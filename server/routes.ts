@@ -196,11 +196,42 @@ export async function registerRoutes(
     }
   });
 
+  app.put("/api/users/:id", async (req, res) => {
+    try {
+      const user = await storage.updateUser(req.params.id, req.body);
+      if (!user) {
+        return res.status(404).json({ error: "User not found" });
+      }
+      res.json(user);
+    } catch (error: any) {
+      res.status(500).json({ error: error.message });
+    }
+  });
+
+  app.delete("/api/users/:id", async (req, res) => {
+    try {
+      const userId = parseInt(req.params.id);
+      if (isNaN(userId)) {
+        return res.status(400).json({ error: "Invalid user ID" });
+      }
+
+      const user = await storage.getUserById(req.params.id);
+      if (!user) {
+        return res.status(404).json({ error: "User not found" });
+      }
+
+      await storage.deleteUser(userId);
+      res.status(204).send();
+    } catch (error: any) {
+      res.status(500).json({ error: error.message });
+    }
+  });
+
   // Change password
   app.post("/api/users/change-password", async (req, res) => {
     try {
       const { email, currentPassword, newPassword } = req.body;
-      
+
       if (!email || !currentPassword || !newPassword) {
         return res.status(400).json({ message: "All fields are required" });
       }
@@ -216,6 +247,17 @@ export async function registerRoutes(
 
       await storage.updateUser(user.id, { password: newPassword });
       res.json({ message: "Password changed successfully" });
+    } catch (error: any) {
+      res.status(500).json({ message: error.message });
+    }
+  });
+
+  // Logout
+  app.post("/api/logout", async (req, res) => {
+    try {
+      // Clear session if using sessions
+      // For now, just return success
+      res.json({ message: "Logged out successfully" });
     } catch (error: any) {
       res.status(500).json({ message: error.message });
     }

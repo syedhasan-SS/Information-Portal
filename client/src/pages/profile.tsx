@@ -1,12 +1,13 @@
-import { useState } from "react";
+import { useState, useRef } from "react";
 import { useLocation } from "wouter";
 import { useMutation } from "@tanstack/react-query";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 import { PasswordInput } from "@/components/ui/password-input";
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { useToast } from "@/hooks/use-toast";
-import { ArrowLeft, Save, User, Shield } from "lucide-react";
+import { ArrowLeft, Save, User, Shield, Upload, Camera } from "lucide-react";
 
 export default function ProfilePage() {
   const [, setLocation] = useLocation();
@@ -14,11 +15,51 @@ export default function ProfilePage() {
   const [currentPassword, setCurrentPassword] = useState("");
   const [newPassword, setNewPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
+  const [profilePicture, setProfilePicture] = useState<string>("");
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   // For demo purposes - in production, get from auth context
   const userEmail = localStorage.getItem("userEmail") || "syed.hasan@joinfleek.com";
   const userName = localStorage.getItem("userName") || "Syed Faez Hasan Rizvi";
   const userRole = localStorage.getItem("userRole") || "Owner";
+  const storedProfilePic = localStorage.getItem("profilePicture") || "";
+
+  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) {
+      // Validate file type
+      if (!file.type.startsWith('image/')) {
+        toast({
+          title: "Error",
+          description: "Please select an image file",
+          variant: "destructive",
+        });
+        return;
+      }
+
+      // Validate file size (max 5MB)
+      if (file.size > 5 * 1024 * 1024) {
+        toast({
+          title: "Error",
+          description: "Image must be less than 5MB",
+          variant: "destructive",
+        });
+        return;
+      }
+
+      const reader = new FileReader();
+      reader.onloadend = () => {
+        const base64String = reader.result as string;
+        setProfilePicture(base64String);
+        localStorage.setItem("profilePicture", base64String);
+        toast({
+          title: "Profile Picture Updated",
+          description: "Your profile picture has been changed successfully.",
+        });
+      };
+      reader.readAsDataURL(file);
+    }
+  };
 
   const changePasswordMutation = useMutation({
     mutationFn: async (data: { email: string; currentPassword: string; newPassword: string }) => {
@@ -107,7 +148,38 @@ export default function ProfilePage() {
                 Account Information
               </CardTitle>
             </CardHeader>
-            <CardContent className="space-y-4">
+            <CardContent className="space-y-6">
+              {/* Profile Picture Section */}
+              <div className="flex flex-col items-center gap-4 sm:flex-row sm:items-start">
+                <Avatar className="h-24 w-24">
+                  <AvatarImage src={profilePicture || storedProfilePic} alt={userName} />
+                  <AvatarFallback className="text-2xl">
+                    {userName.split(' ').map(n => n[0]).join('')}
+                  </AvatarFallback>
+                </Avatar>
+                <div className="flex flex-col gap-2">
+                  <Label className="text-sm font-medium">Profile Picture</Label>
+                  <p className="text-sm text-muted-foreground">Upload a new profile picture (max 5MB)</p>
+                  <input
+                    ref={fileInputRef}
+                    type="file"
+                    accept="image/*"
+                    onChange={handleFileChange}
+                    className="hidden"
+                  />
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    onClick={() => fileInputRef.current?.click()}
+                    className="w-fit"
+                  >
+                    <Camera className="mr-2 h-4 w-4" />
+                    Change Picture
+                  </Button>
+                </div>
+              </div>
+
               <div className="grid gap-4 sm:grid-cols-2">
                 <div>
                   <Label className="text-muted-foreground text-xs">Name</Label>

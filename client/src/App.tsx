@@ -13,6 +13,7 @@ import MyTicketsPage from "@/pages/my-tickets";
 import VendorsPage from "@/pages/vendors";
 import VendorProfilePage from "@/pages/vendor-profile";
 import ProfilePage from "@/pages/profile";
+import AnalyticsPage from "@/pages/analytics";
 
 function Router() {
   return (
@@ -26,6 +27,7 @@ function Router() {
       <Route path="/vendors" component={VendorsPage} />
       <Route path="/vendors/:handle" component={VendorProfilePage} />
       <Route path="/profile" component={ProfilePage} />
+      <Route path="/analytics" component={AnalyticsPage} />
       {/* Fallback to 404 */}
       <Route component={NotFound} />
     </Switch>

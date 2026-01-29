@@ -18,6 +18,7 @@ import {
   ArrowRight,
   User,
   AlertCircle,
+  LogOut,
 } from "lucide-react";
 import type { Ticket as TicketType, User as UserType } from "@shared/schema";
 
@@ -97,9 +98,9 @@ export default function DashboardPage() {
               </div>
               <div>
                 <h1 className="font-serif text-xl font-semibold tracking-tight text-foreground">
-                  JoinFleek
+                  FLOW
                 </h1>
-                <p className="text-xs text-muted-foreground">Seller Escalations Portal</p>
+                <p className="text-xs text-muted-foreground">Fleek Complaint Management Portal</p>
               </div>
             </div>
 
@@ -108,7 +109,26 @@ export default function DashboardPage() {
               <NavButton onClick={() => setLocation("/my-tickets")} icon={User} label="My Tickets" />
               <NavButton onClick={() => setLocation("/vendors")} icon={Store} label="Vendors" />
               <NavButton onClick={() => setLocation("/users")} icon={Users} label="Users" />
+              <NavButton onClick={() => setLocation("/analytics")} icon={BarChart3} label="Analytics" />
               <NavButton onClick={() => setLocation("/profile")} icon={Settings} label="Profile" />
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => {
+                  // Clear session and redirect to login
+                  fetch("/api/logout", { method: "POST" })
+                    .then(() => {
+                      window.location.href = "/";
+                    })
+                    .catch(() => {
+                      window.location.href = "/";
+                    });
+                }}
+                className="gap-2"
+              >
+                <LogOut className="h-4 w-4" />
+                <span>Logout</span>
+              </Button>
             </nav>
           </div>
         </div>

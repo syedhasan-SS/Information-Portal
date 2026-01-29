@@ -140,6 +140,10 @@ export class DatabaseStorage implements IStorage {
       .returning();
     return results[0];
   }
+
+  async deleteUser(id: number): Promise<void> {
+    await db.delete(users).where(eq(users.id, id));
+  }
 }
 
 export const storage = new DatabaseStorage();

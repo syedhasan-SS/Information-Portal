@@ -22,7 +22,24 @@ import {
   Loader2,
   CheckCircle2,
   AlertCircle,
+  Edit,
+  Trash2,
+  MoreVertical,
 } from "lucide-react";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 import type { User } from "@shared/schema";
 
 const ROLES = ["Owner", "Admin", "Seller Support Agent", "Department Head", "Department Manager", "Department Agent"] as const;
@@ -53,6 +70,34 @@ async function createUser(data: {
   return res.json();
 }
 
+async function updateUser(id: number, data: {
+  name?: string;
+  email?: string;
+  role?: string;
+  department?: string;
+}): Promise<User> {
+  const res = await fetch(`/api/users/${id}`, {
+    method: "PUT",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(data),
+  });
+  if (!res.ok) {
+    const err = await res.json();
+    throw new Error(err.error || "Failed to update user");
+  }
+  return res.json();
+}
+
+async function deleteUser(id: number): Promise<void> {
+  const res = await fetch(`/api/users/${id}`, {
+    method: "DELETE",
+  });
+  if (!res.ok) {
+    const err = await res.json();
+    throw new Error(err.error || "Failed to delete user");
+  }
+}
+
 export default function UsersPage() {
   const [, setLocation] = useLocation();
   const [showForm, setShowForm] = useState(false);
@@ -65,6 +110,14 @@ export default function UsersPage() {
   });
   const [error, setError] = useState("");
   const [success, setSuccess] = useState("");
+  const [editingUser, setEditingUser] = useState<User | null>(null);
+  const [deletingUserId, setDeletingUserId] = useState<number | null>(null);
+  const [editFormData, setEditFormData] = useState({
+    name: "",
+    email: "",
+    role: "",
+    department: "",
+  });
 
   const queryClient = useQueryClient();
 
@@ -89,6 +142,36 @@ export default function UsersPage() {
     },
   });
 
+  const updateMutation = useMutation({
+    mutationFn: ({ id, data }: { id: number; data: any }) => updateUser(id, data),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["users"] });
+      setEditingUser(null);
+      setSuccess("User updated successfully!");
+      setError("");
+      setTimeout(() => setSuccess(""), 3000);
+    },
+    onError: (err: Error) => {
+      setError(err.message);
+      setSuccess("");
+    },
+  });
+
+  const deleteMutation = useMutation({
+    mutationFn: deleteUser,
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["users"] });
+      setDeletingUserId(null);
+      setSuccess("User deleted successfully!");
+      setError("");
+      setTimeout(() => setSuccess(""), 3000);
+    },
+    onError: (err: Error) => {
+      setError(err.message);
+      setSuccess("");
+    },
+  });
+
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     setError("");
@@ -102,6 +185,41 @@ export default function UsersPage() {
       ...formData,
       department: formData.department || undefined,
     });
+  };
+
+  const handleEditClick = (user: User) => {
+    setEditingUser(user);
+    setEditFormData({
+      name: user.name,
+      email: user.email,
+      role: user.role,
+      department: user.department || "",
+    });
+  };
+
+  const handleEditSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!editingUser) return;
+
+    setError("");
+    if (!editFormData.name || !editFormData.email || !editFormData.role) {
+      setError("Please fill in all required fields");
+      return;
+    }
+
+    updateMutation.mutate({
+      id: editingUser.id,
+      data: {
+        ...editFormData,
+        department: editFormData.department || undefined,
+      },
+    });
+  };
+
+  const handleDeleteConfirm = () => {
+    if (deletingUserId) {
+      deleteMutation.mutate(deletingUserId);
+    }
   };
 
   const roleColors: Record<string, string> = {
@@ -295,9 +413,31 @@ export default function UsersPage() {
               {users.map((user) => (
                 <Card key={user.id} className="p-5" data-testid={`card-user-${user.id}`}>
                   <div className="space-y-3">
-                    <div>
-                      <h3 className="font-semibold text-foreground">{user.name}</h3>
-                      <p className="text-sm text-muted-foreground">{user.email}</p>
+                    <div className="flex items-start justify-between">
+                      <div>
+                        <h3 className="font-semibold text-foreground">{user.name}</h3>
+                        <p className="text-sm text-muted-foreground">{user.email}</p>
+                      </div>
+                      <DropdownMenu>
+                        <DropdownMenuTrigger asChild>
+                          <Button variant="ghost" size="sm" className="h-8 w-8 p-0">
+                            <MoreVertical className="h-4 w-4" />
+                          </Button>
+                        </DropdownMenuTrigger>
+                        <DropdownMenuContent align="end">
+                          <DropdownMenuItem onClick={() => handleEditClick(user)}>
+                            <Edit className="mr-2 h-4 w-4" />
+                            Edit
+                          </DropdownMenuItem>
+                          <DropdownMenuItem
+                            onClick={() => setDeletingUserId(user.id)}
+                            className="text-destructive focus:text-destructive"
+                          >
+                            <Trash2 className="mr-2 h-4 w-4" />
+                            Delete
+                          </DropdownMenuItem>
+                        </DropdownMenuContent>
+                      </DropdownMenu>
                     </div>
                     <div className="flex flex-wrap items-center gap-2">
                       <Badge className={cn("border", roleColors[user.role])} variant="outline">
@@ -333,6 +473,143 @@ export default function UsersPage() {
           )}
         </div>
       </main>
+
+      {/* Edit User Dialog */}
+      <Dialog open={!!editingUser} onOpenChange={(open) => !open && setEditingUser(null)}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Edit User</DialogTitle>
+            <DialogDescription>Update user information and permissions.</DialogDescription>
+          </DialogHeader>
+          <form onSubmit={handleEditSubmit} className="space-y-4">
+            {error && editingUser && (
+              <div className="flex items-center gap-2 rounded-lg border border-destructive/20 bg-destructive/10 p-3 text-sm text-destructive">
+                <AlertCircle className="h-4 w-4" />
+                {error}
+              </div>
+            )}
+
+            <div className="space-y-2">
+              <Label htmlFor="edit-name">Full Name *</Label>
+              <Input
+                id="edit-name"
+                placeholder="John Doe"
+                value={editFormData.name}
+                onChange={(e) => setEditFormData({ ...editFormData, name: e.target.value })}
+              />
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="edit-email">Email *</Label>
+              <Input
+                id="edit-email"
+                type="email"
+                placeholder="john@joinfleek.com"
+                value={editFormData.email}
+                onChange={(e) => setEditFormData({ ...editFormData, email: e.target.value })}
+              />
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="edit-role">Role *</Label>
+              <Select
+                value={editFormData.role}
+                onValueChange={(value) => setEditFormData({ ...editFormData, role: value })}
+              >
+                <SelectTrigger>
+                  <SelectValue placeholder="Select role" />
+                </SelectTrigger>
+                <SelectContent>
+                  {ROLES.map((role) => (
+                    <SelectItem key={role} value={role}>
+                      {role}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="edit-department">Department (optional)</Label>
+              <Select
+                value={editFormData.department}
+                onValueChange={(value) => setEditFormData({ ...editFormData, department: value })}
+              >
+                <SelectTrigger>
+                  <SelectValue placeholder="Select department" />
+                </SelectTrigger>
+                <SelectContent>
+                  {DEPARTMENTS.map((dept) => (
+                    <SelectItem key={dept} value={dept}>
+                      {dept}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+
+            <DialogFooter>
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() => setEditingUser(null)}
+              >
+                Cancel
+              </Button>
+              <Button
+                type="submit"
+                disabled={updateMutation.isPending}
+                className="bg-accent text-accent-foreground hover:bg-accent/90"
+              >
+                {updateMutation.isPending ? (
+                  <>
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                    Updating...
+                  </>
+                ) : (
+                  "Update User"
+                )}
+              </Button>
+            </DialogFooter>
+          </form>
+        </DialogContent>
+      </Dialog>
+
+      {/* Delete Confirmation Dialog */}
+      <Dialog open={!!deletingUserId} onOpenChange={(open) => !open && setDeletingUserId(null)}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Delete User</DialogTitle>
+            <DialogDescription>
+              Are you sure you want to delete this user? This action cannot be undone.
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => setDeletingUserId(null)}
+            >
+              Cancel
+            </Button>
+            <Button
+              type="button"
+              variant="destructive"
+              disabled={deleteMutation.isPending}
+              onClick={handleDeleteConfirm}
+            >
+              {deleteMutation.isPending ? (
+                <>
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                  Deleting...
+                </>
+              ) : (
+                "Delete User"
+              )}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

@@ -31,10 +31,10 @@ export default function LoginPage() {
           />
           <div>
             <h1 className="font-serif text-3xl font-bold tracking-tight text-foreground">
-              JoinFleek
+              FLOW
             </h1>
             <p className="mt-1 text-sm text-muted-foreground">
-              Seller Escalations Portal
+              Fleek Complaint Management Portal
             </p>
           </div>
         </div>
