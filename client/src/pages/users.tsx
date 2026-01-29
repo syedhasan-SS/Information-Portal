@@ -4,6 +4,7 @@ import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { PasswordInput } from "@/components/ui/password-input";
 import { Badge } from "@/components/ui/badge";
 import {
   Select,
@@ -24,7 +25,7 @@ import {
 } from "lucide-react";
 import type { User } from "@shared/schema";
 
-const ROLES = ["Admin", "Department Lead", "Management", "Seller Support Agent"] as const;
+const ROLES = ["Owner", "Admin", "Seller Support Agent", "Department Head", "Department Manager", "Department Agent"] as const;
 const DEPARTMENTS = ["Finance", "Operations", "Marketplace", "Tech", "Experience", "CX", "Seller Support"] as const;
 
 async function getUsers(): Promise<User[]> {
@@ -104,10 +105,12 @@ export default function UsersPage() {
   };
 
   const roleColors: Record<string, string> = {
+    Owner: "bg-red-500/10 text-red-600 border-red-500/20",
     Admin: "bg-purple-500/10 text-purple-600 border-purple-500/20",
-    "Department Lead": "bg-blue-500/10 text-blue-600 border-blue-500/20",
-    Management: "bg-amber-500/10 text-amber-600 border-amber-500/20",
     "Seller Support Agent": "bg-green-500/10 text-green-600 border-green-500/20",
+    "Department Head": "bg-blue-500/10 text-blue-600 border-blue-500/20",
+    "Department Manager": "bg-amber-500/10 text-amber-600 border-amber-500/20",
+    "Department Agent": "bg-slate-500/10 text-slate-600 border-slate-500/20",
   };
 
   return (
@@ -199,12 +202,12 @@ export default function UsersPage() {
 
                 <div className="space-y-2">
                   <Label htmlFor="password">Password *</Label>
-                  <Input
+                  <PasswordInput
                     id="password"
-                    type="password"
                     placeholder="Enter password"
                     value={formData.password}
                     onChange={(e) => setFormData({ ...formData, password: e.target.value })}
+                    showStrength
                     data-testid="input-password"
                   />
                 </div>

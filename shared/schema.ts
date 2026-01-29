@@ -7,10 +7,15 @@ export const vendors = pgTable("vendors", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
   handle: text("handle").notNull().unique(),
   name: text("name").notNull(),
-  gmvTier: text("gmv_tier").notNull().$type<"S" | "M" | "L" | "XL">(),
-  kam: text("kam").notNull(),
-  zone: text("zone").notNull(),
-  persona: text("persona").notNull(),
+  email: text("email"),
+  phone: text("phone"),
+  gmvTier: text("gmv_tier").$type<"S" | "M" | "L" | "XL" | "Platinum" | "Gold" | "Silver" | "Bronze">(),
+  gmv90Day: integer("gmv_90_day"),
+  kam: text("kam"),
+  zone: text("zone"),
+  region: text("region"),
+  country: text("country"),
+  persona: text("persona"),
   createdAt: timestamp("created_at").notNull().defaultNow(),
   updatedAt: timestamp("updated_at").notNull().defaultNow(),
 });
@@ -29,6 +34,7 @@ export const categories = pgTable("categories", {
 
 export const tickets = pgTable("tickets", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  ticketNumber: text("ticket_number").notNull().unique(),
   vendorHandle: text("vendor_handle").notNull().references(() => vendors.handle),
   department: text("department").notNull().$type<"Finance" | "Operations" | "Marketplace" | "Tech" | "Experience" | "CX" | "Seller Support">(),
   issueType: text("issue_type").notNull().$type<"Complaint" | "Request" | "Information">(),
@@ -51,10 +57,19 @@ export const tickets = pgTable("tickets", {
   }>(),
   
   ownerTeam: text("owner_team").notNull(),
-  ownerAssignee: text("owner_assignee"),
+  assigneeId: varchar("assignee_id").references(() => users.id),
+  createdById: varchar("created_by_id").references(() => users.id),
+  
+  tags: text("tags").array(),
+  
+  slaResponseTarget: timestamp("sla_response_target"),
+  slaResolveTarget: timestamp("sla_resolve_target"),
+  slaStatus: text("sla_status").default("on_track").$type<"on_track" | "at_risk" | "breached">(),
+  firstResponseAt: timestamp("first_response_at"),
   
   resolutionNotes: text("resolution_notes"),
   resolvedAt: timestamp("resolved_at"),
+  closedAt: timestamp("closed_at"),
   
   zendeskLinked: boolean("zendesk_linked").notNull().default(false),
   zendeskTicketId: text("zendesk_ticket_id"),
@@ -77,9 +92,11 @@ export const users = pgTable("users", {
   email: text("email").notNull().unique(),
   password: text("password").notNull(),
   name: text("name").notNull(),
-  role: text("role").notNull().$type<"Admin" | "Department Lead" | "Management" | "Seller Support Agent">(),
+  role: text("role").notNull().$type<"Owner" | "Admin" | "Seller Support Agent" | "Department Head" | "Department Manager" | "Department Agent">(),
   department: text("department").$type<"Finance" | "Operations" | "Marketplace" | "Tech" | "Experience" | "CX" | "Seller Support">(),
+  profilePicture: text("profile_picture"),
   isActive: boolean("is_active").notNull().default(true),
+  passwordChangedAt: timestamp("password_changed_at"),
   createdAt: timestamp("created_at").notNull().defaultNow(),
   updatedAt: timestamp("updated_at").notNull().defaultNow(),
 });

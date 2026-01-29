@@ -7,6 +7,11 @@ import NotFound from "@/pages/not-found";
 import LoginPage from "@/pages/login";
 import DashboardPage from "@/pages/dashboard";
 import UsersPage from "@/pages/users";
+import AllTicketsPage from "@/pages/all-tickets";
+import TicketDetailPage from "@/pages/ticket-detail";
+import MyTicketsPage from "@/pages/my-tickets";
+import VendorsPage from "@/pages/vendors";
+import VendorProfilePage from "@/pages/vendor-profile";
 
 function Router() {
   return (
@@ -14,6 +19,11 @@ function Router() {
       <Route path="/" component={LoginPage} />
       <Route path="/dashboard" component={DashboardPage} />
       <Route path="/users" component={UsersPage} />
+      <Route path="/tickets" component={AllTicketsPage} />
+      <Route path="/tickets/:id" component={TicketDetailPage} />
+      <Route path="/my-tickets" component={MyTicketsPage} />
+      <Route path="/vendors" component={VendorsPage} />
+      <Route path="/vendors/:handle" component={VendorProfilePage} />
       {/* Fallback to 404 */}
       <Route component={NotFound} />
     </Switch>
