@@ -1,0 +1,23 @@
+We need to build a portal with all the relevant integrations for the Seller Support Tickets that fall on Zendesk. This portal will be used by the whole company to resolve sellers' problem. The case will be escalated by the seller support team and the internal stakeholders will solve and give resolution through the portal directly. We need to minimize dependencies and unstructured, un reported escalations. The portal will be fully automated and will integrate with all the relevant touch points. At the moment, our human agent escalates these tickets over whatsapp or slack as a regular message. theres no way to keep track of all escalations or filter them by department. we need to reduce all this manual back an forth and create one dedicated system/portal that has this visibility across the company. 
+You already have access to our metabase, big query and zendesk. 
+The support agent will escalate the ticket, fill the relevant problematic category. I have shared with you our category structure as well.
+Ticket Fields:
+1. Vendor Handle (search table for the sellers, registered on our platforms, so agent will write and select the name)
+2. Issue Type (Complaint, Request, Information)
+3. Department
+4. Fleek Order ID (integrated with fleek_hub.order_line_details to sync all the existing orders of the selected vendors.
+5. We will give the access to the all the relevant stake holders.
+6. This portal will have different pages.
+   1. All tickets with the relevant filters (like Solved, Open, Closed, New, Pending, etc)
+   2. Vendor wise display of tickets
+   3. Issue Type Wise Tickets
+   4. A summary window
+7. ticket subject 
+8. ticket description 
+So what we want the escalation system to look like is that our AI agent that is active on Zendesk or a human agent active on Zendesk has the ability to escalate cases meant to be escalated directly on that portal. 
+We also want that when a ticket is raised on Zendesk that is escalated to the relevant team through the developed portal, that we get a notification of that escalation on slack as well. 
+We also want that when any ticket is escalated, the portal has the capabilities to prioritise those tickets based on :
+1) how many tickets that vendor has already raised meaning if the vendor has already raised multiple payout concerns, their ticket gets priority
+2) size of the vendor based on the number of gmv they bring to our business
+3) Issue type-wise priority, for example if a payment query is raised, that has higher priority then lets say order status change or update. 
+Let me know if all this makes sense to you, please ask any follow up questions if you are confused about something within this process. I need a successful way to implement this or help me make this entirely. if you need any specific APIs to get this rolling, search for the APIs yourself as you have entire access to the company's database.
