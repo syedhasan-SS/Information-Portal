@@ -1,16 +1,145 @@
 import type { Express } from "express";
 import { createServer, type Server } from "http";
 import { storage } from "./storage";
+import {
+  insertVendorSchema,
+  insertCategorySchema,
+  insertTicketSchema,
+  insertCommentSchema,
+} from "@shared/schema";
+import { z } from "zod";
 
 export async function registerRoutes(
   httpServer: Server,
   app: Express
 ): Promise<Server> {
-  // put application routes here
-  // prefix all routes with /api
+  // Vendors
+  app.get("/api/vendors", async (_req, res) => {
+    try {
+      const vendors = await storage.getVendors();
+      res.json(vendors);
+    } catch (error: any) {
+      res.status(500).json({ error: error.message });
+    }
+  });
 
-  // use storage to perform CRUD operations on the storage interface
-  // e.g. storage.insertUser(user) or storage.getUserByUsername(username)
+  app.get("/api/vendors/:handle", async (req, res) => {
+    try {
+      const vendor = await storage.getVendorByHandle(req.params.handle);
+      if (!vendor) {
+        return res.status(404).json({ error: "Vendor not found" });
+      }
+      res.json(vendor);
+    } catch (error: any) {
+      res.status(500).json({ error: error.message });
+    }
+  });
+
+  app.post("/api/vendors", async (req, res) => {
+    try {
+      const parsed = insertVendorSchema.safeParse(req.body);
+      if (!parsed.success) {
+        return res.status(400).json({ error: parsed.error.message });
+      }
+      const vendor = await storage.createVendor(parsed.data);
+      res.status(201).json(vendor);
+    } catch (error: any) {
+      res.status(500).json({ error: error.message });
+    }
+  });
+
+  // Categories
+  app.get("/api/categories", async (_req, res) => {
+    try {
+      const categories = await storage.getCategories();
+      res.json(categories);
+    } catch (error: any) {
+      res.status(500).json({ error: error.message });
+    }
+  });
+
+  app.post("/api/categories", async (req, res) => {
+    try {
+      const parsed = insertCategorySchema.safeParse(req.body);
+      if (!parsed.success) {
+        return res.status(400).json({ error: parsed.error.message });
+      }
+      const category = await storage.createCategory(parsed.data);
+      res.status(201).json(category);
+    } catch (error: any) {
+      res.status(500).json({ error: error.message });
+    }
+  });
+
+  // Tickets
+  app.get("/api/tickets", async (_req, res) => {
+    try {
+      const tickets = await storage.getTickets();
+      res.json(tickets);
+    } catch (error: any) {
+      res.status(500).json({ error: error.message });
+    }
+  });
+
+  app.get("/api/tickets/:id", async (req, res) => {
+    try {
+      const ticket = await storage.getTicketById(req.params.id);
+      if (!ticket) {
+        return res.status(404).json({ error: "Ticket not found" });
+      }
+      res.json(ticket);
+    } catch (error: any) {
+      res.status(500).json({ error: error.message });
+    }
+  });
+
+  app.post("/api/tickets", async (req, res) => {
+    try {
+      const parsed = insertTicketSchema.safeParse(req.body);
+      if (!parsed.success) {
+        return res.status(400).json({ error: parsed.error.message });
+      }
+      const ticket = await storage.createTicket(parsed.data);
+      res.status(201).json(ticket);
+    } catch (error: any) {
+      res.status(500).json({ error: error.message });
+    }
+  });
+
+  app.patch("/api/tickets/:id", async (req, res) => {
+    try {
+      const ticket = await storage.updateTicket(req.params.id, req.body);
+      if (!ticket) {
+        return res.status(404).json({ error: "Ticket not found" });
+      }
+      res.json(ticket);
+    } catch (error: any) {
+      res.status(500).json({ error: error.message });
+    }
+  });
+
+  // Comments
+  app.get("/api/tickets/:ticketId/comments", async (req, res) => {
+    try {
+      const comments = await storage.getCommentsByTicketId(req.params.ticketId);
+      res.json(comments);
+    } catch (error: any) {
+      res.status(500).json({ error: error.message });
+    }
+  });
+
+  app.post("/api/comments", async (req, res) => {
+    try {
+      const parsed = insertCommentSchema.safeParse(req.body);
+      if (!parsed.success) {
+        return res.status(400).json({ error: parsed.error.message });
+      }
+      const comment = await storage.createComment(parsed.data);
+      res.status(201).json(comment);
+    } catch (error: any) {
+      res.status(500).json({ error: error.message });
+    }
+  });
 
   return httpServer;
 }
