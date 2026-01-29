@@ -4,6 +4,7 @@ import type { Request, Response, NextFunction } from "express";
 import type { VercelRequest, VercelResponse } from "@vercel/node";
 import { createServer } from "http";
 import path from "path";
+import fs from "fs";
 import { registerRoutes } from "../server/routes";
 
 const app = express();
@@ -59,29 +60,52 @@ app.use((req, res, next) => {
   next();
 });
 
-// Initialize routes
-// Create a mock HTTP server for the registerRoutes function
-const mockServer = createServer();
-registerRoutes(mockServer, app);
+// Initialize routes asynchronously
+let routesInitialized = false;
+const initPromise = (async () => {
+  try {
+    const mockServer = createServer();
+    await registerRoutes(mockServer, app);
+    routesInitialized = true;
+    log("Routes initialized successfully");
+  } catch (error: any) {
+    log(`Error initializing routes: ${error.message}`);
+    throw error;
+  }
+})();
 
+// Serve static files from dist/public if it exists
+const distPath = path.join(process.cwd(), "dist", "public");
+if (fs.existsSync(distPath)) {
+  app.use(express.static(distPath));
+  log(`Serving static files from ${distPath}`);
+} else {
+  log(`Warning: Static files directory not found at ${distPath}`);
+}
+
+// Fall through to index.html for client-side routing
+app.get("*", (_req, res, next) => {
+  const indexPath = path.join(distPath, "index.html");
+  if (fs.existsSync(indexPath)) {
+    res.sendFile(indexPath);
+  } else {
+    next(); // Let error handler handle it
+  }
+});
+
+// Error handler (must be last)
 app.use((err: any, _req: Request, res: Response, _next: NextFunction) => {
   const status = err.status || err.statusCode || 500;
   const message = err.message || "Internal Server Error";
-
+  log(`Error: ${message}`);
   res.status(status).json({ message });
-});
-
-// Serve static files from dist/public
-const distPath = path.join(process.cwd(), "dist", "public");
-app.use(express.static(distPath));
-
-// Fall through to index.html for client-side routing
-app.get("*", (_req, res) => {
-  res.sendFile(path.join(distPath, "index.html"));
 });
 
 // Export handler for Vercel
 export default async function handler(req: VercelRequest, res: VercelResponse) {
+  // Wait for routes to be initialized
+  await initPromise;
+
   return new Promise((resolve, reject) => {
     app(req as any, res as any, (err: any) => {
       if (err) {
