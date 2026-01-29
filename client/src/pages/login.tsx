@@ -89,7 +89,7 @@ export default function LoginPage() {
         </Card>
 
         <p className="text-center text-xs text-muted-foreground">
-          Internal use only. Contact IT for access.
+          Internal use only. Contact Syed Faez for access.
         </p>
       </div>
     </div>
