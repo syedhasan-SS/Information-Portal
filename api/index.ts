@@ -1,10 +1,8 @@
-import "dotenv/config";
 import express from "express";
 import type { Request, Response, NextFunction } from "express";
 import type { VercelRequest, VercelResponse } from "@vercel/node";
 import { createServer } from "http";
 import path from "path";
-import fs from "fs";
 import { registerRoutes } from "../server/routes";
 
 const app = express();
@@ -19,20 +17,9 @@ app.use(
 
 app.use(express.urlencoded({ extended: false }));
 
-function log(message: string, source = "express") {
-  const formattedTime = new Date().toLocaleTimeString("en-US", {
-    hour: "numeric",
-    minute: "2-digit",
-    second: "2-digit",
-    hour12: true,
-  });
-
-  console.log(`${formattedTime} [${source}] ${message}`);
-}
-
 app.use((req, res, next) => {
   const start = Date.now();
-  const path = req.path;
+  const reqPath = req.path;
   let capturedJsonResponse: Record<string, any> | undefined = undefined;
 
   const originalResJson = res.json;
@@ -43,8 +30,8 @@ app.use((req, res, next) => {
 
   res.on("finish", () => {
     const duration = Date.now() - start;
-    if (path.startsWith("/api")) {
-      let logLine = `${req.method} ${path} ${res.statusCode} in ${duration}ms`;
+    if (reqPath.startsWith("/api")) {
+      let logLine = `${req.method} ${reqPath} ${res.statusCode} in ${duration}ms`;
       if (capturedJsonResponse) {
         logLine += ` :: ${JSON.stringify(capturedJsonResponse)}`;
       }
@@ -53,66 +40,65 @@ app.use((req, res, next) => {
         logLine = logLine.slice(0, 79) + "…";
       }
 
-      log(logLine);
+      console.log(logLine);
     }
   });
 
   next();
 });
 
-// Initialize routes asynchronously
-let routesInitialized = false;
-const initPromise = (async () => {
-  try {
-    const mockServer = createServer();
-    await registerRoutes(mockServer, app);
-    routesInitialized = true;
-    log("Routes initialized successfully");
-  } catch (error: any) {
-    log(`Error initializing routes: ${error.message}`);
-    throw error;
-  }
-})();
+// Initialize routes
+let routesInitialized: Promise<void> | null = null;
 
-// Serve static files from dist/public if it exists
-const distPath = path.join(process.cwd(), "dist", "public");
-if (fs.existsSync(distPath)) {
-  app.use(express.static(distPath));
-  log(`Serving static files from ${distPath}`);
-} else {
-  log(`Warning: Static files directory not found at ${distPath}`);
+function initRoutes() {
+  if (!routesInitialized) {
+    routesInitialized = (async () => {
+      const mockServer = createServer();
+      await registerRoutes(mockServer, app);
+
+      // Serve static files from dist/public
+      const distPath = path.join(process.cwd(), "dist", "public");
+      app.use(express.static(distPath));
+
+      // Fall through to index.html for client-side routing
+      app.get("*", (_req, res, next) => {
+        try {
+          res.sendFile(path.join(distPath, "index.html"));
+        } catch (error) {
+          next(error);
+        }
+      });
+
+      // Error handler (must be last)
+      app.use((err: any, _req: Request, res: Response, _next: NextFunction) => {
+        const status = err.status || err.statusCode || 500;
+        const message = err.message || "Internal Server Error";
+        console.error(`Error: ${message}`);
+        res.status(status).json({ message });
+      });
+    })();
+  }
+  return routesInitialized;
 }
-
-// Fall through to index.html for client-side routing
-app.get("*", (_req, res, next) => {
-  const indexPath = path.join(distPath, "index.html");
-  if (fs.existsSync(indexPath)) {
-    res.sendFile(indexPath);
-  } else {
-    next(); // Let error handler handle it
-  }
-});
-
-// Error handler (must be last)
-app.use((err: any, _req: Request, res: Response, _next: NextFunction) => {
-  const status = err.status || err.statusCode || 500;
-  const message = err.message || "Internal Server Error";
-  log(`Error: ${message}`);
-  res.status(status).json({ message });
-});
 
 // Export handler for Vercel
 export default async function handler(req: VercelRequest, res: VercelResponse) {
-  // Wait for routes to be initialized
-  await initPromise;
+  try {
+    // Initialize routes on first request
+    await initRoutes();
 
-  return new Promise((resolve, reject) => {
-    app(req as any, res as any, (err: any) => {
-      if (err) {
-        reject(err);
-      } else {
-        resolve(undefined);
-      }
+    return new Promise((resolve, reject) => {
+      app(req as any, res as any, (err: any) => {
+        if (err) {
+          console.error("Handler error:", err);
+          reject(err);
+        } else {
+          resolve(undefined);
+        }
+      });
     });
-  });
+  } catch (error: any) {
+    console.error("Initialization error:", error);
+    res.status(500).send(`Initialization error: ${error.message}`);
+  }
 }
