@@ -1,0 +1,2 @@
+# Don't deploy dist as static files - the serverless function will serve them
+dist/
