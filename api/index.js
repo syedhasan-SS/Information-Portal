@@ -18,8 +18,8 @@ async function ensureRoutesRegistered() {
       if (routesRegistered) return;
 
       try {
-        // Dynamic import of routes (will be compiled from TypeScript)
-        const { registerRoutes } = require("../server/routes");
+        // Import compiled routes from dist/server
+        const { registerRoutes } = require("../dist/server/routes");
         const mockServer = createServer();
 
         await registerRoutes(mockServer, app);
