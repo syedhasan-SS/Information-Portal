@@ -3,7 +3,6 @@ import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Ticket } from "lucide-react";
 
 export default function LoginPage() {
   const [email, setEmail] = useState("");
@@ -24,9 +23,11 @@ export default function LoginPage() {
       <div className="w-full max-w-md space-y-8">
         {/* Logo Section */}
         <div className="flex flex-col items-center space-y-4 text-center">
-          <div className="flex h-16 w-16 items-center justify-center rounded-2xl bg-accent">
-            <Ticket className="h-8 w-8 text-accent-foreground" />
-          </div>
+          <img
+            src="/fleek-logo.png"
+            alt="Fleek Logo"
+            className="h-20 w-20 rounded-2xl object-cover"
+          />
           <div>
             <h1 className="font-serif text-3xl font-bold tracking-tight text-foreground">
               JoinFleek
