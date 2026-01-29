@@ -44,11 +44,11 @@ async function buildAll() {
   ];
   const externals = allDeps.filter((dep) => !allowlist.includes(dep));
 
-  // Build server code but as a module that can be required by api/index.js
+  // Build server code as modules that can be required by api/index.js
   await esbuild({
     entryPoints: ["server/routes.ts", "server/storage.ts", "server/db.ts"],
     platform: "node",
-    bundle: false,
+    bundle: true,
     format: "cjs",
     outdir: "dist/server",
     define: {
