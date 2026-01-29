@@ -3,7 +3,6 @@ import express from "express";
 import type { Request, Response, NextFunction } from "express";
 import type { VercelRequest, VercelResponse } from "@vercel/node";
 import path from "path";
-import { fileURLToPath } from "url";
 import { registerRoutes } from "../server/routes";
 
 const app = express();
@@ -74,7 +73,7 @@ const distPath = path.join(process.cwd(), "dist", "public");
 app.use(express.static(distPath));
 
 // Fall through to index.html for client-side routing
-app.use("*", (_req, res) => {
+app.get("*", (_req, res) => {
   res.sendFile(path.join(distPath, "index.html"));
 });
 
