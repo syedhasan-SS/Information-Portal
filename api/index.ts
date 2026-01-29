@@ -2,8 +2,9 @@ import "dotenv/config";
 import express from "express";
 import type { Request, Response, NextFunction } from "express";
 import type { VercelRequest, VercelResponse } from "@vercel/node";
+import path from "path";
+import { fileURLToPath } from "url";
 import { registerRoutes } from "../server/routes";
-import { serveStatic } from "../server/static";
 
 const app = express();
 
@@ -68,8 +69,14 @@ app.use((err: any, _req: Request, res: Response, _next: NextFunction) => {
   res.status(status).json({ message });
 });
 
-// Serve static files in production
-serveStatic(app);
+// Serve static files from dist/public
+const distPath = path.join(process.cwd(), "dist", "public");
+app.use(express.static(distPath));
+
+// Fall through to index.html for client-side routing
+app.use("*", (_req, res) => {
+  res.sendFile(path.join(distPath, "index.html"));
+});
 
 // Export handler for Vercel
 export default async function handler(req: VercelRequest, res: VercelResponse) {

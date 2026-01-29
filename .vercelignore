@@ -1,2 +1,2 @@
-# Don't deploy dist as static files - the serverless function will serve them
-dist/
+# Don't deploy the server bundle as a static file
+dist/index.cjs
