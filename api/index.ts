@@ -1,6 +1,7 @@
 import "dotenv/config";
 import express from "express";
 import type { Request, Response, NextFunction } from "express";
+import type { VercelRequest, VercelResponse } from "@vercel/node";
 import { registerRoutes } from "../server/routes";
 import { serveStatic } from "../server/static";
 
@@ -70,5 +71,15 @@ app.use((err: any, _req: Request, res: Response, _next: NextFunction) => {
 // Serve static files in production
 serveStatic(app);
 
-// Export for Vercel serverless
-export default app;
+// Export handler for Vercel
+export default async function handler(req: VercelRequest, res: VercelResponse) {
+  return new Promise((resolve, reject) => {
+    app(req as any, res as any, (err: any) => {
+      if (err) {
+        reject(err);
+      } else {
+        resolve(undefined);
+      }
+    });
+  });
+}
