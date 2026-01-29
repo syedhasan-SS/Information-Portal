@@ -1,2 +1,8 @@
-# Don't serve the server bundle as a static file - it will be required by api/index.js
-# But we need dist/public for frontend assets
+# Exclude the server bundle from static file serving
+dist/index.cjs
+dist/index.cjs.map
+
+# Exclude other unnecessary files
+node_modules/
+.git/
+*.log
