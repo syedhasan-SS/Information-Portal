@@ -196,5 +196,30 @@ export async function registerRoutes(
     }
   });
 
+  // Change password
+  app.post("/api/users/change-password", async (req, res) => {
+    try {
+      const { email, currentPassword, newPassword } = req.body;
+      
+      if (!email || !currentPassword || !newPassword) {
+        return res.status(400).json({ message: "All fields are required" });
+      }
+
+      const user = await storage.getUserByEmail(email);
+      if (!user) {
+        return res.status(404).json({ message: "User not found" });
+      }
+
+      if (user.password !== currentPassword) {
+        return res.status(400).json({ message: "Current password is incorrect" });
+      }
+
+      await storage.updateUser(user.id, { password: newPassword });
+      res.json({ message: "Password changed successfully" });
+    } catch (error: any) {
+      res.status(500).json({ message: error.message });
+    }
+  });
+
   return httpServer;
 }

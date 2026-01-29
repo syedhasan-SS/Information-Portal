@@ -108,6 +108,7 @@ export default function DashboardPage() {
               <NavButton onClick={() => setLocation("/my-tickets")} icon={User} label="My Tickets" />
               <NavButton onClick={() => setLocation("/vendors")} icon={Store} label="Vendors" />
               <NavButton onClick={() => setLocation("/users")} icon={Users} label="Users" />
+              <NavButton onClick={() => setLocation("/profile")} icon={Settings} label="Profile" />
             </nav>
           </div>
         </div>
