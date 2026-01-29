@@ -1,38 +1,106 @@
-import { type User, type InsertUser } from "@shared/schema";
-import { randomUUID } from "crypto";
-
-// modify the interface with any CRUD methods
-// you might need
+import { eq, and, desc, sql } from "drizzle-orm";
+import { db } from "./db";
+import {
+  vendors,
+  categories,
+  tickets,
+  comments,
+  type Vendor,
+  type Category,
+  type Ticket,
+  type Comment,
+  type InsertVendor,
+  type InsertCategory,
+  type InsertTicket,
+  type InsertComment,
+} from "@shared/schema";
 
 export interface IStorage {
-  getUser(id: string): Promise<User | undefined>;
-  getUserByUsername(username: string): Promise<User | undefined>;
-  createUser(user: InsertUser): Promise<User>;
+  // Vendors
+  getVendors(): Promise<Vendor[]>;
+  getVendorByHandle(handle: string): Promise<Vendor | undefined>;
+  createVendor(vendor: InsertVendor): Promise<Vendor>;
+
+  // Categories
+  getCategories(): Promise<Category[]>;
+  getCategoryById(id: string): Promise<Category | undefined>;
+  createCategory(category: InsertCategory): Promise<Category>;
+
+  // Tickets
+  getTickets(): Promise<Ticket[]>;
+  getTicketById(id: string): Promise<Ticket | undefined>;
+  createTicket(ticket: InsertTicket): Promise<Ticket>;
+  updateTicket(id: string, updates: Partial<InsertTicket>): Promise<Ticket | undefined>;
+
+  // Comments
+  getCommentsByTicketId(ticketId: string): Promise<Comment[]>;
+  createComment(comment: InsertComment): Promise<Comment>;
 }
 
-export class MemStorage implements IStorage {
-  private users: Map<string, User>;
-
-  constructor() {
-    this.users = new Map();
+export class DatabaseStorage implements IStorage {
+  // Vendors
+  async getVendors(): Promise<Vendor[]> {
+    return await db.select().from(vendors).orderBy(desc(vendors.createdAt));
   }
 
-  async getUser(id: string): Promise<User | undefined> {
-    return this.users.get(id);
+  async getVendorByHandle(handle: string): Promise<Vendor | undefined> {
+    const results = await db.select().from(vendors).where(eq(vendors.handle, handle)).limit(1);
+    return results[0];
   }
 
-  async getUserByUsername(username: string): Promise<User | undefined> {
-    return Array.from(this.users.values()).find(
-      (user) => user.username === username,
-    );
+  async createVendor(vendor: InsertVendor): Promise<Vendor> {
+    const results = await db.insert(vendors).values(vendor).returning();
+    return results[0];
   }
 
-  async createUser(insertUser: InsertUser): Promise<User> {
-    const id = randomUUID();
-    const user: User = { ...insertUser, id };
-    this.users.set(id, user);
-    return user;
+  // Categories
+  async getCategories(): Promise<Category[]> {
+    return await db.select().from(categories).orderBy(categories.path);
+  }
+
+  async getCategoryById(id: string): Promise<Category | undefined> {
+    const results = await db.select().from(categories).where(eq(categories.id, id)).limit(1);
+    return results[0];
+  }
+
+  async createCategory(category: InsertCategory): Promise<Category> {
+    const results = await db.insert(categories).values(category).returning();
+    return results[0];
+  }
+
+  // Tickets
+  async getTickets(): Promise<Ticket[]> {
+    return await db.select().from(tickets).orderBy(desc(tickets.createdAt));
+  }
+
+  async getTicketById(id: string): Promise<Ticket | undefined> {
+    const results = await db.select().from(tickets).where(eq(tickets.id, id)).limit(1);
+    return results[0];
+  }
+
+  async createTicket(ticket: InsertTicket): Promise<Ticket> {
+    const results = await db.insert(tickets).values(ticket).returning();
+    return results[0];
+  }
+
+  async updateTicket(id: string, updates: Partial<InsertTicket>): Promise<Ticket | undefined> {
+    const results = await db
+      .update(tickets)
+      .set({ ...updates, updatedAt: new Date() })
+      .where(eq(tickets.id, id))
+      .returning();
+    return results[0];
+  }
+
+  // Comments
+  async getCommentsByTicketId(ticketId: string): Promise<Comment[]> {
+    return await db.select().from(comments).where(eq(comments.ticketId, ticketId)).orderBy(comments.createdAt);
+  }
+
+  async createComment(comment: InsertComment): Promise<Comment> {
+    const results = await db.insert(comments).values(comment).returning();
+    return results[0];
   }
 }
 
-export const storage = new MemStorage();
+export const storage = new DatabaseStorage();
