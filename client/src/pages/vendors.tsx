@@ -78,8 +78,8 @@ export default function VendorsPage() {
     }
 
     if (activeTab !== "all") {
-      const region = vendor.region?.toLowerCase() || "";
-      const country = vendor.country?.toLowerCase() || "";
+      const region = (vendor.region || vendor.zone || "").toLowerCase();
+      const country = (vendor.country || "").toLowerCase();
       
       switch (activeTab) {
         case "zone":
@@ -232,7 +232,7 @@ export default function VendorsPage() {
                         {vendor.handle}
                       </TableCell>
                       <TableCell>
-                        <Badge variant="outline">{vendor.region || "Unknown"}</Badge>
+                        <Badge variant="outline">{vendor.region || vendor.zone || "Unknown"}</Badge>
                       </TableCell>
                       <TableCell>
                         {getTierBadge(vendor.gmvTier) || <span className="text-muted-foreground">-</span>}

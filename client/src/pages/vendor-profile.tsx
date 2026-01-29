@@ -180,7 +180,7 @@ export default function VendorProfilePage() {
                     {getTierBadge(vendor.gmvTier)}
                   </div>
                   <p className="text-xs text-muted-foreground">
-                    {vendor.region || "Unknown Region"} • {vendor.country || "Unknown Country"}
+                    {vendor.region || vendor.zone || "Unknown Region"} • {vendor.country || "Unknown Country"}
                   </p>
                 </div>
               </div>
@@ -209,7 +209,7 @@ export default function VendorProfilePage() {
                 )}
                 <div className="flex items-center gap-3 text-sm">
                   <MapPin className="h-4 w-4 text-muted-foreground" />
-                  <span>{vendor.region || "Unknown"} - {vendor.country || "N/A"}</span>
+                  <span>{vendor.region || vendor.zone || "Unknown"} - {vendor.country || "N/A"}</span>
                 </div>
                 {vendor.kam && (
                   <div className="flex items-center gap-3 text-sm">

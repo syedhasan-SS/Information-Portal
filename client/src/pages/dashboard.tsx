@@ -263,11 +263,12 @@ export default function DashboardPage() {
               <Button
                 onClick={() => setLocation("/tickets")}
                 className="bg-accent text-accent-foreground hover:bg-accent/90"
+                data-testid="button-view-all-tickets"
               >
                 View All Tickets
                 <ArrowRight className="ml-2 h-4 w-4" />
               </Button>
-              <Button variant="outline" onClick={() => setLocation("/vendors")}>
+              <Button variant="outline" onClick={() => setLocation("/vendors")} data-testid="button-manage-vendors">
                 Manage Vendors
               </Button>
             </div>

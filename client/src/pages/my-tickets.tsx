@@ -53,6 +53,8 @@ export default function MyTicketsPage() {
     return acc;
   }, {} as Record<string, Category>) || {};
 
+  // Note: In production, filter by current logged-in user ID
+  // For now, showing all tickets with createdById/assigneeId set
   const createdTickets = tickets?.filter((t) => t.createdById) || [];
   const assignedTickets = tickets?.filter((t) => t.assigneeId) || [];
 
