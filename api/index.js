@@ -28,9 +28,17 @@ async function ensureRoutesRegistered() {
         const distPath = path.join(process.cwd(), "dist", "public");
         app.use(express.static(distPath));
 
-        // Fallback to index.html for client-side routing
-        app.get("*", (_req, res) => {
-          res.sendFile(path.join(distPath, "index.html"));
+        // Fallback to index.html for client-side routing (Express 5 compatible)
+        app.use((_req, res, next) => {
+          // Only serve index.html for non-API routes
+          if (!_req.path.startsWith("/api")) {
+            const indexPath = path.join(distPath, "index.html");
+            res.sendFile(indexPath, (err) => {
+              if (err) next(err);
+            });
+          } else {
+            next();
+          }
         });
 
         routesRegistered = true;
