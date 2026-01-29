@@ -2,6 +2,7 @@ import "dotenv/config";
 import express from "express";
 import type { Request, Response, NextFunction } from "express";
 import type { VercelRequest, VercelResponse } from "@vercel/node";
+import { createServer } from "http";
 import path from "path";
 import { registerRoutes } from "../server/routes";
 
@@ -59,7 +60,9 @@ app.use((req, res, next) => {
 });
 
 // Initialize routes
-registerRoutes(app);
+// Create a mock HTTP server for the registerRoutes function
+const mockServer = createServer();
+registerRoutes(mockServer, app);
 
 app.use((err: any, _req: Request, res: Response, _next: NextFunction) => {
   const status = err.status || err.statusCode || 500;
