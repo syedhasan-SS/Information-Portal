@@ -6,6 +6,7 @@ import {
   insertCategorySchema,
   insertTicketSchema,
   insertCommentSchema,
+  insertUserSchema,
 } from "@shared/schema";
 import { z } from "zod";
 
@@ -136,6 +137,60 @@ export async function registerRoutes(
       }
       const comment = await storage.createComment(parsed.data);
       res.status(201).json(comment);
+    } catch (error: any) {
+      res.status(500).json({ error: error.message });
+    }
+  });
+
+  // Users
+  app.get("/api/users", async (_req, res) => {
+    try {
+      const users = await storage.getUsers();
+      res.json(users);
+    } catch (error: any) {
+      res.status(500).json({ error: error.message });
+    }
+  });
+
+  app.get("/api/users/:id", async (req, res) => {
+    try {
+      const user = await storage.getUserById(req.params.id);
+      if (!user) {
+        return res.status(404).json({ error: "User not found" });
+      }
+      res.json(user);
+    } catch (error: any) {
+      res.status(500).json({ error: error.message });
+    }
+  });
+
+  app.post("/api/users", async (req, res) => {
+    try {
+      const parsed = insertUserSchema.safeParse(req.body);
+      if (!parsed.success) {
+        return res.status(400).json({ error: parsed.error.message });
+      }
+      
+      // Check if email already exists
+      const existing = await storage.getUserByEmail(parsed.data.email);
+      if (existing) {
+        return res.status(400).json({ error: "A user with this email already exists" });
+      }
+      
+      const user = await storage.createUser(parsed.data);
+      res.status(201).json(user);
+    } catch (error: any) {
+      res.status(500).json({ error: error.message });
+    }
+  });
+
+  app.patch("/api/users/:id", async (req, res) => {
+    try {
+      const user = await storage.updateUser(req.params.id, req.body);
+      if (!user) {
+        return res.status(404).json({ error: "User not found" });
+      }
+      res.json(user);
     } catch (error: any) {
       res.status(500).json({ error: error.message });
     }

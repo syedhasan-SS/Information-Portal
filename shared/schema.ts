@@ -72,6 +72,18 @@ export const comments = pgTable("comments", {
   createdAt: timestamp("created_at").notNull().defaultNow(),
 });
 
+export const users = pgTable("users", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  email: text("email").notNull().unique(),
+  password: text("password").notNull(),
+  name: text("name").notNull(),
+  role: text("role").notNull().$type<"Admin" | "Department Lead" | "Management" | "Seller Support Agent">(),
+  department: text("department").$type<"Finance" | "Operations" | "Marketplace" | "Tech" | "Experience" | "CX" | "Seller Support">(),
+  isActive: boolean("is_active").notNull().default(true),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+  updatedAt: timestamp("updated_at").notNull().defaultNow(),
+});
+
 export const insertVendorSchema = createInsertSchema(vendors).omit({
   id: true,
   createdAt: true,
@@ -94,12 +106,20 @@ export const insertCommentSchema = createInsertSchema(comments).omit({
   createdAt: true,
 });
 
+export const insertUserSchema = createInsertSchema(users).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+});
+
 export type InsertVendor = z.infer<typeof insertVendorSchema>;
 export type InsertCategory = z.infer<typeof insertCategorySchema>;
 export type InsertTicket = z.infer<typeof insertTicketSchema>;
 export type InsertComment = z.infer<typeof insertCommentSchema>;
+export type InsertUser = z.infer<typeof insertUserSchema>;
 
 export type Vendor = typeof vendors.$inferSelect;
 export type Category = typeof categories.$inferSelect;
 export type Ticket = typeof tickets.$inferSelect;
 export type Comment = typeof comments.$inferSelect;
+export type User = typeof users.$inferSelect;

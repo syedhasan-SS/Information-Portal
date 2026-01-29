@@ -5,14 +5,17 @@ import {
   categories,
   tickets,
   comments,
+  users,
   type Vendor,
   type Category,
   type Ticket,
   type Comment,
+  type User,
   type InsertVendor,
   type InsertCategory,
   type InsertTicket,
   type InsertComment,
+  type InsertUser,
 } from "@shared/schema";
 
 export interface IStorage {
@@ -35,6 +38,13 @@ export interface IStorage {
   // Comments
   getCommentsByTicketId(ticketId: string): Promise<Comment[]>;
   createComment(comment: InsertComment): Promise<Comment>;
+
+  // Users
+  getUsers(): Promise<User[]>;
+  getUserById(id: string): Promise<User | undefined>;
+  getUserByEmail(email: string): Promise<User | undefined>;
+  createUser(user: InsertUser): Promise<User>;
+  updateUser(id: string, updates: Partial<InsertUser>): Promise<User | undefined>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -99,6 +109,35 @@ export class DatabaseStorage implements IStorage {
 
   async createComment(comment: InsertComment): Promise<Comment> {
     const results = await db.insert(comments).values(comment).returning();
+    return results[0];
+  }
+
+  // Users
+  async getUsers(): Promise<User[]> {
+    return await db.select().from(users).orderBy(desc(users.createdAt));
+  }
+
+  async getUserById(id: string): Promise<User | undefined> {
+    const results = await db.select().from(users).where(eq(users.id, id)).limit(1);
+    return results[0];
+  }
+
+  async getUserByEmail(email: string): Promise<User | undefined> {
+    const results = await db.select().from(users).where(eq(users.email, email)).limit(1);
+    return results[0];
+  }
+
+  async createUser(user: InsertUser): Promise<User> {
+    const results = await db.insert(users).values(user).returning();
+    return results[0];
+  }
+
+  async updateUser(id: string, updates: Partial<InsertUser>): Promise<User | undefined> {
+    const results = await db
+      .update(users)
+      .set({ ...updates, updatedAt: new Date() })
+      .where(eq(users.id, id))
+      .returning();
     return results[0];
   }
 }
