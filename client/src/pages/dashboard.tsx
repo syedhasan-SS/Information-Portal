@@ -1,9 +1,11 @@
 import { useState } from "react";
+import { useQuery } from "@tanstack/react-query";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { cn } from "@/lib/utils";
+import { getVendors, getTickets } from "@/lib/api";
 import {
   Search,
   Plus,
@@ -15,6 +17,7 @@ import {
   BarChart3,
   Ticket,
   Package,
+  Loader2,
 } from "lucide-react";
 
 type Tab = "tickets" | "vendors" | "analytics";
@@ -339,11 +342,18 @@ function TicketCard({ ticket }: { ticket: MockTicket }) {
 }
 
 function VendorsView() {
-  const mockVendors = [
-    { name: "Fleek Moda", handle: "fleek_moda", gmvTier: "XL", kam: "Ayesha Khan", openTickets: 8, totalTickets: 45 },
-    { name: "Silverlane", handle: "silverlane", gmvTier: "L", kam: "Rohan Mehta", openTickets: 3, totalTickets: 22 },
-    { name: "Kora Home", handle: "kora_home", gmvTier: "M", kam: "Sana Iqbal", openTickets: 5, totalTickets: 18 },
-  ];
+  const { data: vendors, isLoading } = useQuery({
+    queryKey: ["vendors"],
+    queryFn: getVendors,
+  });
+
+  if (isLoading) {
+    return (
+      <div className="flex items-center justify-center py-12">
+        <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-6">
@@ -355,7 +365,7 @@ function VendorsView() {
       </div>
 
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-        {mockVendors.map((vendor) => (
+        {vendors?.map((vendor) => (
           <Card key={vendor.handle} className="p-5" data-testid={`card-vendor-${vendor.handle}`}>
             <div className="space-y-4">
               <div>
@@ -369,8 +379,8 @@ function VendorsView() {
                 <span className="text-xs text-muted-foreground">KAM: {vendor.kam}</span>
               </div>
               <div className="flex items-center justify-between text-sm">
-                <span className="text-muted-foreground">Open: {vendor.openTickets}</span>
-                <span className="text-muted-foreground">Total: {vendor.totalTickets}</span>
+                <span className="text-muted-foreground">Zone: {vendor.zone}</span>
+                <span className="text-muted-foreground">{vendor.persona}</span>
               </div>
               <Button size="sm" variant="outline" className="w-full">
                 View Profile
