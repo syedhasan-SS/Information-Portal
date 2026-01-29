@@ -1,5 +1,5 @@
 {
-  "buildCommand": "npm run build",
+  "buildCommand": "npx vite build --outDir dist/public",
   "rewrites": [
     {
       "source": "/(.*)",
