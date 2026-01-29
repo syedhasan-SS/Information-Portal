@@ -1,2 +1,2 @@
-# Don't deploy the server bundle as a static file
-dist/index.cjs
+# Don't serve the server bundle as a static file - it will be required by api/index.js
+# But we need dist/public for frontend assets
