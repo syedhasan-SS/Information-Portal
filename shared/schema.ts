@@ -41,7 +41,13 @@ export const tickets = pgTable("tickets", {
   categoryId: varchar("category_id").notNull().references(() => categories.id),
   subject: text("subject").notNull(),
   description: text("description").notNull(),
-  fleekOrderId: text("fleek_order_id"),
+  fleekOrderIds: text("fleek_order_ids").array(),
+  attachments: jsonb("attachments").$type<Array<{
+    type: "image" | "file" | "video";
+    name: string;
+    url: string;
+    size: number;
+  }>>(),
   status: text("status").notNull().default("New").$type<"New" | "Open" | "Pending" | "Solved" | "Closed">(),
   
   priorityScore: integer("priority_score").notNull(),
