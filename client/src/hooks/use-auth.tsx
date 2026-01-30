@@ -94,8 +94,6 @@ const ROLE_PERMISSIONS = {
 };
 
 export function AuthProvider({ children }: { children: ReactNode }) {
-  const [user, setUser] = useState<User | null>(null);
-
   // Fetch current user session
   const { data: currentUser, isLoading } = useQuery({
     queryKey: ["current-user"],
@@ -128,10 +126,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     staleTime: 5 * 60 * 1000, // 5 minutes
   });
 
+  // Update localStorage when user data is fetched
   useEffect(() => {
     if (currentUser) {
-      setUser(currentUser);
-      // Store in localStorage for client-side checks
       localStorage.setItem("userEmail", currentUser.email);
       localStorage.setItem("userName", currentUser.name);
       localStorage.setItem("userRole", currentUser.role);
@@ -142,19 +139,18 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, [currentUser]);
 
   const hasPermission = (permission: string): boolean => {
-    if (!user) return false;
-    const permissions = ROLE_PERMISSIONS[user.role] || [];
+    if (!currentUser) return false;
+    const permissions = ROLE_PERMISSIONS[currentUser.role] || [];
     return permissions.includes(permission);
   };
 
   const hasRole = (roles: string[]): boolean => {
-    if (!user) return false;
-    return roles.includes(user.role);
+    if (!currentUser) return false;
+    return roles.includes(currentUser.role);
   };
 
   const logout = async () => {
     await fetch("/api/logout", { method: "POST" });
-    setUser(null);
     localStorage.clear();
     window.location.href = "/";
   };
@@ -162,9 +158,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   return (
     <AuthContext.Provider
       value={{
-        user,
+        user: currentUser ?? null,
         isLoading,
-        isAuthenticated: !!user,
+        isAuthenticated: !!currentUser,
         hasPermission,
         hasRole,
         logout,
