@@ -433,28 +433,21 @@ export default function MyTicketsPage() {
                     </Button>
                   </PopoverTrigger>
                   <PopoverContent className="w-full p-0" align="start">
-                    <Command>
-                      <CommandInput
-                        placeholder="Search or type vendor handle..."
-                        value={newTicket.vendorHandle}
-                        onValueChange={(val) => setNewTicket({ ...newTicket, vendorHandle: val })}
-                      />
+                    <Command shouldFilter={true}>
+                      <CommandInput placeholder="Search vendor handle or name..." />
                       <CommandList>
                         <CommandEmpty>
                           <p className="text-sm text-muted-foreground p-2">
-                            Type to manually enter vendor handle
+                            No vendor found. You can type manually in the field.
                           </p>
                         </CommandEmpty>
                         <CommandGroup>
-                          {vendors?.filter(v =>
-                            v.handle.toLowerCase().includes(newTicket.vendorHandle.toLowerCase()) ||
-                            v.name.toLowerCase().includes(newTicket.vendorHandle.toLowerCase())
-                          ).map((v) => (
+                          {vendors?.map((v) => (
                             <CommandItem
                               key={v.handle}
-                              value={v.handle}
-                              onSelect={(value) => {
-                                setNewTicket({ ...newTicket, vendorHandle: value });
+                              value={`${v.handle} ${v.name}`}
+                              onSelect={() => {
+                                setNewTicket({ ...newTicket, vendorHandle: v.handle });
                                 setVendorComboOpen(false);
                               }}
                             >
@@ -472,6 +465,12 @@ export default function MyTicketsPage() {
                     </Command>
                   </PopoverContent>
                 </Popover>
+                <Input
+                  value={newTicket.vendorHandle}
+                  onChange={(e) => setNewTicket({ ...newTicket, vendorHandle: e.target.value })}
+                  placeholder="Or type vendor handle manually"
+                  className="text-sm"
+                />
               </div>
 
               <div className="space-y-2">
@@ -587,7 +586,7 @@ export default function MyTicketsPage() {
                   </Button>
                 </PopoverTrigger>
                 <PopoverContent className="w-full p-0" align="start">
-                  <Command>
+                  <Command shouldFilter={true}>
                     <CommandInput placeholder="Search or type order ID..." />
                     <CommandList>
                       <CommandEmpty>
