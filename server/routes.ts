@@ -10,6 +10,7 @@ import {
 } from "@shared/schema";
 import { z } from "zod";
 import { sendNewUserEmail } from "./email";
+import { getOrdersByIds, testBigQueryConnection } from "./bigquery";
 
 export async function registerRoutes(
   httpServer: Server,
@@ -790,6 +791,41 @@ export async function registerRoutes(
           id: `config-${Date.now()}-${index}`,
           createdAt: new Date()
         }))
+      });
+    } catch (error: any) {
+      res.status(500).json({ error: error.message });
+    }
+  });
+
+  // BigQuery Integration
+  app.get("/api/bigquery/orders", async (req, res) => {
+    try {
+      const orderIds = req.query.ids as string;
+
+      if (!orderIds) {
+        return res.status(400).json({ error: "Order IDs are required" });
+      }
+
+      const idsArray = orderIds.split(',').map(id => id.trim()).filter(id => id);
+
+      if (idsArray.length === 0) {
+        return res.status(400).json({ error: "No valid order IDs provided" });
+      }
+
+      const orders = await getOrdersByIds(idsArray);
+      res.json(orders);
+    } catch (error: any) {
+      console.error('[API] BigQuery orders fetch failed:', error);
+      res.status(500).json({ error: error.message });
+    }
+  });
+
+  app.get("/api/bigquery/test", async (_req, res) => {
+    try {
+      const isConnected = await testBigQueryConnection();
+      res.json({
+        connected: isConnected,
+        configured: !!(process.env.BIGQUERY_PROJECT_ID),
       });
     } catch (error: any) {
       res.status(500).json({ error: error.message });

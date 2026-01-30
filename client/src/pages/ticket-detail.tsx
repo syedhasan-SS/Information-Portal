@@ -29,10 +29,33 @@ import {
 } from "lucide-react";
 import type { Ticket, Comment, Category, User as UserType } from "@shared/schema";
 
+interface FleetOrderData {
+  orderId: string;
+  orderDate?: string;
+  orderStatus?: string;
+  orderAmount?: number;
+  currency?: string;
+  customerName?: string;
+  customerEmail?: string;
+  vendorHandle?: string;
+}
+
 async function getTicket(id: string): Promise<Ticket> {
   const res = await fetch(`/api/tickets/${id}`);
   if (!res.ok) throw new Error("Failed to fetch ticket");
   return res.json();
+}
+
+async function getOrdersFromBigQuery(orderIds: string[]): Promise<FleetOrderData[]> {
+  try {
+    const ids = orderIds.join(',');
+    const res = await fetch(`/api/bigquery/orders?ids=${encodeURIComponent(ids)}`);
+    if (!res.ok) return [];
+    return res.json();
+  } catch (error) {
+    console.error('Failed to fetch BigQuery orders:', error);
+    return [];
+  }
 }
 
 async function getComments(ticketId: string): Promise<Comment[]> {
@@ -108,6 +131,12 @@ export default function TicketDetailPage() {
   const { data: users } = useQuery({
     queryKey: ["users"],
     queryFn: getUsers,
+  });
+
+  const { data: bigQueryOrders, isLoading: ordersLoading } = useQuery({
+    queryKey: ["bigquery-orders", ticket?.fleekOrderIds],
+    queryFn: () => getOrdersFromBigQuery(ticket!.fleekOrderIds!),
+    enabled: !!(ticket?.fleekOrderIds && ticket.fleekOrderIds.length > 0),
   });
 
   const updateMutation = useMutation({
@@ -457,6 +486,69 @@ export default function TicketDetailPage() {
                 )}
               </div>
             </Card>
+
+            {ticket.fleekOrderIds && ticket.fleekOrderIds.length > 0 && (
+              <Card className="p-6">
+                <h3 className="mb-4 font-semibold flex items-center justify-between">
+                  Order Information
+                  {ordersLoading && <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />}
+                </h3>
+                {bigQueryOrders && bigQueryOrders.length > 0 ? (
+                  <div className="space-y-4">
+                    {bigQueryOrders.map((order, index) => (
+                      <div key={order.orderId} className={cn(
+                        "space-y-2 pb-3",
+                        index < bigQueryOrders.length - 1 && "border-b border-border"
+                      )}>
+                        <div className="flex items-start justify-between">
+                          <div>
+                            <label className="text-xs font-medium text-muted-foreground">Order ID</label>
+                            <p className="mt-0.5 font-mono text-sm font-semibold">{order.orderId}</p>
+                          </div>
+                          {order.orderStatus && (
+                            <Badge variant="secondary" className="text-xs">
+                              {order.orderStatus}
+                            </Badge>
+                          )}
+                        </div>
+
+                        {order.orderAmount && (
+                          <div>
+                            <label className="text-xs font-medium text-muted-foreground">Amount</label>
+                            <p className="mt-0.5 text-sm">
+                              {order.currency || '$'}{order.orderAmount.toLocaleString()}
+                            </p>
+                          </div>
+                        )}
+
+                        {order.orderDate && (
+                          <div>
+                            <label className="text-xs font-medium text-muted-foreground">Order Date</label>
+                            <p className="mt-0.5 text-sm">
+                              {new Date(order.orderDate).toLocaleDateString()}
+                            </p>
+                          </div>
+                        )}
+
+                        {order.customerName && (
+                          <div>
+                            <label className="text-xs font-medium text-muted-foreground">Customer</label>
+                            <p className="mt-0.5 text-sm">{order.customerName}</p>
+                            {order.customerEmail && (
+                              <p className="text-xs text-muted-foreground">{order.customerEmail}</p>
+                            )}
+                          </div>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                ) : !ordersLoading ? (
+                  <p className="text-sm text-muted-foreground">
+                    {bigQueryOrders ? 'No order data available in BigQuery' : 'BigQuery integration not configured'}
+                  </p>
+                ) : null}
+              </Card>
+            )}
 
             <Card className="p-6">
               <h3 className="mb-4 font-semibold">SLA Information</h3>
