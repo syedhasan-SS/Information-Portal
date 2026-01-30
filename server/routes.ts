@@ -252,34 +252,59 @@ export async function registerRoutes(
     }
   });
 
+  // Health check / debug endpoint
+  app.get("/api/health", async (_req, res) => {
+    try {
+      const userCount = await storage.getUsers();
+      res.json({
+        status: "ok",
+        timestamp: new Date().toISOString(),
+        usersInDB: userCount.length,
+        version: "1.0.1"
+      });
+    } catch (error: any) {
+      res.status(500).json({ error: error.message });
+    }
+  });
+
   // Authentication
   app.post("/api/auth/login", async (req, res) => {
     try {
       const { email, password } = req.body;
 
+      console.log("[LOGIN] Attempt with email:", email);
+
       if (!email || !password) {
+        console.log("[LOGIN] Missing email or password");
         return res.status(400).json({ error: "Email and password are required" });
       }
 
       const user = await storage.getUserByEmail(email);
+      console.log("[LOGIN] User found:", !!user);
+
       if (!user) {
+        console.log("[LOGIN] User not found in database");
         return res.status(401).json({ error: "Invalid credentials" });
       }
 
       // In production, use proper password hashing (bcrypt, etc.)
       if (user.password !== password) {
+        console.log("[LOGIN] Password mismatch");
         return res.status(401).json({ error: "Invalid credentials" });
       }
 
       if (!user.isActive) {
+        console.log("[LOGIN] User inactive");
         return res.status(403).json({ error: "Account is inactive" });
       }
 
+      console.log("[LOGIN] Login successful for:", user.email);
       // Store user session (in production, use express-session or JWT)
       // For now, we'll send the user data back
       const { password: _, ...userWithoutPassword } = user;
       res.json(userWithoutPassword);
     } catch (error: any) {
+      console.error("[LOGIN] Error:", error);
       res.status(500).json({ error: error.message });
     }
   });
@@ -290,18 +315,26 @@ export async function registerRoutes(
       // For demo, we'll use a simple approach with email from headers or query
       const email = req.headers["x-user-email"] as string || req.query.email as string;
 
+      console.log("[AUTH/ME] Request with email:", email);
+
       if (!email) {
+        console.log("[AUTH/ME] No email provided");
         return res.status(401).json({ error: "Not authenticated" });
       }
 
       const user = await storage.getUserByEmail(email);
+      console.log("[AUTH/ME] User found:", !!user, user?.isActive);
+
       if (!user || !user.isActive) {
+        console.log("[AUTH/ME] User not found or inactive");
         return res.status(401).json({ error: "Not authenticated" });
       }
 
+      console.log("[AUTH/ME] Returning user:", user.email);
       const { password: _, ...userWithoutPassword } = user;
       res.json(userWithoutPassword);
     } catch (error: any) {
+      console.error("[AUTH/ME] Error:", error);
       res.status(500).json({ error: error.message });
     }
   });
