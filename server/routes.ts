@@ -9,6 +9,7 @@ import {
   insertUserSchema,
 } from "@shared/schema";
 import { z } from "zod";
+import { sendNewUserEmail } from "./email";
 
 export async function registerRoutes(
   httpServer: Server,
@@ -170,14 +171,23 @@ export async function registerRoutes(
       if (!parsed.success) {
         return res.status(400).json({ error: parsed.error.message });
       }
-      
+
       // Check if email already exists
       const existing = await storage.getUserByEmail(parsed.data.email);
       if (existing) {
         return res.status(400).json({ error: "A user with this email already exists" });
       }
-      
+
+      // Store plain password for email before creating user
+      const plainPassword = parsed.data.password;
+
       const user = await storage.createUser(parsed.data);
+
+      // Send welcome email with credentials (don't await to avoid blocking response)
+      sendNewUserEmail(user, plainPassword).catch(err => {
+        console.error('Failed to send welcome email:', err);
+      });
+
       res.status(201).json(user);
     } catch (error: any) {
       res.status(500).json({ error: error.message });
