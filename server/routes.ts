@@ -12,6 +12,14 @@ import {
 import { z } from "zod";
 import { sendNewUserEmail } from "./email";
 import { getOrdersByIds, getOrderIdsByVendor, testBigQueryConnection } from "./bigquery";
+import {
+  notifyTicketCreated,
+  notifyTicketAssigned,
+  notifyTicketSolved,
+  notifyCommentAdded,
+  notifyMentions,
+  getCurrentUser,
+} from "./notifications";
 
 export async function registerRoutes(
   httpServer: Server,
@@ -104,6 +112,13 @@ export async function registerRoutes(
         return res.status(400).json({ error: parsed.error.message });
       }
       const ticket = await storage.createTicket(parsed.data);
+
+      // Create notifications for new ticket (non-blocking)
+      const creator = await getCurrentUser(req);
+      notifyTicketCreated(ticket, creator).catch(err => {
+        console.error('Failed to send ticket creation notifications:', err);
+      });
+
       res.status(201).json(ticket);
     } catch (error: any) {
       res.status(500).json({ error: error.message });
@@ -112,10 +127,35 @@ export async function registerRoutes(
 
   app.patch("/api/tickets/:id", async (req, res) => {
     try {
+      const oldTicket = await storage.getTicketById(req.params.id);
+      if (!oldTicket) {
+        return res.status(404).json({ error: "Ticket not found" });
+      }
+
       const ticket = await storage.updateTicket(req.params.id, req.body);
       if (!ticket) {
         return res.status(404).json({ error: "Ticket not found" });
       }
+
+      const currentUser = await getCurrentUser(req);
+
+      // Check if ticket was assigned
+      if (req.body.assigneeId && oldTicket.assigneeId !== req.body.assigneeId) {
+        const assignee = await storage.getUserById(req.body.assigneeId);
+        if (assignee) {
+          notifyTicketAssigned(ticket, assignee, currentUser).catch(err => {
+            console.error('Failed to send ticket assignment notification:', err);
+          });
+        }
+      }
+
+      // Check if ticket was solved
+      if (req.body.status === "Solved" && oldTicket.status !== "Solved") {
+        notifyTicketSolved(ticket, currentUser).catch(err => {
+          console.error('Failed to send ticket solved notification:', err);
+        });
+      }
+
       res.json(ticket);
     } catch (error: any) {
       res.status(500).json({ error: error.message });
@@ -139,6 +179,23 @@ export async function registerRoutes(
         return res.status(400).json({ error: parsed.error.message });
       }
       const comment = await storage.createComment(parsed.data);
+
+      // Get the ticket to send notifications
+      const ticket = await storage.getTicketById(parsed.data.ticketId);
+      if (ticket) {
+        const commenter = await getCurrentUser(req);
+
+        // Notify about new comment (non-blocking)
+        notifyCommentAdded(comment, ticket, commenter).catch(err => {
+          console.error('Failed to send comment notifications:', err);
+        });
+
+        // Notify mentioned users (non-blocking)
+        notifyMentions(comment, ticket, commenter).catch(err => {
+          console.error('Failed to send mention notifications:', err);
+        });
+      }
+
       res.status(201).json(comment);
     } catch (error: any) {
       res.status(500).json({ error: error.message });
