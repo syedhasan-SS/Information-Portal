@@ -49,9 +49,38 @@ export default function DashboardPage() {
   const [, setLocation] = useLocation();
   const { user, hasPermission, logout } = useAuth();
 
-  const { data: tickets, isLoading: ticketsLoading } = useQuery({
+  const { data: allTickets, isLoading: ticketsLoading } = useQuery({
     queryKey: ["tickets"],
     queryFn: getTickets,
+  });
+
+  // Filter tickets based on user role and permissions
+  const tickets = allTickets?.filter((ticket) => {
+    if (!user) return false;
+
+    // Owners and Admins see all tickets
+    if (hasPermission("view:all_tickets")) {
+      return true;
+    }
+
+    // Department Heads and Managers see their department tickets
+    if (hasPermission("view:department_tickets") && user.department) {
+      return ticket.department === user.department;
+    }
+
+    // Department Agents see only assigned tickets or their department tickets
+    if (user.role === "Department Agent") {
+      return ticket.assigneeId === user.id ||
+             (user.department && ticket.department === user.department);
+    }
+
+    // Seller Support Agents see all tickets (CX role)
+    if (user.role === "Seller Support Agent") {
+      return true;
+    }
+
+    // Default: only show assigned tickets
+    return ticket.assigneeId === user.id;
   });
 
   const { data: users } = useQuery({
@@ -93,11 +122,26 @@ export default function DashboardPage() {
     return acc;
   }, {} as Record<string, number>) || {};
 
-  const agentPendingTickets = users?.map((user) => {
-    const userTickets = tickets?.filter((t) => t.assigneeId === user.id) || [];
+  // Filter users based on current user's department for Department Heads/Managers
+  const filteredUsers = users?.filter((u) => {
+    if (!user) return false;
+
+    // Owners/Admins see all agents
+    if (hasPermission("view:users")) return true;
+
+    // Department Heads/Managers see only agents from their department
+    if (hasPermission("view:department_tickets") && user.department) {
+      return u.department === user.department;
+    }
+
+    return false;
+  });
+
+  const agentPendingTickets = filteredUsers?.map((u) => {
+    const userTickets = tickets?.filter((t) => t.assigneeId === u.id) || [];
     const pending = userTickets.filter((t) => ["New", "Open", "Pending"].includes(t.status)).length;
     const breached = userTickets.filter((t) => t.slaStatus === "breached").length;
-    return { user, pending, breached, total: userTickets.length };
+    return { user: u, pending, breached, total: userTickets.length };
   }).filter((a) => a.total > 0).sort((a, b) => b.pending - a.pending) || [];
 
   return (
