@@ -164,6 +164,47 @@ export async function getVendorOrderMetrics(vendorHandle: string, days: number =
 }
 
 /**
+ * Fetch order IDs for a specific vendor from BigQuery
+ */
+export async function getOrderIdsByVendor(vendorHandle: string, limit: number = 100): Promise<string[]> {
+  const client = getBigQueryClient();
+
+  if (!client) {
+    console.log('[BigQuery] Client not available, returning empty order IDs');
+    return [];
+  }
+
+  try {
+    const dataset = process.env.BIGQUERY_DATASET || 'fleek_data';
+    const table = process.env.BIGQUERY_ORDERS_TABLE || 'orders';
+
+    const query = `
+      SELECT DISTINCT order_id as orderId
+      FROM \`${process.env.BIGQUERY_PROJECT_ID}.${dataset}.${table}\`
+      WHERE vendor_handle = @vendorHandle
+      ORDER BY order_date DESC
+      LIMIT @limit
+    `;
+
+    const options = {
+      query,
+      params: { vendorHandle, limit },
+      location: process.env.BIGQUERY_LOCATION || 'US',
+    };
+
+    console.log(`[BigQuery] Fetching order IDs for vendor: ${vendorHandle}`);
+    const [rows] = await client.query(options);
+
+    const orderIds = rows.map((row: any) => row.orderId);
+    console.log(`[BigQuery] Found ${orderIds.length} order IDs`);
+    return orderIds;
+  } catch (error) {
+    console.error('[BigQuery] Order IDs query failed:', error);
+    return [];
+  }
+}
+
+/**
  * Test BigQuery connection
  */
 export async function testBigQueryConnection(): Promise<boolean> {

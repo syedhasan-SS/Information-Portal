@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useLocation } from "wouter";
 import { Card } from "@/components/ui/card";
@@ -14,6 +14,19 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import {
+  Command,
+  CommandEmpty,
+  CommandGroup,
+  CommandInput,
+  CommandItem,
+  CommandList,
+} from "@/components/ui/command";
+import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from "@/components/ui/popover";
 import {
   Dialog,
   DialogContent,
@@ -36,6 +49,9 @@ import {
   TicketIcon,
   User,
   Plus,
+  Check,
+  ChevronsUpDown,
+  X,
 } from "lucide-react";
 import type { Ticket, Category, Vendor } from "@shared/schema";
 
@@ -73,6 +89,10 @@ export default function MyTicketsPage() {
     description: "",
     fleekOrderIds: "",
   });
+  const [vendorComboOpen, setVendorComboOpen] = useState(false);
+  const [orderIdsComboOpen, setOrderIdsComboOpen] = useState(false);
+  const [selectedOrderIds, setSelectedOrderIds] = useState<string[]>([]);
+  const [availableOrderIds, setAvailableOrderIds] = useState<string[]>([]);
   const queryClient = useQueryClient();
   const { toast } = useToast();
 
@@ -101,6 +121,39 @@ export default function MyTicketsPage() {
     if (newTicket.issueType && cat.issueType !== newTicket.issueType) return false;
     return true;
   }) || [];
+
+  // Fetch order IDs from BigQuery when vendor is selected
+  useEffect(() => {
+    const fetchOrderIds = async () => {
+      if (newTicket.vendorHandle) {
+        try {
+          const res = await fetch(`/api/bigquery/vendor/${encodeURIComponent(newTicket.vendorHandle)}/order-ids?limit=100`);
+          if (res.ok) {
+            const orderIds = await res.json();
+            setAvailableOrderIds(orderIds);
+          } else {
+            setAvailableOrderIds([]);
+          }
+        } catch (error) {
+          console.error('Failed to fetch order IDs:', error);
+          setAvailableOrderIds([]);
+        }
+      } else {
+        setAvailableOrderIds([]);
+        setSelectedOrderIds([]);
+      }
+    };
+
+    fetchOrderIds();
+  }, [newTicket.vendorHandle]);
+
+  // Update fleekOrderIds string when selectedOrderIds changes
+  useEffect(() => {
+    setNewTicket(prev => ({
+      ...prev,
+      fleekOrderIds: selectedOrderIds.join(', ')
+    }));
+  }, [selectedOrderIds]);
 
   const createTicketMutation = useMutation({
     mutationFn: async (ticketData: typeof newTicket) => {
@@ -165,6 +218,8 @@ export default function MyTicketsPage() {
       queryClient.invalidateQueries({ queryKey: ["tickets"] });
       setShowNewTicketDialog(false);
       setNewTicket({ vendorHandle: "", department: "", issueType: "", categoryId: "", subject: "", description: "", fleekOrderIds: "" });
+      setSelectedOrderIds([]);
+      setAvailableOrderIds([]);
       toast({ title: "Success", description: "Ticket created successfully" });
     },
     onError: (error: Error) => {
@@ -364,21 +419,59 @@ export default function MyTicketsPage() {
             <div className="grid gap-4 sm:grid-cols-2">
               <div className="space-y-2">
                 <Label htmlFor="vendorHandle">Vendor</Label>
-                <Select
-                  value={newTicket.vendorHandle}
-                  onValueChange={(val) => setNewTicket({ ...newTicket, vendorHandle: val })}
-                >
-                  <SelectTrigger data-testid="select-vendor">
-                    <SelectValue placeholder="Select vendor" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {vendors?.map((v) => (
-                      <SelectItem key={v.handle} value={v.handle}>
-                        {v.handle} - {v.name}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
+                <Popover open={vendorComboOpen} onOpenChange={setVendorComboOpen}>
+                  <PopoverTrigger asChild>
+                    <Button
+                      variant="outline"
+                      role="combobox"
+                      aria-expanded={vendorComboOpen}
+                      className="w-full justify-between font-normal"
+                      data-testid="select-vendor"
+                    >
+                      {newTicket.vendorHandle || "Select or type vendor handle..."}
+                      <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+                    </Button>
+                  </PopoverTrigger>
+                  <PopoverContent className="w-full p-0" align="start">
+                    <Command>
+                      <CommandInput
+                        placeholder="Search or type vendor handle..."
+                        value={newTicket.vendorHandle}
+                        onValueChange={(val) => setNewTicket({ ...newTicket, vendorHandle: val })}
+                      />
+                      <CommandList>
+                        <CommandEmpty>
+                          <p className="text-sm text-muted-foreground p-2">
+                            Type to manually enter vendor handle
+                          </p>
+                        </CommandEmpty>
+                        <CommandGroup>
+                          {vendors?.filter(v =>
+                            v.handle.toLowerCase().includes(newTicket.vendorHandle.toLowerCase()) ||
+                            v.name.toLowerCase().includes(newTicket.vendorHandle.toLowerCase())
+                          ).map((v) => (
+                            <CommandItem
+                              key={v.handle}
+                              value={v.handle}
+                              onSelect={(value) => {
+                                setNewTicket({ ...newTicket, vendorHandle: value });
+                                setVendorComboOpen(false);
+                              }}
+                            >
+                              <Check
+                                className={cn(
+                                  "mr-2 h-4 w-4",
+                                  newTicket.vendorHandle === v.handle ? "opacity-100" : "opacity-0"
+                                )}
+                              />
+                              {v.handle} - {v.name}
+                            </CommandItem>
+                          ))}
+                        </CommandGroup>
+                      </CommandList>
+                    </Command>
+                  </PopoverContent>
+                </Popover>
               </div>
 
               <div className="space-y-2">
@@ -460,15 +553,97 @@ export default function MyTicketsPage() {
 
             <div className="space-y-2">
               <Label htmlFor="fleekOrderIds">Fleek Order IDs (optional)</Label>
-              <Input
-                id="fleekOrderIds"
-                value={newTicket.fleekOrderIds}
-                onChange={(e) => setNewTicket({ ...newTicket, fleekOrderIds: e.target.value })}
-                placeholder="e.g., ORD-123456, ORD-789012 (comma-separated)"
-                data-testid="input-order-ids"
-              />
+              <Popover open={orderIdsComboOpen} onOpenChange={setOrderIdsComboOpen}>
+                <PopoverTrigger asChild>
+                  <Button
+                    variant="outline"
+                    role="combobox"
+                    aria-expanded={orderIdsComboOpen}
+                    className="w-full justify-between font-normal h-auto min-h-10"
+                    data-testid="select-order-ids"
+                    disabled={!newTicket.vendorHandle}
+                  >
+                    <div className="flex flex-wrap gap-1 flex-1">
+                      {selectedOrderIds.length > 0 ? (
+                        selectedOrderIds.map((orderId) => (
+                          <Badge key={orderId} variant="secondary" className="gap-1">
+                            {orderId}
+                            <X
+                              className="h-3 w-3 cursor-pointer"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                setSelectedOrderIds(prev => prev.filter(id => id !== orderId));
+                              }}
+                            />
+                          </Badge>
+                        ))
+                      ) : (
+                        <span className="text-muted-foreground">
+                          {newTicket.vendorHandle ? "Select or type order IDs..." : "Select vendor first"}
+                        </span>
+                      )}
+                    </div>
+                    <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+                  </Button>
+                </PopoverTrigger>
+                <PopoverContent className="w-full p-0" align="start">
+                  <Command>
+                    <CommandInput placeholder="Search or type order ID..." />
+                    <CommandList>
+                      <CommandEmpty>
+                        <div className="p-2">
+                          <p className="text-sm text-muted-foreground mb-2">
+                            {availableOrderIds.length === 0 && newTicket.vendorHandle
+                              ? "No order IDs found for this vendor in BigQuery"
+                              : "Type to manually enter order ID"}
+                          </p>
+                          <Button
+                            size="sm"
+                            variant="ghost"
+                            className="w-full"
+                            onClick={() => {
+                              const input = document.querySelector('[placeholder="Search or type order ID..."]') as HTMLInputElement;
+                              const value = input?.value?.trim();
+                              if (value && !selectedOrderIds.includes(value)) {
+                                setSelectedOrderIds(prev => [...prev, value]);
+                                input.value = '';
+                              }
+                            }}
+                          >
+                            <Plus className="h-4 w-4 mr-2" />
+                            Add manually
+                          </Button>
+                        </div>
+                      </CommandEmpty>
+                      <CommandGroup>
+                        {availableOrderIds.map((orderId) => (
+                          <CommandItem
+                            key={orderId}
+                            value={orderId}
+                            onSelect={(value) => {
+                              setSelectedOrderIds(prev =>
+                                prev.includes(value)
+                                  ? prev.filter(id => id !== value)
+                                  : [...prev, value]
+                              );
+                            }}
+                          >
+                            <Check
+                              className={cn(
+                                "mr-2 h-4 w-4",
+                                selectedOrderIds.includes(orderId) ? "opacity-100" : "opacity-0"
+                              )}
+                            />
+                            {orderId}
+                          </CommandItem>
+                        ))}
+                      </CommandGroup>
+                    </CommandList>
+                  </Command>
+                </PopoverContent>
+              </Popover>
               <p className="text-xs text-muted-foreground">
-                Enter multiple order IDs separated by commas
+                Select from available order IDs or type manually. Multiple selections allowed.
               </p>
             </div>
 

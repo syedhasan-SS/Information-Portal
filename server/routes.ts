@@ -10,7 +10,7 @@ import {
 } from "@shared/schema";
 import { z } from "zod";
 import { sendNewUserEmail } from "./email";
-import { getOrdersByIds, testBigQueryConnection } from "./bigquery";
+import { getOrdersByIds, getOrderIdsByVendor, testBigQueryConnection } from "./bigquery";
 
 export async function registerRoutes(
   httpServer: Server,
@@ -816,6 +816,23 @@ export async function registerRoutes(
       res.json(orders);
     } catch (error: any) {
       console.error('[API] BigQuery orders fetch failed:', error);
+      res.status(500).json({ error: error.message });
+    }
+  });
+
+  app.get("/api/bigquery/vendor/:vendorHandle/order-ids", async (req, res) => {
+    try {
+      const { vendorHandle } = req.params;
+      const limit = parseInt(req.query.limit as string) || 100;
+
+      if (!vendorHandle) {
+        return res.status(400).json({ error: "Vendor handle is required" });
+      }
+
+      const orderIds = await getOrderIdsByVendor(vendorHandle, limit);
+      res.json(orderIds);
+    } catch (error: any) {
+      console.error('[API] BigQuery vendor order IDs fetch failed:', error);
       res.status(500).json({ error: error.message });
     }
   });
