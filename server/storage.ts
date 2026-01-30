@@ -215,6 +215,13 @@ export class DatabaseStorage implements IStorage {
     return await db.select().from(categoryHierarchy).where(eq(categoryHierarchy.level, level)).orderBy(categoryHierarchy.name);
   }
 
+  async getCategoryHierarchyByLevelAndName(level: number, name: string): Promise<CategoryHierarchy | undefined> {
+    const results = await db.select().from(categoryHierarchy)
+      .where(and(eq(categoryHierarchy.level, level), eq(categoryHierarchy.name, name)))
+      .limit(1);
+    return results[0];
+  }
+
   async getCategoryHierarchyByParent(parentId: string | null): Promise<CategoryHierarchy[]> {
     const condition = parentId === null ? isNull(categoryHierarchy.parentId) : eq(categoryHierarchy.parentId, parentId);
     return await db.select().from(categoryHierarchy).where(condition).orderBy(categoryHierarchy.name);

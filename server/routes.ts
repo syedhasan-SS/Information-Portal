@@ -920,9 +920,113 @@ export async function registerRoutes(
 
   app.post("/api/config/ticket-configs", async (req, res) => {
     try {
-      // Placeholder for now
-      res.status(201).json({ ...req.body, id: `config-${Date.now()}`, createdAt: new Date() });
+      const config = req.body;
+
+      // Basic validation
+      if (!config.issueType || !config.l1 || !config.l2 || !config.l3 || !config.l4) {
+        return res.status(400).json({ error: "Missing required fields" });
+      }
+      if (!['Complaint', 'Request', 'Information'].includes(config.issueType)) {
+        return res.status(400).json({ error: "Invalid issue type" });
+      }
+      if (!config.slaResolutionHours || isNaN(config.slaResolutionHours)) {
+        return res.status(400).json({ error: "Invalid SLA resolution hours" });
+      }
+
+      // Create or find issue type
+      const existingIssueTypes = await storage.getIssueTypes();
+      let issueType = existingIssueTypes.find(it => it.name === config.issueType);
+      if (!issueType) {
+        issueType = await storage.createIssueType({
+          name: config.issueType,
+          description: `${config.issueType} issue type`,
+          isActive: true,
+        });
+      }
+
+      // Create L1 category
+      let l1Category = await storage.getCategoryHierarchyByLevelAndName(1, config.l1);
+      if (!l1Category) {
+        l1Category = await storage.createCategoryHierarchy({
+          level: 1,
+          name: config.l1,
+          parentId: null,
+          description: null,
+          isActive: true,
+        });
+      }
+
+      // Create L2 category
+      let l2Category = await storage.getCategoryHierarchyByLevelAndName(2, config.l2);
+      if (!l2Category || l2Category.parentId !== l1Category.id) {
+        l2Category = await storage.createCategoryHierarchy({
+          level: 2,
+          name: config.l2,
+          parentId: l1Category.id,
+          description: null,
+          isActive: true,
+        });
+      }
+
+      // Create L3 category
+      let l3Category = await storage.getCategoryHierarchyByLevelAndName(3, config.l3);
+      if (!l3Category || l3Category.parentId !== l2Category.id) {
+        l3Category = await storage.createCategoryHierarchy({
+          level: 3,
+          name: config.l3,
+          parentId: l2Category.id,
+          description: null,
+          isActive: true,
+        });
+      }
+
+      // Create L4 category
+      const l4Category = await storage.createCategoryHierarchy({
+        level: 4,
+        name: config.l4,
+        parentId: l3Category.id,
+        description: config.description || null,
+        isActive: config.isActive !== undefined ? config.isActive : true,
+      });
+
+      // Create category mapping (needs all category IDs)
+      await storage.createCategoryMapping({
+        issueTypeId: issueType.id,
+        l1CategoryId: l1Category.id,
+        l2CategoryId: l2Category.id,
+        l3CategoryId: l3Category.id,
+        l4CategoryId: l4Category.id,
+        isActive: true,
+      });
+
+      // Create SLA configuration (needs a name)
+      const slaConfig = await storage.createSlaConfiguration({
+        name: `${config.l1} > ${config.l2} > ${config.l3} > ${config.l4}`,
+        issueTypeId: issueType.id,
+        l1CategoryId: l1Category.id,
+        l2CategoryId: l2Category.id,
+        l3CategoryId: l3Category.id,
+        l4CategoryId: l4Category.id,
+        responseTimeHours: config.slaResponseHours || null,
+        resolutionTimeHours: config.slaResolutionHours,
+        isActive: true,
+      });
+
+      res.status(201).json({
+        id: l4Category.id,
+        issueType: config.issueType,
+        l1: config.l1,
+        l2: config.l2,
+        l3: config.l3,
+        l4: config.l4,
+        description: config.description || "",
+        isActive: l4Category.isActive,
+        slaResponseHours: slaConfig.responseTimeHours,
+        slaResolutionHours: slaConfig.resolutionTimeHours,
+        createdAt: l4Category.createdAt,
+      });
     } catch (error: any) {
+      console.error("Error creating ticket config:", error);
       res.status(500).json({ error: error.message });
     }
   });
@@ -955,18 +1059,111 @@ export async function registerRoutes(
         }
       }
 
-      // For now, just return success with count
-      // In the future, this will insert into the database
+      // Process each config and save to database
+      const createdConfigs = [];
+
+      for (const config of configs) {
+        // Create or find issue type
+        const existingIssueTypes = await storage.getIssueTypes();
+        let issueType = existingIssueTypes.find(it => it.name === config.issueType);
+        if (!issueType) {
+          issueType = await storage.createIssueType({
+            name: config.issueType,
+            description: `${config.issueType} issue type`,
+            isActive: true,
+          });
+        }
+
+        // Create L1 category (or find existing)
+        let l1Category = await storage.getCategoryHierarchyByLevelAndName(1, config.l1);
+        if (!l1Category) {
+          l1Category = await storage.createCategoryHierarchy({
+            level: 1,
+            name: config.l1,
+            parentId: null,
+            description: null,
+            isActive: true,
+          });
+        }
+
+        // Create L2 category (or find existing)
+        let l2Category = await storage.getCategoryHierarchyByLevelAndName(2, config.l2);
+        if (!l2Category || l2Category.parentId !== l1Category.id) {
+          l2Category = await storage.createCategoryHierarchy({
+            level: 2,
+            name: config.l2,
+            parentId: l1Category.id,
+            description: null,
+            isActive: true,
+          });
+        }
+
+        // Create L3 category (or find existing)
+        let l3Category = await storage.getCategoryHierarchyByLevelAndName(3, config.l3);
+        if (!l3Category || l3Category.parentId !== l2Category.id) {
+          l3Category = await storage.createCategoryHierarchy({
+            level: 3,
+            name: config.l3,
+            parentId: l2Category.id,
+            description: null,
+            isActive: true,
+          });
+        }
+
+        // Create L4 category (always create new to avoid conflicts)
+        const l4Category = await storage.createCategoryHierarchy({
+          level: 4,
+          name: config.l4,
+          parentId: l3Category.id,
+          description: config.description || null,
+          isActive: config.isActive !== undefined ? config.isActive : true,
+        });
+
+        // Create category mapping (link issue type to all category levels)
+        await storage.createCategoryMapping({
+          issueTypeId: issueType.id,
+          l1CategoryId: l1Category.id,
+          l2CategoryId: l2Category.id,
+          l3CategoryId: l3Category.id,
+          l4CategoryId: l4Category.id,
+          isActive: true,
+        });
+
+        // Create SLA configuration
+        const slaConfig = await storage.createSlaConfiguration({
+          name: `${config.l1} > ${config.l2} > ${config.l3} > ${config.l4}`,
+          issueTypeId: issueType.id,
+          l1CategoryId: l1Category.id,
+          l2CategoryId: l2Category.id,
+          l3CategoryId: l3Category.id,
+          l4CategoryId: l4Category.id,
+          responseTimeHours: config.slaResponseHours || null,
+          resolutionTimeHours: config.slaResolutionHours,
+          isActive: true,
+        });
+
+        createdConfigs.push({
+          id: l4Category.id,
+          issueType: config.issueType,
+          l1: config.l1,
+          l2: config.l2,
+          l3: config.l3,
+          l4: config.l4,
+          description: config.description || "",
+          isActive: l4Category.isActive,
+          slaResponseHours: slaConfig.responseTimeHours,
+          slaResolutionHours: slaConfig.resolutionTimeHours,
+          createdAt: l4Category.createdAt,
+        });
+      }
+
       res.status(201).json({
         message: "Configurations created successfully",
-        count: configs.length,
-        configs: configs.map((config, index) => ({
-          ...config,
-          id: `config-${Date.now()}-${index}`,
-          createdAt: new Date()
-        }))
+        count: createdConfigs.length,
+        configs: createdConfigs,
       });
     } catch (error: any) {
+      console.error("Error creating ticket configs:", error);
       res.status(500).json({ error: error.message });
     }
   });
