@@ -81,24 +81,17 @@ export async function getOrdersByIds(orderIds: string[]): Promise<FleetOrderData
   }
 
   try {
-    const dataset = process.env.BIGQUERY_DATASET || 'fleek_data';
-    const table = process.env.BIGQUERY_ORDERS_TABLE || 'orders';
+    const dataset = process.env.BIGQUERY_DATASET || 'fleek_hub';
+    const table = process.env.BIGQUERY_ORDERS_TABLE || 'order_line_details';
 
     // Construct SQL query with parameterized order IDs
     const orderIdParams = orderIds.map((_, i) => `@orderId${i}`).join(', ');
     const query = `
-      SELECT
-        order_id as orderId,
-        order_date as orderDate,
-        order_status as orderStatus,
-        order_amount as orderAmount,
-        currency,
-        customer_name as customerName,
-        customer_email as customerEmail,
-        vendor_handle as vendorHandle
+      SELECT DISTINCT
+        fleek_id as orderId,
+        vendor as vendorHandle
       FROM \`${process.env.BIGQUERY_PROJECT_ID}.${dataset}.${table}\`
-      WHERE order_id IN (${orderIdParams})
-      ORDER BY order_date DESC
+      WHERE fleek_id IN (${orderIdParams})
     `;
 
     // Build query parameters
@@ -175,14 +168,13 @@ export async function getOrderIdsByVendor(vendorHandle: string, limit: number = 
   }
 
   try {
-    const dataset = process.env.BIGQUERY_DATASET || 'fleek_data';
-    const table = process.env.BIGQUERY_ORDERS_TABLE || 'orders';
+    const dataset = process.env.BIGQUERY_DATASET || 'fleek_hub';
+    const table = process.env.BIGQUERY_ORDERS_TABLE || 'order_line_details';
 
     const query = `
-      SELECT DISTINCT order_id as orderId
+      SELECT DISTINCT fleek_id as orderId
       FROM \`${process.env.BIGQUERY_PROJECT_ID}.${dataset}.${table}\`
-      WHERE vendor_handle = @vendorHandle
-      ORDER BY order_date DESC
+      WHERE vendor = @vendorHandle
       LIMIT @limit
     `;
 
