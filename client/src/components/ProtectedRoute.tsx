@@ -18,8 +18,10 @@ export function ProtectedRoute({
   const [, setLocation] = useLocation();
 
   useEffect(() => {
+    console.log("ProtectedRoute check:", { isLoading, user, userEmail: localStorage.getItem("userEmail") });
     if (!isLoading && !user) {
       // Not authenticated, redirect to login
+      console.log("Not authenticated, redirecting to login");
       setLocation("/");
     }
   }, [isLoading, user, setLocation]);

@@ -33,12 +33,21 @@ export default function LoginPage() {
 
       const user = await res.json();
 
+      console.log("Login successful, user data:", user);
+
       // Store user email in localStorage for session management
       localStorage.setItem("userEmail", user.email);
       localStorage.setItem("userName", user.name);
       localStorage.setItem("userRole", user.role);
 
+      console.log("Stored in localStorage:", {
+        email: localStorage.getItem("userEmail"),
+        name: localStorage.getItem("userName"),
+        role: localStorage.getItem("userRole")
+      });
+
       // Redirect to dashboard
+      console.log("Redirecting to dashboard...");
       window.location.href = "/dashboard";
     } catch (err: any) {
       setError(err.message);

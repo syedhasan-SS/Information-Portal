@@ -100,14 +100,29 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const { data: currentUser, isLoading } = useQuery({
     queryKey: ["current-user"],
     queryFn: async () => {
-      const res = await fetch("/api/auth/me");
+      const userEmail = localStorage.getItem("userEmail");
+      console.log("Fetching current user with email:", userEmail);
+
+      const res = await fetch("/api/auth/me", {
+        headers: {
+          "Content-Type": "application/json",
+          ...(userEmail ? { "x-user-email": userEmail } : {}),
+        },
+      });
+
+      console.log("Auth response status:", res.status);
+
       if (!res.ok) {
         if (res.status === 401) {
+          console.log("Not authenticated");
           return null;
         }
         throw new Error("Failed to fetch user");
       }
-      return res.json() as Promise<User>;
+
+      const userData = await res.json();
+      console.log("Authenticated user:", userData);
+      return userData as User;
     },
     retry: false,
     staleTime: 5 * 60 * 1000, // 5 minutes
