@@ -345,25 +345,30 @@ export default function MyTicketsPage() {
               <Table>
                 <TableHeader>
                   <TableRow>
-                    <TableHead className="w-32">Ticket #</TableHead>
-                    <TableHead className="min-w-[200px]">Subject</TableHead>
+                    <TableHead className="w-32">Ticket ID</TableHead>
                     <TableHead>Vendor</TableHead>
                     <TableHead>Department</TableHead>
-                    <TableHead>Status</TableHead>
+                    <TableHead>Category</TableHead>
+                    <TableHead>Issue Type</TableHead>
                     <TableHead>Priority</TableHead>
-                    <TableHead>SLA Status</TableHead>
-                    <TableHead>Created</TableHead>
+                    <TableHead>Status</TableHead>
+                    <TableHead>Assignee</TableHead>
+                    <TableHead>SLA Due</TableHead>
+                    <TableHead>Aging</TableHead>
+                    <TableHead>Last Updated</TableHead>
+                    <TableHead>Source</TableHead>
                     <TableHead className="text-right">Actions</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {displayedTickets.map((ticket) => (
+                  {displayedTickets.map((ticket) => {
+                    const category = categories?.find(c => c.id === ticket.categoryId);
+                    const agingDays = Math.floor((new Date().getTime() - new Date(ticket.createdAt).getTime()) / (1000 * 60 * 60 * 24));
+
+                    return (
                     <TableRow key={ticket.id} data-testid={`row-ticket-${ticket.id}`}>
                       <TableCell className="font-mono text-sm">
                         {ticket.ticketNumber || ticket.id.slice(0, 8)}
-                      </TableCell>
-                      <TableCell>
-                        <div className="max-w-[250px] truncate font-medium">{ticket.subject}</div>
                       </TableCell>
                       <TableCell className="font-mono text-sm text-muted-foreground">
                         {ticket.vendorHandle}
@@ -371,11 +376,42 @@ export default function MyTicketsPage() {
                       <TableCell>
                         <Badge variant="secondary">{ticket.department}</Badge>
                       </TableCell>
-                      <TableCell>{getStatusBadge(ticket.status)}</TableCell>
+                      <TableCell className="text-sm">
+                        {category ? `${category.l1} > ${category.l2} > ${category.l3}${category.l4 ? ` > ${category.l4}` : ''}` : 'N/A'}
+                      </TableCell>
+                      <TableCell>
+                        <Badge variant="outline">{ticket.issueType}</Badge>
+                      </TableCell>
                       <TableCell>{getPriorityBadge(ticket.priorityTier)}</TableCell>
-                      <TableCell>{getSlaStatusBadge(ticket.slaStatus)}</TableCell>
+                      <TableCell>{getStatusBadge(ticket.status)}</TableCell>
+                      <TableCell className="text-sm">
+                        {ticket.assignedAgentId ? (
+                          <span className="text-muted-foreground">
+                            {ticket.assignedAgentId.slice(0, 8)}
+                          </span>
+                        ) : (
+                          <span className="text-muted-foreground italic">Unassigned</span>
+                        )}
+                      </TableCell>
+                      <TableCell className="text-sm">
+                        {ticket.slaDueDate ? (
+                          <span className={new Date(ticket.slaDueDate) < new Date() ? 'text-red-600 font-medium' : 'text-muted-foreground'}>
+                            {new Date(ticket.slaDueDate).toLocaleDateString()}
+                          </span>
+                        ) : (
+                          <span className="text-muted-foreground italic">No SLA</span>
+                        )}
+                      </TableCell>
+                      <TableCell className="text-sm">
+                        <span className={agingDays > 7 ? 'text-amber-600 font-medium' : 'text-muted-foreground'}>
+                          {agingDays}d
+                        </span>
+                      </TableCell>
                       <TableCell className="text-sm text-muted-foreground">
-                        {new Date(ticket.createdAt).toLocaleDateString()}
+                        {new Date(ticket.updatedAt).toLocaleDateString()}
+                      </TableCell>
+                      <TableCell className="text-sm text-muted-foreground">
+                        {ticket.source || 'Portal'}
                       </TableCell>
                       <TableCell className="text-right">
                         <Button
@@ -388,7 +424,8 @@ export default function MyTicketsPage() {
                         </Button>
                       </TableCell>
                     </TableRow>
-                  ))}
+                    );
+                  })}
                 </TableBody>
               </Table>
             </div>

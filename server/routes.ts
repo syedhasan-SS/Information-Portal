@@ -1168,6 +1168,17 @@ export async function registerRoutes(
     }
   });
 
+  // Analytics & Reporting
+  app.get("/api/analytics/ticket-counts", async (_req, res) => {
+    try {
+      const analytics = await storage.getTicketAnalytics();
+      res.json(analytics);
+    } catch (error: any) {
+      console.error("Error fetching analytics:", error);
+      res.status(500).json({ error: error.message });
+    }
+  });
+
   // BigQuery Integration
   app.get("/api/bigquery/orders", async (req, res) => {
     try {

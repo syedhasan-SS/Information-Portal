@@ -411,6 +411,128 @@ export class DatabaseStorage implements IStorage {
   async getAllSlaConfigurations(): Promise<SlaConfiguration[]> {
     return await db.select().from(slaConfigurations).where(eq(slaConfigurations.isActive, true));
   }
+
+  // Analytics
+  async getTicketAnalytics(): Promise<{
+    byIssueType: Array<{ issueType: string; count: number }>;
+    byStatus: Array<{ status: string; count: number }>;
+    byL1: Array<{ category: string; count: number }>;
+    byL2: Array<{ category: string; count: number }>;
+    byL3: Array<{ category: string; count: number }>;
+    byL4: Array<{ category: string; count: number }>;
+    bySla: Array<{ status: string; count: number }>;
+    byDepartment: Array<{ department: string; count: number }>;
+    byPriority: Array<{ priority: string; count: number }>;
+    total: number;
+  }> {
+    // Get all tickets with their categories
+    const allTickets = await db.select({
+      id: tickets.id,
+      issueType: tickets.issueType,
+      status: tickets.status,
+      department: tickets.department,
+      priorityTier: tickets.priorityTier,
+      categoryId: tickets.categoryId,
+      createdAt: tickets.createdAt,
+      slaDueDate: tickets.slaDueDate,
+    }).from(tickets);
+
+    // Get all categories for L1/L2/L3/L4 breakdown
+    const allCategories = await db.select().from(categories);
+    const categoryMap = new Map(allCategories.map(c => [c.id, c]));
+
+    // Count by issue type
+    const byIssueType = Object.entries(
+      allTickets.reduce((acc, t) => {
+        acc[t.issueType] = (acc[t.issueType] || 0) + 1;
+        return acc;
+      }, {} as Record<string, number>)
+    ).map(([issueType, count]) => ({ issueType, count }));
+
+    // Count by status
+    const byStatus = Object.entries(
+      allTickets.reduce((acc, t) => {
+        acc[t.status] = (acc[t.status] || 0) + 1;
+        return acc;
+      }, {} as Record<string, number>)
+    ).map(([status, count]) => ({ status, count }));
+
+    // Count by department
+    const byDepartment = Object.entries(
+      allTickets.reduce((acc, t) => {
+        acc[t.department] = (acc[t.department] || 0) + 1;
+        return acc;
+      }, {} as Record<string, number>)
+    ).map(([department, count]) => ({ department, count }));
+
+    // Count by priority
+    const byPriority = Object.entries(
+      allTickets.reduce((acc, t) => {
+        acc[t.priorityTier] = (acc[t.priorityTier] || 0) + 1;
+        return acc;
+      }, {} as Record<string, number>)
+    ).map(([priority, count]) => ({ priority, count }));
+
+    // Count by L1/L2/L3/L4
+    const l1Counts: Record<string, number> = {};
+    const l2Counts: Record<string, number> = {};
+    const l3Counts: Record<string, number> = {};
+    const l4Counts: Record<string, number> = {};
+
+    allTickets.forEach(ticket => {
+      const category = categoryMap.get(ticket.categoryId);
+      if (category) {
+        l1Counts[category.l1] = (l1Counts[category.l1] || 0) + 1;
+        l2Counts[category.l2] = (l2Counts[category.l2] || 0) + 1;
+        l3Counts[category.l3] = (l3Counts[category.l3] || 0) + 1;
+        if (category.l4) {
+          l4Counts[category.l4] = (l4Counts[category.l4] || 0) + 1;
+        }
+      }
+    });
+
+    const byL1 = Object.entries(l1Counts).map(([category, count]) => ({ category, count }));
+    const byL2 = Object.entries(l2Counts).map(([category, count]) => ({ category, count }));
+    const byL3 = Object.entries(l3Counts).map(([category, count]) => ({ category, count }));
+    const byL4 = Object.entries(l4Counts).map(([category, count]) => ({ category, count }));
+
+    // Count by SLA status
+    const now = new Date();
+    const slaCounts = {
+      "Within SLA": 0,
+      "Breached": 0,
+      "No SLA": 0,
+    };
+
+    allTickets.forEach(ticket => {
+      if (!ticket.slaDueDate) {
+        slaCounts["No SLA"]++;
+      } else if (ticket.status === "Solved" || ticket.status === "Closed") {
+        // For solved/closed tickets, we'd need to check if they were solved before SLA due date
+        // For now, we'll just count them as within SLA if slaDueDate exists
+        slaCounts["Within SLA"]++;
+      } else if (new Date(ticket.slaDueDate) < now) {
+        slaCounts["Breached"]++;
+      } else {
+        slaCounts["Within SLA"]++;
+      }
+    });
+
+    const bySla = Object.entries(slaCounts).map(([status, count]) => ({ status, count }));
+
+    return {
+      byIssueType,
+      byStatus,
+      byL1,
+      byL2,
+      byL3,
+      byL4,
+      bySla,
+      byDepartment,
+      byPriority,
+      total: allTickets.length,
+    };
+  }
 }
 
 export const storage = new DatabaseStorage();

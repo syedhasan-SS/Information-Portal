@@ -70,6 +70,7 @@ export default function TicketConfigPage() {
   // Wizard state
   const [showWizard, setShowWizard] = useState(false);
   const [currentStep, setCurrentStep] = useState(1);
+  const [editingConfig, setEditingConfig] = useState<CategoryConfig | null>(null);
   const [wizardData, setWizardData] = useState({
     issueType: "" as "Complaint" | "Request" | "Information" | "",
     l1: "",
@@ -151,6 +152,7 @@ export default function TicketConfigPage() {
 
   const resetWizard = () => {
     setCurrentStep(1);
+    setEditingConfig(null);
     setWizardData({
       issueType: "",
       l1: "",
@@ -591,7 +593,26 @@ Information,Tech,Product Listings,Product Information,Category Query,Product cat
                         </TableCell>
                         <TableCell>
                           <div className="flex gap-2">
-                            <Button variant="ghost" size="sm">
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              onClick={() => {
+                                setEditingConfig(config);
+                                setWizardData({
+                                  issueType: config.issueType as "Complaint" | "Request" | "Information",
+                                  l1: config.l1,
+                                  l2: config.l2,
+                                  l3: config.l3,
+                                  l4: config.l4,
+                                  description: config.description || "",
+                                  isActive: config.isActive,
+                                  slaResponseHours: config.slaResponseHours?.toString() || "",
+                                  slaResolutionHours: config.slaResolutionHours?.toString() || "",
+                                });
+                                setCurrentStep(1);
+                                setShowWizard(true);
+                              }}
+                            >
                               <Edit className="h-4 w-4" />
                             </Button>
                             <Button variant="ghost" size="sm">
@@ -624,7 +645,9 @@ Information,Tech,Product Listings,Product Information,Category Query,Product cat
       }}>
         <DialogContent className="max-w-2xl">
           <DialogHeader>
-            <DialogTitle>Add Ticket Configuration - Step {currentStep} of 7</DialogTitle>
+            <DialogTitle>
+              {editingConfig ? "Edit" : "Add"} Ticket Configuration - Step {currentStep} of 7
+            </DialogTitle>
             <DialogDescription>{stepTitles[currentStep - 1]}</DialogDescription>
           </DialogHeader>
 

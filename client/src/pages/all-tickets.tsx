@@ -415,13 +415,7 @@ export default function AllTicketsPage() {
                     <TableRow>
                       <TableHead className="w-32">
                         <Button variant="ghost" size="sm" onClick={() => handleSort("ticketNumber")} className="-ml-3 h-8">
-                          Ticket #
-                          <ArrowUpDown className="ml-1 h-3 w-3" />
-                        </Button>
-                      </TableHead>
-                      <TableHead className="min-w-[200px]">
-                        <Button variant="ghost" size="sm" onClick={() => handleSort("subject")} className="-ml-3 h-8">
-                          Subject
+                          Ticket ID
                           <ArrowUpDown className="ml-1 h-3 w-3" />
                         </Button>
                       </TableHead>
@@ -439,8 +433,8 @@ export default function AllTicketsPage() {
                       </TableHead>
                       <TableHead>Category</TableHead>
                       <TableHead>
-                        <Button variant="ghost" size="sm" onClick={() => handleSort("status")} className="-ml-3 h-8">
-                          Status
+                        <Button variant="ghost" size="sm" onClick={() => handleSort("issueType")} className="-ml-3 h-8">
+                          Issue Type
                           <ArrowUpDown className="ml-1 h-3 w-3" />
                         </Button>
                       </TableHead>
@@ -450,24 +444,34 @@ export default function AllTicketsPage() {
                           <ArrowUpDown className="ml-1 h-3 w-3" />
                         </Button>
                       </TableHead>
-                      <TableHead>SLA Status</TableHead>
                       <TableHead>
-                        <Button variant="ghost" size="sm" onClick={() => handleSort("createdAt")} className="-ml-3 h-8">
-                          Created
+                        <Button variant="ghost" size="sm" onClick={() => handleSort("status")} className="-ml-3 h-8">
+                          Status
                           <ArrowUpDown className="ml-1 h-3 w-3" />
                         </Button>
                       </TableHead>
+                      <TableHead>Assignee</TableHead>
+                      <TableHead>SLA Due</TableHead>
+                      <TableHead>Aging</TableHead>
+                      <TableHead>
+                        <Button variant="ghost" size="sm" onClick={() => handleSort("updatedAt")} className="-ml-3 h-8">
+                          Last Updated
+                          <ArrowUpDown className="ml-1 h-3 w-3" />
+                        </Button>
+                      </TableHead>
+                      <TableHead>Source</TableHead>
                       <TableHead className="text-right">Actions</TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
-                    {paginatedTickets.map((ticket) => (
+                    {paginatedTickets.map((ticket) => {
+                      const category = categoryMap[ticket.categoryId];
+                      const agingDays = Math.floor((new Date().getTime() - new Date(ticket.createdAt).getTime()) / (1000 * 60 * 60 * 24));
+
+                      return (
                       <TableRow key={ticket.id} data-testid={`row-ticket-${ticket.id}`}>
                         <TableCell className="font-mono text-sm">
                           {ticket.ticketNumber || ticket.id.slice(0, 8)}
-                        </TableCell>
-                        <TableCell>
-                          <div className="max-w-[250px] truncate font-medium">{ticket.subject}</div>
                         </TableCell>
                         <TableCell className="font-mono text-sm text-muted-foreground">
                           {ticket.vendorHandle}
@@ -475,14 +479,42 @@ export default function AllTicketsPage() {
                         <TableCell>
                           <Badge variant="secondary">{ticket.department}</Badge>
                         </TableCell>
-                        <TableCell className="text-sm text-muted-foreground">
-                          {categoryMap[ticket.categoryId]?.l3 || "-"}
+                        <TableCell className="text-sm">
+                          {category ? `${category.l1} > ${category.l2} > ${category.l3}${category.l4 ? ` > ${category.l4}` : ''}` : 'N/A'}
                         </TableCell>
-                        <TableCell>{getStatusBadge(ticket.status)}</TableCell>
+                        <TableCell>
+                          <Badge variant="outline">{ticket.issueType}</Badge>
+                        </TableCell>
                         <TableCell>{getPriorityBadge(ticket.priorityTier)}</TableCell>
-                        <TableCell>{getSlaStatusBadge(ticket.slaStatus)}</TableCell>
+                        <TableCell>{getStatusBadge(ticket.status)}</TableCell>
+                        <TableCell className="text-sm">
+                          {ticket.assignedAgentId ? (
+                            <span className="text-muted-foreground">
+                              {ticket.assignedAgentId.slice(0, 8)}
+                            </span>
+                          ) : (
+                            <span className="text-muted-foreground italic">Unassigned</span>
+                          )}
+                        </TableCell>
+                        <TableCell className="text-sm">
+                          {ticket.slaDueDate ? (
+                            <span className={new Date(ticket.slaDueDate) < new Date() ? 'text-red-600 font-medium' : 'text-muted-foreground'}>
+                              {new Date(ticket.slaDueDate).toLocaleDateString()}
+                            </span>
+                          ) : (
+                            <span className="text-muted-foreground italic">No SLA</span>
+                          )}
+                        </TableCell>
+                        <TableCell className="text-sm">
+                          <span className={agingDays > 7 ? 'text-amber-600 font-medium' : 'text-muted-foreground'}>
+                            {agingDays}d
+                          </span>
+                        </TableCell>
                         <TableCell className="text-sm text-muted-foreground">
-                          {new Date(ticket.createdAt).toLocaleDateString()}
+                          {new Date(ticket.updatedAt).toLocaleDateString()}
+                        </TableCell>
+                        <TableCell className="text-sm text-muted-foreground">
+                          {ticket.source || 'Portal'}
                         </TableCell>
                         <TableCell className="text-right">
                           <Button
@@ -495,7 +527,8 @@ export default function AllTicketsPage() {
                           </Button>
                         </TableCell>
                       </TableRow>
-                    ))}
+                      );
+                    })}
                   </TableBody>
                 </Table>
               </div>

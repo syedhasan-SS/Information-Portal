@@ -60,6 +60,12 @@ async function getTickets(): Promise<Ticket[]> {
   return res.json();
 }
 
+async function getTicketAnalytics() {
+  const res = await fetch("/api/analytics/ticket-counts");
+  if (!res.ok) throw new Error("Failed to fetch analytics");
+  return res.json();
+}
+
 function processAnalyticsData(
   tickets: Ticket[],
   timeGrouping: string,
@@ -210,6 +216,11 @@ export default function AnalyticsPage() {
   const { data: tickets, isLoading } = useQuery({
     queryKey: ["tickets"],
     queryFn: getTickets,
+  });
+
+  const { data: reportingAnalytics, isLoading: isLoadingAnalytics } = useQuery({
+    queryKey: ["ticket-analytics"],
+    queryFn: getTicketAnalytics,
   });
 
   if (isLoading) {
@@ -476,6 +487,126 @@ export default function AnalyticsPage() {
                 </ResponsiveContainer>
               </Card>
             </div>
+
+            {/* Category Hierarchy Breakdowns */}
+            {reportingAnalytics && (
+              <>
+                <h2 className="my-6 text-2xl font-semibold">Category Hierarchy Breakdown</h2>
+                <div className="grid gap-6 lg:grid-cols-2">
+                  {/* L1 Categories */}
+                  {reportingAnalytics.byL1 && reportingAnalytics.byL1.length > 0 && (
+                    <Card className="p-6">
+                      <h2 className="mb-4 text-lg font-semibold">L1 Category Distribution</h2>
+                      <ResponsiveContainer width="100%" height={300}>
+                        <BarChart data={reportingAnalytics.byL1}>
+                          <CartesianGrid strokeDasharray="3 3" />
+                          <XAxis dataKey="category" />
+                          <YAxis />
+                          <Tooltip />
+                          <Legend />
+                          <Bar dataKey="count" fill="#8b5cf6" />
+                        </BarChart>
+                      </ResponsiveContainer>
+                    </Card>
+                  )}
+
+                  {/* L2 Categories */}
+                  {reportingAnalytics.byL2 && reportingAnalytics.byL2.length > 0 && (
+                    <Card className="p-6">
+                      <h2 className="mb-4 text-lg font-semibold">L2 Category Distribution</h2>
+                      <ResponsiveContainer width="100%" height={300}>
+                        <BarChart data={reportingAnalytics.byL2}>
+                          <CartesianGrid strokeDasharray="3 3" />
+                          <XAxis dataKey="category" />
+                          <YAxis />
+                          <Tooltip />
+                          <Legend />
+                          <Bar dataKey="count" fill="#ec4899" />
+                        </BarChart>
+                      </ResponsiveContainer>
+                    </Card>
+                  )}
+
+                  {/* L3 Categories */}
+                  {reportingAnalytics.byL3 && reportingAnalytics.byL3.length > 0 && (
+                    <Card className="p-6">
+                      <h2 className="mb-4 text-lg font-semibold">L3 Category Distribution</h2>
+                      <ResponsiveContainer width="100%" height={300}>
+                        <BarChart data={reportingAnalytics.byL3}>
+                          <CartesianGrid strokeDasharray="3 3" />
+                          <XAxis dataKey="category" />
+                          <YAxis />
+                          <Tooltip />
+                          <Legend />
+                          <Bar dataKey="count" fill="#f59e0b" />
+                        </BarChart>
+                      </ResponsiveContainer>
+                    </Card>
+                  )}
+
+                  {/* L4 Categories */}
+                  {reportingAnalytics.byL4 && reportingAnalytics.byL4.length > 0 && (
+                    <Card className="p-6">
+                      <h2 className="mb-4 text-lg font-semibold">L4 Category Distribution</h2>
+                      <ResponsiveContainer width="100%" height={300}>
+                        <BarChart data={reportingAnalytics.byL4}>
+                          <CartesianGrid strokeDasharray="3 3" />
+                          <XAxis dataKey="category" />
+                          <YAxis />
+                          <Tooltip />
+                          <Legend />
+                          <Bar dataKey="count" fill="#10b981" />
+                        </BarChart>
+                      </ResponsiveContainer>
+                    </Card>
+                  )}
+
+                  {/* Priority Distribution */}
+                  {reportingAnalytics.byPriority && reportingAnalytics.byPriority.length > 0 && (
+                    <Card className="p-6">
+                      <h2 className="mb-4 text-lg font-semibold">Priority Distribution</h2>
+                      <ResponsiveContainer width="100%" height={300}>
+                        <PieChart>
+                          <Pie
+                            data={reportingAnalytics.byPriority}
+                            cx="50%"
+                            cy="50%"
+                            labelLine={false}
+                            label={(entry) => `${entry.priority}: ${entry.count}`}
+                            outerRadius={100}
+                            fill="#8884d8"
+                            dataKey="count"
+                          >
+                            {reportingAnalytics.byPriority.map((entry: any, index: number) => (
+                              <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
+                            ))}
+                          </Pie>
+                          <Tooltip />
+                          <Legend />
+                        </PieChart>
+                      </ResponsiveContainer>
+                    </Card>
+                  )}
+
+                  {/* Status Distribution */}
+                  {reportingAnalytics.byStatus && reportingAnalytics.byStatus.length > 0 && (
+                    <Card className="p-6">
+                      <h2 className="mb-4 text-lg font-semibold">Status Distribution</h2>
+                      <ResponsiveContainer width="100%" height={300}>
+                        <BarChart data={reportingAnalytics.byStatus}>
+                          <CartesianGrid strokeDasharray="3 3" />
+                          <XAxis dataKey="status" />
+                          <YAxis />
+                          <Tooltip />
+                          <Legend />
+                          <Bar dataKey="count" fill="#3b82f6" />
+                        </BarChart>
+                      </ResponsiveContainer>
+                    </Card>
+                  )}
+                </div>
+              </>
+            )}
           </>
         )}
       </main>
