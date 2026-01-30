@@ -88,19 +88,19 @@ function processAnalyticsData(
   const totalSolved = filtered.filter((t) => t.status === "Solved").length;
   const totalNew = filtered.filter((t) => t.status === "New").length;
 
-  // Region-wise status
+  // Department-wise status (replacing region-wise as tickets don't have region directly)
   const regionWiseStatus: Record<string, { open: number; closed: number; pending: number }> = {};
   filtered.forEach((ticket) => {
-    const region = ticket.region || "Unknown";
-    if (!regionWiseStatus[region]) {
-      regionWiseStatus[region] = { open: 0, closed: 0, pending: 0 };
+    const dept = ticket.department || "Unassigned";
+    if (!regionWiseStatus[dept]) {
+      regionWiseStatus[dept] = { open: 0, closed: 0, pending: 0 };
     }
     if (ticket.status === "New" || ticket.status === "Open") {
-      regionWiseStatus[region].open++;
+      regionWiseStatus[dept].open++;
     } else if (ticket.status === "Solved" || ticket.status === "Closed") {
-      regionWiseStatus[region].closed++;
+      regionWiseStatus[dept].closed++;
     } else if (ticket.status === "Pending") {
-      regionWiseStatus[region].pending++;
+      regionWiseStatus[dept].pending++;
     }
   });
 
@@ -174,11 +174,11 @@ function processAnalyticsData(
     };
   });
 
-  // Category-wise data
+  // Issue Type data (since tickets have issueType field)
   const categoryMap = new Map<string, number>();
   filtered.forEach((ticket) => {
-    const category = ticket.category || "Uncategorized";
-    categoryMap.set(category, (categoryMap.get(category) || 0) + 1);
+    const issueType = ticket.issueType || "Uncategorized";
+    categoryMap.set(issueType, (categoryMap.get(issueType) || 0) + 1);
   });
 
   const categoryData = Array.from(categoryMap.entries()).map(([category, count]) => ({
@@ -349,9 +349,9 @@ export default function AnalyticsPage() {
               </Card>
             </div>
 
-            {/* Region-wise Status */}
+            {/* Department-wise Status */}
             <Card className="mb-6 p-6">
-              <h2 className="mb-4 text-lg font-semibold">Region-wise Ticket Status</h2>
+              <h2 className="mb-4 text-lg font-semibold">Department-wise Ticket Status</h2>
               <div className="space-y-4">
                 {Object.entries(analyticsData.regionWiseStatus).map(([region, stats]) => (
                   <div key={region} className="space-y-2">
@@ -451,9 +451,9 @@ export default function AnalyticsPage() {
                 </ResponsiveContainer>
               </Card>
 
-              {/* Category Distribution */}
+              {/* Issue Type Distribution */}
               <Card className="p-6 lg:col-span-2">
-                <h2 className="mb-4 text-lg font-semibold">Category-wise View Count</h2>
+                <h2 className="mb-4 text-lg font-semibold">Issue Type Distribution</h2>
                 <ResponsiveContainer width="100%" height={300}>
                   <PieChart>
                     <Pie

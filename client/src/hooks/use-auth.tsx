@@ -24,7 +24,7 @@ type AuthContextType = {
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
 // Define permissions for each role
-const ROLE_PERMISSIONS = {
+export const ROLE_PERMISSIONS = {
   Owner: [
     "view:dashboard",
     "view:tickets",

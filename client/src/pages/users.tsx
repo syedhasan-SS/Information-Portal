@@ -44,6 +44,7 @@ import {
 } from "@/components/ui/dialog";
 import { Checkbox } from "@/components/ui/checkbox";
 import type { User } from "@shared/schema";
+import { ROLE_PERMISSIONS } from "@/hooks/use-auth";
 
 const ROLES = ["Owner", "Admin", "Seller Support Agent", "Department Head", "Department Manager", "Department Agent"] as const;
 const DEPARTMENTS = ["Finance", "Operations", "Marketplace", "Tech", "Experience", "CX", "Seller Support"] as const;
@@ -327,7 +328,11 @@ export default function UsersPage() {
 
   const handleManagePermissions = (user: User) => {
     setManagingPermissionsUser(user);
-    setSelectedPermissions(user.customPermissions || []);
+    // If user has custom permissions, use those; otherwise pre-select role-based defaults
+    const permissions = user.customPermissions && user.customPermissions.length > 0
+      ? user.customPermissions
+      : (ROLE_PERMISSIONS[user.role] || []);
+    setSelectedPermissions(permissions);
   };
 
   const handlePermissionsSubmit = () => {
@@ -398,6 +403,70 @@ export default function UsersPage() {
       </header>
 
       <main className="mx-auto max-w-[1600px] px-6 py-8">
+        {/* User Statistics */}
+        {users && (
+          <div className="mb-8 grid gap-4 md:grid-cols-3">
+            {/* Total Users */}
+            <Card className="p-6">
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="text-sm font-medium text-muted-foreground">Total Users</p>
+                  <h3 className="mt-2 text-3xl font-bold">{users.length}</h3>
+                </div>
+                <div className="flex h-12 w-12 items-center justify-center rounded-full bg-blue-500/10">
+                  <Users className="h-6 w-6 text-blue-600" />
+                </div>
+              </div>
+            </Card>
+
+            {/* Role-wise Breakdown */}
+            <Card className="p-6">
+              <p className="text-sm font-medium text-muted-foreground mb-3">Role-wise Users</p>
+              <div className="space-y-2">
+                {Object.entries(
+                  users.reduce((acc, user) => {
+                    acc[user.role] = (acc[user.role] || 0) + 1;
+                    return acc;
+                  }, {} as Record<string, number>)
+                ).map(([role, count]) => (
+                  <div key={role} className="flex items-center justify-between text-sm">
+                    <span className="text-muted-foreground">{role}</span>
+                    <span className="font-semibold">{count}</span>
+                  </div>
+                ))}
+              </div>
+            </Card>
+
+            {/* Department-wise Breakdown */}
+            <Card className="p-6">
+              <p className="text-sm font-medium text-muted-foreground mb-3">Department-wise Users</p>
+              <div className="space-y-2">
+                {Object.entries(
+                  users
+                    .filter((user) => user.department)
+                    .reduce((acc, user) => {
+                      if (user.department) {
+                        acc[user.department] = (acc[user.department] || 0) + 1;
+                      }
+                      return acc;
+                    }, {} as Record<string, number>)
+                ).map(([dept, count]) => (
+                  <div key={dept} className="flex items-center justify-between text-sm">
+                    <span className="text-muted-foreground">{dept}</span>
+                    <span className="font-semibold">{count}</span>
+                  </div>
+                ))}
+                {users.filter((user) => !user.department).length > 0 && (
+                  <div className="flex items-center justify-between text-sm">
+                    <span className="text-muted-foreground">No Department</span>
+                    <span className="font-semibold">{users.filter((user) => !user.department).length}</span>
+                  </div>
+                )}
+              </div>
+            </Card>
+          </div>
+        )}
+
         {/* Success/Error Messages */}
         {success && (
           <div className="mb-6 flex items-center gap-2 rounded-lg border border-green-500/20 bg-green-500/10 p-4 text-green-600">
