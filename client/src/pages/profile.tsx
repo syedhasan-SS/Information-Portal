@@ -1,6 +1,6 @@
-import { useState, useRef } from "react";
+import { useState, useRef, useEffect } from "react";
 import { useLocation } from "wouter";
-import { useMutation } from "@tanstack/react-query";
+import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
@@ -14,11 +14,51 @@ export default function ProfilePage() {
   const [, setLocation] = useLocation();
   const { toast } = useToast();
   const { user, isLoading } = useAuth();
+  const queryClient = useQueryClient();
   const [currentPassword, setCurrentPassword] = useState("");
   const [newPassword, setNewPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
   const [profilePicture, setProfilePicture] = useState<string>("");
   const fileInputRef = useRef<HTMLInputElement>(null);
+
+  // Initialize profile picture from user data or localStorage
+  useEffect(() => {
+    if (user) {
+      const savedPicture = user.profilePicture || localStorage.getItem("profilePicture") || "";
+      setProfilePicture(savedPicture);
+    }
+  }, [user]);
+
+  const updateProfilePictureMutation = useMutation({
+    mutationFn: async (profilePicture: string) => {
+      if (!user) throw new Error("User not found");
+      const res = await fetch(`/api/users/${user.id}`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ profilePicture }),
+      });
+      if (!res.ok) {
+        const error = await res.json();
+        throw new Error(error.error || "Failed to update profile picture");
+      }
+      return res.json();
+    },
+    onSuccess: () => {
+      // Invalidate current user query to refresh user data
+      queryClient.invalidateQueries({ queryKey: ["current-user"] });
+      toast({
+        title: "Profile Picture Updated",
+        description: "Your profile picture has been changed successfully.",
+      });
+    },
+    onError: (error: Error) => {
+      toast({
+        title: "Error",
+        description: error.message,
+        variant: "destructive",
+      });
+    },
+  });
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -48,10 +88,8 @@ export default function ProfilePage() {
         const base64String = reader.result as string;
         setProfilePicture(base64String);
         localStorage.setItem("profilePicture", base64String);
-        toast({
-          title: "Profile Picture Updated",
-          description: "Your profile picture has been changed successfully.",
-        });
+        // Save to database
+        updateProfilePictureMutation.mutate(base64String);
       };
       reader.readAsDataURL(file);
     }
