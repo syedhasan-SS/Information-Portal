@@ -123,6 +123,9 @@ export default function DashboardPage() {
                   <NavButton onClick={() => setLocation("/tickets")} icon={Ticket} label="All Tickets" />
                 )}
                 <NavButton onClick={() => setLocation("/my-tickets")} icon={User} label="My Tickets" />
+                {hasPermission("view:department_tickets") && (
+                  <NavButton onClick={() => setLocation("/department-tickets")} icon={Ticket} label="Department Tickets" />
+                )}
                 {hasPermission("view:vendors") && (
                   <NavButton onClick={() => setLocation("/vendors")} icon={Store} label="Vendors" />
                 )}
@@ -180,6 +183,12 @@ export default function DashboardPage() {
                       <Ticket className="mr-2 h-4 w-4" />
                       My Tickets
                     </DropdownMenuItem>
+                    {hasPermission("view:department_tickets") && (
+                      <DropdownMenuItem onClick={() => setLocation("/department-tickets")}>
+                        <Ticket className="mr-2 h-4 w-4" />
+                        Department Tickets
+                      </DropdownMenuItem>
+                    )}
                     <DropdownMenuSeparator />
                     <DropdownMenuItem onClick={logout} className="text-destructive focus:text-destructive">
                       <LogOut className="mr-2 h-4 w-4" />

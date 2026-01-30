@@ -17,6 +17,7 @@ import VendorProfilePage from "@/pages/vendor-profile";
 import ProfilePage from "@/pages/profile";
 import AnalyticsPage from "@/pages/analytics";
 import TicketConfigPage from "@/pages/ticket-config";
+import DepartmentTicketsPage from "@/pages/department-tickets";
 
 function Router() {
   return (
@@ -45,6 +46,11 @@ function Router() {
       <Route path="/my-tickets">
         <ProtectedRoute>
           <MyTicketsPage />
+        </ProtectedRoute>
+      </Route>
+      <Route path="/department-tickets">
+        <ProtectedRoute requiredPermission="view:department_tickets">
+          <DepartmentTicketsPage />
         </ProtectedRoute>
       </Route>
       <Route path="/vendors">
