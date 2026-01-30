@@ -4,7 +4,6 @@ import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import {
   Select,
   SelectContent,
@@ -38,366 +37,279 @@ import {
   Edit,
   Trash2,
   Loader2,
-  CheckCircle2,
-  AlertCircle,
+  ChevronRight,
+  ChevronLeft,
 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 
-// Types from schema
-type IssueType = {
+// Category configuration type combining issue type and hierarchy
+type CategoryConfig = {
   id: string;
-  name: string;
-  description: string | null;
+  issueType: "Complaint" | "Request" | "Information";
+  l1: string; // Department
+  l2: string; // Sub Department
+  l3: string; // Category
+  l4: string; // Sub-Category/Problem Area
+  description: string;
   isActive: boolean;
+  slaResponseHours: number | null;
+  slaResolutionHours: number;
   createdAt: Date;
-  updatedAt: Date;
-};
-
-type CategoryHierarchy = {
-  id: string;
-  name: string;
-  level: 1 | 2 | 3 | 4;
-  parentId: string | null;
-  description: string | null;
-  isActive: boolean;
-  createdAt: Date;
-  updatedAt: Date;
-};
-
-type CategoryMapping = {
-  id: string;
-  issueTypeId: string;
-  l1CategoryId: string;
-  l2CategoryId: string | null;
-  l3CategoryId: string | null;
-  l4CategoryId: string | null;
-  isActive: boolean;
-  createdAt: Date;
-  updatedAt: Date;
-};
-
-type SlaConfiguration = {
-  id: string;
-  name: string;
-  issueTypeId: string | null;
-  l1CategoryId: string | null;
-  l2CategoryId: string | null;
-  l3CategoryId: string | null;
-  l4CategoryId: string | null;
-  responseTimeHours: number | null;
-  resolutionTimeHours: number;
-  useBusinessHours: boolean;
-  isActive: boolean;
-  createdAt: Date;
-  updatedAt: Date;
-};
-
-type PriorityConfiguration = {
-  id: string;
-  name: string;
-  level: "Critical" | "High" | "Medium" | "Low";
-  issueTypeId: string | null;
-  l1CategoryId: string | null;
-  l2CategoryId: string | null;
-  l3CategoryId: string | null;
-  l4CategoryId: string | null;
-  points: number;
-  isActive: boolean;
-  createdAt: Date;
-  updatedAt: Date;
-};
-
-type Tag = {
-  id: string;
-  name: string;
-  color: string | null;
-  description: string | null;
-  isAutoApplied: boolean;
-  autoApplyCondition: any;
-  isActive: boolean;
-  createdAt: Date;
-  updatedAt: Date;
 };
 
 export default function TicketConfigPage() {
   const [, setLocation] = useLocation();
   const { toast } = useToast();
   const queryClient = useQueryClient();
-  const [activeTab, setActiveTab] = useState("issue-types");
 
-  // Fetch all configuration data
-  const { data: issueTypes } = useQuery({
-    queryKey: ["config", "issue-types"],
-    queryFn: async () => {
-      const res = await fetch("/api/config/issue-types");
-      if (!res.ok) throw new Error("Failed to fetch issue types");
-      return res.json() as Promise<IssueType[]>;
-    },
-  });
-
-  const { data: categories } = useQuery({
-    queryKey: ["config", "categories"],
-    queryFn: async () => {
-      const res = await fetch("/api/config/categories");
-      if (!res.ok) throw new Error("Failed to fetch categories");
-      return res.json() as Promise<CategoryHierarchy[]>;
-    },
-  });
-
-  const { data: mappings } = useQuery({
-    queryKey: ["config", "mappings"],
-    queryFn: async () => {
-      const res = await fetch("/api/config/mappings");
-      if (!res.ok) throw new Error("Failed to fetch mappings");
-      return res.json() as Promise<CategoryMapping[]>;
-    },
-  });
-
-  const { data: slas } = useQuery({
-    queryKey: ["config", "sla"],
-    queryFn: async () => {
-      const res = await fetch("/api/config/sla");
-      if (!res.ok) throw new Error("Failed to fetch SLAs");
-      return res.json() as Promise<SlaConfiguration[]>;
-    },
-  });
-
-  const { data: priorities } = useQuery({
-    queryKey: ["config", "priorities"],
-    queryFn: async () => {
-      const res = await fetch("/api/config/priorities");
-      if (!res.ok) throw new Error("Failed to fetch priorities");
-      return res.json() as Promise<PriorityConfiguration[]>;
-    },
-  });
-
-  const { data: tags } = useQuery({
-    queryKey: ["config", "tags"],
-    queryFn: async () => {
-      const res = await fetch("/api/config/tags");
-      if (!res.ok) throw new Error("Failed to fetch tags");
-      return res.json() as Promise<Tag[]>;
-    },
-  });
-
-  // State for forms
-  const [showIssueTypeForm, setShowIssueTypeForm] = useState(false);
-  const [showCategoryForm, setShowCategoryForm] = useState(false);
-  const [showSlaForm, setShowSlaForm] = useState(false);
-  const [showPriorityForm, setShowPriorityForm] = useState(false);
-  const [showTagForm, setShowTagForm] = useState(false);
-
-  const [issueTypeForm, setIssueTypeForm] = useState({ name: "", description: "", isActive: true });
-  const [categoryForm, setCategoryForm] = useState({ name: "", level: 1 as 1 | 2 | 3 | 4, parentId: "", description: "", isActive: true });
-  const [slaForm, setSlaForm] = useState({
-    name: "",
-    issueTypeId: "",
-    l1CategoryId: "",
-    l2CategoryId: "",
-    l3CategoryId: "",
-    l4CategoryId: "",
-    responseTimeHours: "",
-    resolutionTimeHours: "",
-    useBusinessHours: false,
+  // Wizard state
+  const [showWizard, setShowWizard] = useState(false);
+  const [currentStep, setCurrentStep] = useState(1);
+  const [wizardData, setWizardData] = useState({
+    issueType: "" as "Complaint" | "Request" | "Information" | "",
+    l1: "",
+    l2: "",
+    l3: "",
+    l4: "",
+    description: "",
     isActive: true,
+    slaResponseHours: "",
+    slaResolutionHours: "",
   });
-  const [priorityForm, setPriorityForm] = useState({
-    name: "",
-    level: "Medium" as "Critical" | "High" | "Medium" | "Low",
-    issueTypeId: "",
-    l1CategoryId: "",
-    l2CategoryId: "",
-    l3CategoryId: "",
-    l4CategoryId: "",
-    points: "",
-    isActive: true,
-  });
-  const [tagForm, setTagForm] = useState({ name: "", color: "#3b82f6", description: "", isAutoApplied: false, isActive: true });
 
-  // Create Issue Type
-  const createIssueTypeMutation = useMutation({
+  // Fetch configurations
+  const { data: configs, isLoading } = useQuery({
+    queryKey: ["ticket-configs"],
+    queryFn: async () => {
+      const res = await fetch("/api/config/ticket-configs");
+      if (!res.ok) throw new Error("Failed to fetch configurations");
+      return res.json() as Promise<CategoryConfig[]>;
+    },
+  });
+
+  // Create configuration mutation
+  const createConfigMutation = useMutation({
     mutationFn: async (data: any) => {
-      const res = await fetch("/api/config/issue-types", {
+      const res = await fetch("/api/config/ticket-configs", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(data),
       });
-      if (!res.ok) throw new Error("Failed to create issue type");
+      if (!res.ok) throw new Error("Failed to create configuration");
       return res.json();
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["config", "issue-types"] });
-      setShowIssueTypeForm(false);
-      setIssueTypeForm({ name: "", description: "", isActive: true });
-      toast({ title: "Success", description: "Issue type created successfully" });
+      queryClient.invalidateQueries({ queryKey: ["ticket-configs"] });
+      setShowWizard(false);
+      resetWizard();
+      toast({ title: "Success", description: "Configuration created successfully" });
     },
     onError: () => {
-      toast({ title: "Error", description: "Failed to create issue type", variant: "destructive" });
+      toast({ title: "Error", description: "Failed to create configuration", variant: "destructive" });
     },
   });
 
-  // Create Category
-  const createCategoryMutation = useMutation({
-    mutationFn: async (data: any) => {
-      const res = await fetch("/api/config/categories", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(data),
-      });
-      if (!res.ok) throw new Error("Failed to create category");
-      return res.json();
-    },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["config", "categories"] });
-      setShowCategoryForm(false);
-      setCategoryForm({ name: "", level: 1, parentId: "", description: "", isActive: true });
-      toast({ title: "Success", description: "Category created successfully" });
-    },
-    onError: () => {
-      toast({ title: "Error", description: "Failed to create category", variant: "destructive" });
-    },
-  });
-
-  // Create SLA
-  const createSlaMutation = useMutation({
-    mutationFn: async (data: any) => {
-      const res = await fetch("/api/config/sla", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(data),
-      });
-      if (!res.ok) throw new Error("Failed to create SLA");
-      return res.json();
-    },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["config", "sla"] });
-      setShowSlaForm(false);
-      setSlaForm({
-        name: "",
-        issueTypeId: "",
-        l1CategoryId: "",
-        l2CategoryId: "",
-        l3CategoryId: "",
-        l4CategoryId: "",
-        responseTimeHours: "",
-        resolutionTimeHours: "",
-        useBusinessHours: false,
-        isActive: true,
-      });
-      toast({ title: "Success", description: "SLA configuration created successfully" });
-    },
-    onError: () => {
-      toast({ title: "Error", description: "Failed to create SLA", variant: "destructive" });
-    },
-  });
-
-  // Create Priority
-  const createPriorityMutation = useMutation({
-    mutationFn: async (data: any) => {
-      const res = await fetch("/api/config/priorities", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(data),
-      });
-      if (!res.ok) throw new Error("Failed to create priority");
-      return res.json();
-    },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["config", "priorities"] });
-      setShowPriorityForm(false);
-      setPriorityForm({
-        name: "",
-        level: "Medium",
-        issueTypeId: "",
-        l1CategoryId: "",
-        l2CategoryId: "",
-        l3CategoryId: "",
-        l4CategoryId: "",
-        points: "",
-        isActive: true,
-      });
-      toast({ title: "Success", description: "Priority configuration created successfully" });
-    },
-    onError: () => {
-      toast({ title: "Error", description: "Failed to create priority", variant: "destructive" });
-    },
-  });
-
-  // Create Tag
-  const createTagMutation = useMutation({
-    mutationFn: async (data: any) => {
-      const res = await fetch("/api/config/tags", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(data),
-      });
-      if (!res.ok) throw new Error("Failed to create tag");
-      return res.json();
-    },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["config", "tags"] });
-      setShowTagForm(false);
-      setTagForm({ name: "", color: "#3b82f6", description: "", isAutoApplied: false, isActive: true });
-      toast({ title: "Success", description: "Tag created successfully" });
-    },
-    onError: () => {
-      toast({ title: "Error", description: "Failed to create tag", variant: "destructive" });
-    },
-  });
-
-  const handleSubmitIssueType = () => {
-    createIssueTypeMutation.mutate(issueTypeForm);
-  };
-
-  const handleSubmitCategory = () => {
-    createCategoryMutation.mutate({
-      ...categoryForm,
-      parentId: categoryForm.parentId || null,
+  const resetWizard = () => {
+    setCurrentStep(1);
+    setWizardData({
+      issueType: "",
+      l1: "",
+      l2: "",
+      l3: "",
+      l4: "",
+      description: "",
+      isActive: true,
+      slaResponseHours: "",
+      slaResolutionHours: "",
     });
   };
 
-  const handleSubmitSla = () => {
-    createSlaMutation.mutate({
-      ...slaForm,
-      issueTypeId: slaForm.issueTypeId || null,
-      l1CategoryId: slaForm.l1CategoryId || null,
-      l2CategoryId: slaForm.l2CategoryId || null,
-      l3CategoryId: slaForm.l3CategoryId || null,
-      l4CategoryId: slaForm.l4CategoryId || null,
-      responseTimeHours: slaForm.responseTimeHours ? parseInt(slaForm.responseTimeHours) : null,
-      resolutionTimeHours: parseInt(slaForm.resolutionTimeHours),
+  const handleNext = () => {
+    setCurrentStep((prev) => Math.min(prev + 1, 7));
+  };
+
+  const handleBack = () => {
+    setCurrentStep((prev) => Math.max(prev - 1, 1));
+  };
+
+  const handleSubmit = () => {
+    createConfigMutation.mutate({
+      ...wizardData,
+      slaResponseHours: wizardData.slaResponseHours ? parseInt(wizardData.slaResponseHours) : null,
+      slaResolutionHours: parseInt(wizardData.slaResolutionHours),
     });
   };
 
-  const handleSubmitPriority = () => {
-    createPriorityMutation.mutate({
-      ...priorityForm,
-      issueTypeId: priorityForm.issueTypeId || null,
-      l1CategoryId: priorityForm.l1CategoryId || null,
-      l2CategoryId: priorityForm.l2CategoryId || null,
-      l3CategoryId: priorityForm.l3CategoryId || null,
-      l4CategoryId: priorityForm.l4CategoryId || null,
-      points: parseInt(priorityForm.points),
-    });
+  const canProceed = () => {
+    switch (currentStep) {
+      case 1: return !!wizardData.issueType && !!wizardData.l1;
+      case 2: return !!wizardData.l2;
+      case 3: return !!wizardData.l3;
+      case 4: return !!wizardData.l4;
+      case 5: return !!wizardData.description;
+      case 6: return true;
+      case 7: return !!wizardData.slaResolutionHours;
+      default: return false;
+    }
   };
 
-  const handleSubmitTag = () => {
-    createTagMutation.mutate(tagForm);
+  const renderWizardStep = () => {
+    switch (currentStep) {
+      case 1:
+        return (
+          <div className="space-y-4">
+            <div className="space-y-2">
+              <Label>Issue Type *</Label>
+              <Select
+                value={wizardData.issueType}
+                onValueChange={(value) => setWizardData({ ...wizardData, issueType: value as any })}
+              >
+                <SelectTrigger>
+                  <SelectValue placeholder="Select issue type" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="Complaint">Complaint</SelectItem>
+                  <SelectItem value="Request">Request</SelectItem>
+                  <SelectItem value="Information">Information</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="space-y-2">
+              <Label>L1 - Department *</Label>
+              <Select
+                value={wizardData.l1}
+                onValueChange={(value) => setWizardData({ ...wizardData, l1: value })}
+              >
+                <SelectTrigger>
+                  <SelectValue placeholder="Select department" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="Finance">Finance</SelectItem>
+                  <SelectItem value="Operations">Operations</SelectItem>
+                  <SelectItem value="Marketplace">Marketplace</SelectItem>
+                  <SelectItem value="Tech">Tech</SelectItem>
+                  <SelectItem value="Experience">Experience</SelectItem>
+                  <SelectItem value="CX">CX</SelectItem>
+                  <SelectItem value="Seller Support">Seller Support</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+          </div>
+        );
+
+      case 2:
+        return (
+          <div className="space-y-2">
+            <Label>L2 - Sub Department *</Label>
+            <Input
+              placeholder="e.g., Payment, Order Related Information"
+              value={wizardData.l2}
+              onChange={(e) => setWizardData({ ...wizardData, l2: e.target.value })}
+            />
+            <p className="text-xs text-muted-foreground">
+              Enter the sub-department name for {wizardData.l1}
+            </p>
+          </div>
+        );
+
+      case 3:
+        return (
+          <div className="space-y-2">
+            <Label>L3 - Category *</Label>
+            <Input
+              placeholder="e.g., Payment Not Processed, Product Approval Request"
+              value={wizardData.l3}
+              onChange={(e) => setWizardData({ ...wizardData, l3: e.target.value })}
+            />
+            <p className="text-xs text-muted-foreground">
+              Enter the category name for {wizardData.l2}
+            </p>
+          </div>
+        );
+
+      case 4:
+        return (
+          <div className="space-y-2">
+            <Label>L4 - Sub-Category / Problem Area *</Label>
+            <Input
+              placeholder="e.g., Commission Adjustment Request, AR Issue"
+              value={wizardData.l4}
+              onChange={(e) => setWizardData({ ...wizardData, l4: e.target.value })}
+            />
+            <p className="text-xs text-muted-foreground">
+              Enter the specific problem area for {wizardData.l3}
+            </p>
+          </div>
+        );
+
+      case 5:
+        return (
+          <div className="space-y-2">
+            <Label>Description *</Label>
+            <Input
+              placeholder="Brief description of this configuration"
+              value={wizardData.description}
+              onChange={(e) => setWizardData({ ...wizardData, description: e.target.value })}
+            />
+          </div>
+        );
+
+      case 6:
+        return (
+          <div className="space-y-4">
+            <div className="flex items-center space-x-2">
+              <Switch
+                checked={wizardData.isActive}
+                onCheckedChange={(checked) => setWizardData({ ...wizardData, isActive: checked })}
+              />
+              <Label>Active Configuration</Label>
+            </div>
+            <p className="text-sm text-muted-foreground">
+              {wizardData.isActive
+                ? "This configuration will be available for ticket creation"
+                : "This configuration will be hidden from ticket creation"}
+            </p>
+          </div>
+        );
+
+      case 7:
+        return (
+          <div className="space-y-4">
+            <div className="space-y-2">
+              <Label>Response Time (hours)</Label>
+              <Input
+                type="number"
+                placeholder="Optional"
+                value={wizardData.slaResponseHours}
+                onChange={(e) => setWizardData({ ...wizardData, slaResponseHours: e.target.value })}
+              />
+            </div>
+            <div className="space-y-2">
+              <Label>Resolution Time (hours) *</Label>
+              <Input
+                type="number"
+                placeholder="Required"
+                value={wizardData.slaResolutionHours}
+                onChange={(e) => setWizardData({ ...wizardData, slaResolutionHours: e.target.value })}
+              />
+            </div>
+          </div>
+        );
+
+      default:
+        return null;
+    }
   };
 
-  // Get category name by ID
-  const getCategoryName = (id: string | null) => {
-    if (!id || !categories) return "N/A";
-    const category = categories.find((c) => c.id === id);
-    return category?.name || "N/A";
-  };
-
-  // Get issue type name by ID
-  const getIssueTypeName = (id: string | null) => {
-    if (!id || !issueTypes) return "N/A";
-    const issueType = issueTypes.find((it) => it.id === id);
-    return issueType?.name || "N/A";
-  };
+  const stepTitles = [
+    "Issue Type & Department",
+    "Sub Department",
+    "Category",
+    "Sub-Category / Problem Area",
+    "Description",
+    "Active Status",
+    "SLA Timeline",
+  ];
 
   return (
     <div className="min-h-screen bg-background">
@@ -418,791 +330,173 @@ export default function TicketConfigPage() {
                   <h1 className="font-serif text-xl font-semibold tracking-tight text-foreground">
                     Ticket Configuration
                   </h1>
-                  <p className="text-xs text-muted-foreground">Manage ticket categories, SLAs, and priorities</p>
+                  <p className="text-xs text-muted-foreground">Manage ticket categories and SLA settings</p>
                 </div>
               </div>
             </div>
+            <Button onClick={() => setShowWizard(true)} size="sm">
+              <Plus className="h-4 w-4" />
+              Add Configuration
+            </Button>
           </div>
         </div>
       </header>
 
       <main className="mx-auto max-w-[1600px] px-6 py-8">
-        <Tabs value={activeTab} onValueChange={setActiveTab}>
-          <TabsList className="mb-6">
-            <TabsTrigger value="issue-types">Issue Types</TabsTrigger>
-            <TabsTrigger value="categories">Categories</TabsTrigger>
-            <TabsTrigger value="sla">SLA Configuration</TabsTrigger>
-            <TabsTrigger value="priorities">Priorities</TabsTrigger>
-            <TabsTrigger value="tags">Tags</TabsTrigger>
-          </TabsList>
-
-          {/* Issue Types Tab */}
-          <TabsContent value="issue-types">
-            <Card className="p-6">
-              <div className="mb-4 flex items-center justify-between">
-                <h2 className="text-lg font-semibold">Issue Types</h2>
-                <Button onClick={() => setShowIssueTypeForm(true)} size="sm">
-                  <Plus className="h-4 w-4" />
-                  Add Issue Type
-                </Button>
-              </div>
-
+        <Card>
+          {isLoading ? (
+            <div className="flex items-center justify-center p-8">
+              <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
+            </div>
+          ) : (
+            <div className="overflow-x-auto">
               <Table>
                 <TableHeader>
                   <TableRow>
-                    <TableHead>Name</TableHead>
-                    <TableHead>Description</TableHead>
+                    <TableHead className="w-12">S.No</TableHead>
+                    <TableHead>Request Type</TableHead>
+                    <TableHead>Dept (L1)</TableHead>
+                    <TableHead>Sub Dept (L2)</TableHead>
+                    <TableHead>Category (L3)</TableHead>
+                    <TableHead>Sub Category (L4)</TableHead>
+                    <TableHead>SLA (hrs)</TableHead>
                     <TableHead>Status</TableHead>
-                    <TableHead>Created At</TableHead>
+                    <TableHead className="w-20">Actions</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {issueTypes?.map((item) => (
-                    <TableRow key={item.id}>
-                      <TableCell className="font-medium">{item.name}</TableCell>
-                      <TableCell>{item.description || "N/A"}</TableCell>
-                      <TableCell>
-                        <Badge variant={item.isActive ? "default" : "secondary"}>
-                          {item.isActive ? "Active" : "Inactive"}
-                        </Badge>
-                      </TableCell>
-                      <TableCell>{new Date(item.createdAt).toLocaleDateString()}</TableCell>
-                    </TableRow>
-                  ))}
-                  {!issueTypes || issueTypes.length === 0 && (
+                  {configs && configs.length > 0 ? (
+                    configs.map((config, index) => (
+                      <TableRow key={config.id}>
+                        <TableCell>{index + 1}</TableCell>
+                        <TableCell>
+                          <Badge variant="outline">{config.issueType}</Badge>
+                        </TableCell>
+                        <TableCell className="font-medium">{config.l1}</TableCell>
+                        <TableCell>{config.l2}</TableCell>
+                        <TableCell>{config.l3}</TableCell>
+                        <TableCell>{config.l4}</TableCell>
+                        <TableCell>
+                          {config.slaResponseHours && `${config.slaResponseHours}/`}
+                          {config.slaResolutionHours}
+                        </TableCell>
+                        <TableCell>
+                          <Badge variant={config.isActive ? "default" : "secondary"}>
+                            {config.isActive ? "Active" : "Inactive"}
+                          </Badge>
+                        </TableCell>
+                        <TableCell>
+                          <div className="flex gap-2">
+                            <Button variant="ghost" size="sm">
+                              <Edit className="h-4 w-4" />
+                            </Button>
+                            <Button variant="ghost" size="sm">
+                              <Trash2 className="h-4 w-4" />
+                            </Button>
+                          </div>
+                        </TableCell>
+                      </TableRow>
+                    ))
+                  ) : (
                     <TableRow>
-                      <TableCell colSpan={4} className="text-center text-muted-foreground">
-                        No issue types configured
+                      <TableCell colSpan={9} className="text-center text-muted-foreground">
+                        No configurations found. Click "Add Configuration" to create one.
                       </TableCell>
                     </TableRow>
                   )}
                 </TableBody>
               </Table>
-            </Card>
-          </TabsContent>
-
-          {/* Categories Tab */}
-          <TabsContent value="categories">
-            <Card className="p-6">
-              <div className="mb-4 flex items-center justify-between">
-                <h2 className="text-lg font-semibold">Category Hierarchy</h2>
-                <Button onClick={() => setShowCategoryForm(true)} size="sm">
-                  <Plus className="h-4 w-4" />
-                  Add Category
-                </Button>
-              </div>
-
-              <div className="space-y-6">
-                {/* L1 Categories */}
-                <div>
-                  <h3 className="mb-2 text-sm font-medium text-muted-foreground">L1 Categories (Department)</h3>
-                  <Table>
-                    <TableHeader>
-                      <TableRow>
-                        <TableHead>Name</TableHead>
-                        <TableHead>Description</TableHead>
-                        <TableHead>Status</TableHead>
-                      </TableRow>
-                    </TableHeader>
-                    <TableBody>
-                      {categories?.filter((c) => c.level === 1).map((item) => (
-                        <TableRow key={item.id}>
-                          <TableCell className="font-medium">{item.name}</TableCell>
-                          <TableCell>{item.description || "N/A"}</TableCell>
-                          <TableCell>
-                            <Badge variant={item.isActive ? "default" : "secondary"}>
-                              {item.isActive ? "Active" : "Inactive"}
-                            </Badge>
-                          </TableCell>
-                        </TableRow>
-                      ))}
-                    </TableBody>
-                  </Table>
-                </div>
-
-                {/* L2 Categories */}
-                <div>
-                  <h3 className="mb-2 text-sm font-medium text-muted-foreground">L2 Categories (Sub-Department)</h3>
-                  <Table>
-                    <TableHeader>
-                      <TableRow>
-                        <TableHead>Name</TableHead>
-                        <TableHead>Parent (L1)</TableHead>
-                        <TableHead>Description</TableHead>
-                        <TableHead>Status</TableHead>
-                      </TableRow>
-                    </TableHeader>
-                    <TableBody>
-                      {categories?.filter((c) => c.level === 2).map((item) => (
-                        <TableRow key={item.id}>
-                          <TableCell className="font-medium">{item.name}</TableCell>
-                          <TableCell>{getCategoryName(item.parentId)}</TableCell>
-                          <TableCell>{item.description || "N/A"}</TableCell>
-                          <TableCell>
-                            <Badge variant={item.isActive ? "default" : "secondary"}>
-                              {item.isActive ? "Active" : "Inactive"}
-                            </Badge>
-                          </TableCell>
-                        </TableRow>
-                      ))}
-                    </TableBody>
-                  </Table>
-                </div>
-
-                {/* L3 Categories */}
-                <div>
-                  <h3 className="mb-2 text-sm font-medium text-muted-foreground">L3 Categories (Category)</h3>
-                  <Table>
-                    <TableHeader>
-                      <TableRow>
-                        <TableHead>Name</TableHead>
-                        <TableHead>Parent (L2)</TableHead>
-                        <TableHead>Description</TableHead>
-                        <TableHead>Status</TableHead>
-                      </TableRow>
-                    </TableHeader>
-                    <TableBody>
-                      {categories?.filter((c) => c.level === 3).map((item) => (
-                        <TableRow key={item.id}>
-                          <TableCell className="font-medium">{item.name}</TableCell>
-                          <TableCell>{getCategoryName(item.parentId)}</TableCell>
-                          <TableCell>{item.description || "N/A"}</TableCell>
-                          <TableCell>
-                            <Badge variant={item.isActive ? "default" : "secondary"}>
-                              {item.isActive ? "Active" : "Inactive"}
-                            </Badge>
-                          </TableCell>
-                        </TableRow>
-                      ))}
-                    </TableBody>
-                  </Table>
-                </div>
-
-                {/* L4 Categories */}
-                <div>
-                  <h3 className="mb-2 text-sm font-medium text-muted-foreground">L4 Categories (Sub-Category/Problem Area)</h3>
-                  <Table>
-                    <TableHeader>
-                      <TableRow>
-                        <TableHead>Name</TableHead>
-                        <TableHead>Parent (L3)</TableHead>
-                        <TableHead>Description</TableHead>
-                        <TableHead>Status</TableHead>
-                      </TableRow>
-                    </TableHeader>
-                    <TableBody>
-                      {categories?.filter((c) => c.level === 4).map((item) => (
-                        <TableRow key={item.id}>
-                          <TableCell className="font-medium">{item.name}</TableCell>
-                          <TableCell>{getCategoryName(item.parentId)}</TableCell>
-                          <TableCell>{item.description || "N/A"}</TableCell>
-                          <TableCell>
-                            <Badge variant={item.isActive ? "default" : "secondary"}>
-                              {item.isActive ? "Active" : "Inactive"}
-                            </Badge>
-                          </TableCell>
-                        </TableRow>
-                      ))}
-                    </TableBody>
-                  </Table>
-                </div>
-              </div>
-            </Card>
-          </TabsContent>
-
-          {/* SLA Configuration Tab */}
-          <TabsContent value="sla">
-            <Card className="p-6">
-              <div className="mb-4 flex items-center justify-between">
-                <h2 className="text-lg font-semibold">SLA Configurations</h2>
-                <Button onClick={() => setShowSlaForm(true)} size="sm">
-                  <Plus className="h-4 w-4" />
-                  Add SLA
-                </Button>
-              </div>
-
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead>Name</TableHead>
-                    <TableHead>Issue Type</TableHead>
-                    <TableHead>L1 Category</TableHead>
-                    <TableHead>Response Time (hrs)</TableHead>
-                    <TableHead>Resolution Time (hrs)</TableHead>
-                    <TableHead>Status</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {slas?.map((item) => (
-                    <TableRow key={item.id}>
-                      <TableCell className="font-medium">{item.name}</TableCell>
-                      <TableCell>{getIssueTypeName(item.issueTypeId)}</TableCell>
-                      <TableCell>{getCategoryName(item.l1CategoryId)}</TableCell>
-                      <TableCell>{item.responseTimeHours || "N/A"}</TableCell>
-                      <TableCell>{item.resolutionTimeHours}</TableCell>
-                      <TableCell>
-                        <Badge variant={item.isActive ? "default" : "secondary"}>
-                          {item.isActive ? "Active" : "Inactive"}
-                        </Badge>
-                      </TableCell>
-                    </TableRow>
-                  ))}
-                  {!slas || slas.length === 0 && (
-                    <TableRow>
-                      <TableCell colSpan={6} className="text-center text-muted-foreground">
-                        No SLA configurations
-                      </TableCell>
-                    </TableRow>
-                  )}
-                </TableBody>
-              </Table>
-            </Card>
-          </TabsContent>
-
-          {/* Priorities Tab */}
-          <TabsContent value="priorities">
-            <Card className="p-6">
-              <div className="mb-4 flex items-center justify-between">
-                <h2 className="text-lg font-semibold">Priority Configurations</h2>
-                <Button onClick={() => setShowPriorityForm(true)} size="sm">
-                  <Plus className="h-4 w-4" />
-                  Add Priority
-                </Button>
-              </div>
-
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead>Name</TableHead>
-                    <TableHead>Level</TableHead>
-                    <TableHead>Points</TableHead>
-                    <TableHead>Issue Type</TableHead>
-                    <TableHead>L1 Category</TableHead>
-                    <TableHead>Status</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {priorities?.map((item) => (
-                    <TableRow key={item.id}>
-                      <TableCell className="font-medium">{item.name}</TableCell>
-                      <TableCell>
-                        <Badge variant={item.level === "Critical" ? "destructive" : "default"}>
-                          {item.level}
-                        </Badge>
-                      </TableCell>
-                      <TableCell>{item.points}</TableCell>
-                      <TableCell>{getIssueTypeName(item.issueTypeId)}</TableCell>
-                      <TableCell>{getCategoryName(item.l1CategoryId)}</TableCell>
-                      <TableCell>
-                        <Badge variant={item.isActive ? "default" : "secondary"}>
-                          {item.isActive ? "Active" : "Inactive"}
-                        </Badge>
-                      </TableCell>
-                    </TableRow>
-                  ))}
-                  {!priorities || priorities.length === 0 && (
-                    <TableRow>
-                      <TableCell colSpan={6} className="text-center text-muted-foreground">
-                        No priority configurations
-                      </TableCell>
-                    </TableRow>
-                  )}
-                </TableBody>
-              </Table>
-            </Card>
-          </TabsContent>
-
-          {/* Tags Tab */}
-          <TabsContent value="tags">
-            <Card className="p-6">
-              <div className="mb-4 flex items-center justify-between">
-                <h2 className="text-lg font-semibold">Tags</h2>
-                <Button onClick={() => setShowTagForm(true)} size="sm">
-                  <Plus className="h-4 w-4" />
-                  Add Tag
-                </Button>
-              </div>
-
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead>Name</TableHead>
-                    <TableHead>Color</TableHead>
-                    <TableHead>Description</TableHead>
-                    <TableHead>Auto-Applied</TableHead>
-                    <TableHead>Status</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {tags?.map((item) => (
-                    <TableRow key={item.id}>
-                      <TableCell className="font-medium">{item.name}</TableCell>
-                      <TableCell>
-                        <div className="flex items-center gap-2">
-                          <div
-                            className="h-4 w-4 rounded-full"
-                            style={{ backgroundColor: item.color || "#3b82f6" }}
-                          />
-                          {item.color || "#3b82f6"}
-                        </div>
-                      </TableCell>
-                      <TableCell>{item.description || "N/A"}</TableCell>
-                      <TableCell>
-                        <Badge variant={item.isAutoApplied ? "default" : "secondary"}>
-                          {item.isAutoApplied ? "Yes" : "No"}
-                        </Badge>
-                      </TableCell>
-                      <TableCell>
-                        <Badge variant={item.isActive ? "default" : "secondary"}>
-                          {item.isActive ? "Active" : "Inactive"}
-                        </Badge>
-                      </TableCell>
-                    </TableRow>
-                  ))}
-                  {!tags || tags.length === 0 && (
-                    <TableRow>
-                      <TableCell colSpan={5} className="text-center text-muted-foreground">
-                        No tags configured
-                      </TableCell>
-                    </TableRow>
-                  )}
-                </TableBody>
-              </Table>
-            </Card>
-          </TabsContent>
-        </Tabs>
+            </div>
+          )}
+        </Card>
       </main>
 
-      {/* Issue Type Form Dialog */}
-      <Dialog open={showIssueTypeForm} onOpenChange={setShowIssueTypeForm}>
-        <DialogContent>
+      {/* Configuration Wizard */}
+      <Dialog open={showWizard} onOpenChange={(open) => {
+        if (!open) {
+          setShowWizard(false);
+          resetWizard();
+        }
+      }}>
+        <DialogContent className="max-w-2xl">
           <DialogHeader>
-            <DialogTitle>Add Issue Type</DialogTitle>
-            <DialogDescription>Create a new issue type for ticket classification.</DialogDescription>
+            <DialogTitle>Add Ticket Configuration - Step {currentStep} of 7</DialogTitle>
+            <DialogDescription>{stepTitles[currentStep - 1]}</DialogDescription>
           </DialogHeader>
-          <div className="space-y-4">
-            <div className="space-y-2">
-              <Label htmlFor="issue-type-name">Name *</Label>
-              <Input
-                id="issue-type-name"
-                value={issueTypeForm.name}
-                onChange={(e) => setIssueTypeForm({ ...issueTypeForm, name: e.target.value })}
-                placeholder="e.g., Complaint, Request, Information"
-              />
-            </div>
-            <div className="space-y-2">
-              <Label htmlFor="issue-type-desc">Description</Label>
-              <Input
-                id="issue-type-desc"
-                value={issueTypeForm.description}
-                onChange={(e) => setIssueTypeForm({ ...issueTypeForm, description: e.target.value })}
-                placeholder="Brief description"
-              />
-            </div>
-            <div className="flex items-center space-x-2">
-              <Switch
-                id="issue-type-active"
-                checked={issueTypeForm.isActive}
-                onCheckedChange={(checked) => setIssueTypeForm({ ...issueTypeForm, isActive: checked })}
-              />
-              <Label htmlFor="issue-type-active">Active</Label>
-            </div>
-          </div>
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setShowIssueTypeForm(false)}>
-              Cancel
-            </Button>
-            <Button onClick={handleSubmitIssueType} disabled={createIssueTypeMutation.isPending}>
-              {createIssueTypeMutation.isPending ? (
-                <>
-                  <Loader2 className="h-4 w-4 animate-spin" />
-                  Creating...
-                </>
-              ) : (
-                "Create"
-              )}
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
 
-      {/* Category Form Dialog */}
-      <Dialog open={showCategoryForm} onOpenChange={setShowCategoryForm}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>Add Category</DialogTitle>
-            <DialogDescription>Create a new category in the hierarchy.</DialogDescription>
-          </DialogHeader>
-          <div className="space-y-4">
-            <div className="space-y-2">
-              <Label htmlFor="category-name">Name *</Label>
-              <Input
-                id="category-name"
-                value={categoryForm.name}
-                onChange={(e) => setCategoryForm({ ...categoryForm, name: e.target.value })}
-                placeholder="Category name"
+          {/* Progress indicator */}
+          <div className="flex gap-2">
+            {[1, 2, 3, 4, 5, 6, 7].map((step) => (
+              <div
+                key={step}
+                className={`h-2 flex-1 rounded-full ${
+                  step <= currentStep ? "bg-accent" : "bg-muted"
+                }`}
               />
-            </div>
-            <div className="space-y-2">
-              <Label htmlFor="category-level">Level *</Label>
-              <Select
-                value={categoryForm.level.toString()}
-                onValueChange={(value) => setCategoryForm({ ...categoryForm, level: parseInt(value) as 1 | 2 | 3 | 4 })}
-              >
-                <SelectTrigger id="category-level">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="1">L1 (Department)</SelectItem>
-                  <SelectItem value="2">L2 (Sub-Department)</SelectItem>
-                  <SelectItem value="3">L3 (Category)</SelectItem>
-                  <SelectItem value="4">L4 (Sub-Category/Problem Area)</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-            {categoryForm.level > 1 && (
-              <div className="space-y-2">
-                <Label htmlFor="category-parent">Parent Category</Label>
-                <Select
-                  value={categoryForm.parentId}
-                  onValueChange={(value) => setCategoryForm({ ...categoryForm, parentId: value })}
-                >
-                  <SelectTrigger id="category-parent">
-                    <SelectValue placeholder="Select parent" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {categories
-                      ?.filter((c) => c.level === categoryForm.level - 1)
-                      .map((cat) => (
-                        <SelectItem key={cat.id} value={cat.id}>
-                          {cat.name}
-                        </SelectItem>
-                      ))}
-                  </SelectContent>
-                </Select>
+            ))}
+          </div>
+
+          {/* Wizard content */}
+          <div className="py-4">
+            {renderWizardStep()}
+          </div>
+
+          {/* Summary section */}
+          {currentStep > 1 && (
+            <div className="rounded-lg bg-muted p-4">
+              <h4 className="mb-2 text-sm font-medium">Configuration Summary</h4>
+              <div className="space-y-1 text-sm text-muted-foreground">
+                {wizardData.issueType && <p>Issue Type: {wizardData.issueType}</p>}
+                {wizardData.l1 && <p>L1 (Dept): {wizardData.l1}</p>}
+                {wizardData.l2 && <p>L2 (Sub Dept): {wizardData.l2}</p>}
+                {wizardData.l3 && <p>L3 (Category): {wizardData.l3}</p>}
+                {wizardData.l4 && <p>L4 (Problem Area): {wizardData.l4}</p>}
               </div>
-            )}
-            <div className="space-y-2">
-              <Label htmlFor="category-desc">Description</Label>
-              <Input
-                id="category-desc"
-                value={categoryForm.description}
-                onChange={(e) => setCategoryForm({ ...categoryForm, description: e.target.value })}
-                placeholder="Brief description"
-              />
             </div>
-            <div className="flex items-center space-x-2">
-              <Switch
-                id="category-active"
-                checked={categoryForm.isActive}
-                onCheckedChange={(checked) => setCategoryForm({ ...categoryForm, isActive: checked })}
-              />
-              <Label htmlFor="category-active">Active</Label>
-            </div>
-          </div>
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setShowCategoryForm(false)}>
-              Cancel
-            </Button>
-            <Button onClick={handleSubmitCategory} disabled={createCategoryMutation.isPending}>
-              {createCategoryMutation.isPending ? (
-                <>
-                  <Loader2 className="h-4 w-4 animate-spin" />
-                  Creating...
-                </>
-              ) : (
-                "Create"
-              )}
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+          )}
 
-      {/* SLA Form Dialog */}
-      <Dialog open={showSlaForm} onOpenChange={setShowSlaForm}>
-        <DialogContent className="max-h-[90vh] overflow-y-auto">
-          <DialogHeader>
-            <DialogTitle>Add SLA Configuration</DialogTitle>
-            <DialogDescription>Define SLA targets for ticket resolution.</DialogDescription>
-          </DialogHeader>
-          <div className="space-y-4">
-            <div className="space-y-2">
-              <Label htmlFor="sla-name">Name *</Label>
-              <Input
-                id="sla-name"
-                value={slaForm.name}
-                onChange={(e) => setSlaForm({ ...slaForm, name: e.target.value })}
-                placeholder="SLA configuration name"
-              />
-            </div>
-            <div className="space-y-2">
-              <Label htmlFor="sla-issue-type">Issue Type (optional)</Label>
-              <Select
-                value={slaForm.issueTypeId}
-                onValueChange={(value) => setSlaForm({ ...slaForm, issueTypeId: value })}
-              >
-                <SelectTrigger id="sla-issue-type">
-                  <SelectValue placeholder="Select issue type" />
-                </SelectTrigger>
-                <SelectContent>
-                  {issueTypes?.map((it) => (
-                    <SelectItem key={it.id} value={it.id}>
-                      {it.name}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-            <div className="space-y-2">
-              <Label htmlFor="sla-l1">L1 Category (optional)</Label>
-              <Select
-                value={slaForm.l1CategoryId}
-                onValueChange={(value) => setSlaForm({ ...slaForm, l1CategoryId: value })}
-              >
-                <SelectTrigger id="sla-l1">
-                  <SelectValue placeholder="Select L1 category" />
-                </SelectTrigger>
-                <SelectContent>
-                  {categories
-                    ?.filter((c) => c.level === 1)
-                    .map((cat) => (
-                      <SelectItem key={cat.id} value={cat.id}>
-                        {cat.name}
-                      </SelectItem>
-                    ))}
-                </SelectContent>
-              </Select>
-            </div>
-            <div className="space-y-2">
-              <Label htmlFor="sla-response">Response Time (hours)</Label>
-              <Input
-                id="sla-response"
-                type="number"
-                value={slaForm.responseTimeHours}
-                onChange={(e) => setSlaForm({ ...slaForm, responseTimeHours: e.target.value })}
-                placeholder="Optional"
-              />
-            </div>
-            <div className="space-y-2">
-              <Label htmlFor="sla-resolution">Resolution Time (hours) *</Label>
-              <Input
-                id="sla-resolution"
-                type="number"
-                value={slaForm.resolutionTimeHours}
-                onChange={(e) => setSlaForm({ ...slaForm, resolutionTimeHours: e.target.value })}
-                placeholder="Required"
-              />
-            </div>
-            <div className="flex items-center space-x-2">
-              <Switch
-                id="sla-business-hours"
-                checked={slaForm.useBusinessHours}
-                onCheckedChange={(checked) => setSlaForm({ ...slaForm, useBusinessHours: checked })}
-              />
-              <Label htmlFor="sla-business-hours">Use Business Hours</Label>
-            </div>
-            <div className="flex items-center space-x-2">
-              <Switch
-                id="sla-active"
-                checked={slaForm.isActive}
-                onCheckedChange={(checked) => setSlaForm({ ...slaForm, isActive: checked })}
-              />
-              <Label htmlFor="sla-active">Active</Label>
-            </div>
-          </div>
           <DialogFooter>
-            <Button variant="outline" onClick={() => setShowSlaForm(false)}>
-              Cancel
-            </Button>
-            <Button onClick={handleSubmitSla} disabled={createSlaMutation.isPending}>
-              {createSlaMutation.isPending ? (
-                <>
-                  <Loader2 className="h-4 w-4 animate-spin" />
-                  Creating...
-                </>
-              ) : (
-                "Create"
-              )}
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
-
-      {/* Priority Form Dialog */}
-      <Dialog open={showPriorityForm} onOpenChange={setShowPriorityForm}>
-        <DialogContent className="max-h-[90vh] overflow-y-auto">
-          <DialogHeader>
-            <DialogTitle>Add Priority Configuration</DialogTitle>
-            <DialogDescription>Define priority mapping for tickets.</DialogDescription>
-          </DialogHeader>
-          <div className="space-y-4">
-            <div className="space-y-2">
-              <Label htmlFor="priority-name">Name *</Label>
-              <Input
-                id="priority-name"
-                value={priorityForm.name}
-                onChange={(e) => setPriorityForm({ ...priorityForm, name: e.target.value })}
-                placeholder="Priority configuration name"
-              />
-            </div>
-            <div className="space-y-2">
-              <Label htmlFor="priority-level">Priority Level *</Label>
-              <Select
-                value={priorityForm.level}
-                onValueChange={(value) => setPriorityForm({ ...priorityForm, level: value as any })}
+            <div className="flex w-full justify-between">
+              <Button
+                variant="outline"
+                onClick={handleBack}
+                disabled={currentStep === 1}
               >
-                <SelectTrigger id="priority-level">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="Critical">Critical</SelectItem>
-                  <SelectItem value="High">High</SelectItem>
-                  <SelectItem value="Medium">Medium</SelectItem>
-                  <SelectItem value="Low">Low</SelectItem>
-                </SelectContent>
-              </Select>
+                <ChevronLeft className="h-4 w-4" />
+                Back
+              </Button>
+              <div className="flex gap-2">
+                <Button
+                  variant="outline"
+                  onClick={() => {
+                    setShowWizard(false);
+                    resetWizard();
+                  }}
+                >
+                  Cancel
+                </Button>
+                {currentStep < 7 ? (
+                  <Button onClick={handleNext} disabled={!canProceed()}>
+                    Next
+                    <ChevronRight className="h-4 w-4" />
+                  </Button>
+                ) : (
+                  <Button
+                    onClick={handleSubmit}
+                    disabled={!canProceed() || createConfigMutation.isPending}
+                  >
+                    {createConfigMutation.isPending ? (
+                      <>
+                        <Loader2 className="h-4 w-4 animate-spin" />
+                        Creating...
+                      </>
+                    ) : (
+                      "Create Configuration"
+                    )}
+                  </Button>
+                )}
+              </div>
             </div>
-            <div className="space-y-2">
-              <Label htmlFor="priority-points">Points *</Label>
-              <Input
-                id="priority-points"
-                type="number"
-                value={priorityForm.points}
-                onChange={(e) => setPriorityForm({ ...priorityForm, points: e.target.value })}
-                placeholder="Priority points"
-              />
-            </div>
-            <div className="space-y-2">
-              <Label htmlFor="priority-issue-type">Issue Type (optional)</Label>
-              <Select
-                value={priorityForm.issueTypeId}
-                onValueChange={(value) => setPriorityForm({ ...priorityForm, issueTypeId: value })}
-              >
-                <SelectTrigger id="priority-issue-type">
-                  <SelectValue placeholder="Select issue type" />
-                </SelectTrigger>
-                <SelectContent>
-                  {issueTypes?.map((it) => (
-                    <SelectItem key={it.id} value={it.id}>
-                      {it.name}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-            <div className="space-y-2">
-              <Label htmlFor="priority-l1">L1 Category (optional)</Label>
-              <Select
-                value={priorityForm.l1CategoryId}
-                onValueChange={(value) => setPriorityForm({ ...priorityForm, l1CategoryId: value })}
-              >
-                <SelectTrigger id="priority-l1">
-                  <SelectValue placeholder="Select L1 category" />
-                </SelectTrigger>
-                <SelectContent>
-                  {categories
-                    ?.filter((c) => c.level === 1)
-                    .map((cat) => (
-                      <SelectItem key={cat.id} value={cat.id}>
-                        {cat.name}
-                      </SelectItem>
-                    ))}
-                </SelectContent>
-              </Select>
-            </div>
-            <div className="flex items-center space-x-2">
-              <Switch
-                id="priority-active"
-                checked={priorityForm.isActive}
-                onCheckedChange={(checked) => setPriorityForm({ ...priorityForm, isActive: checked })}
-              />
-              <Label htmlFor="priority-active">Active</Label>
-            </div>
-          </div>
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setShowPriorityForm(false)}>
-              Cancel
-            </Button>
-            <Button onClick={handleSubmitPriority} disabled={createPriorityMutation.isPending}>
-              {createPriorityMutation.isPending ? (
-                <>
-                  <Loader2 className="h-4 w-4 animate-spin" />
-                  Creating...
-                </>
-              ) : (
-                "Create"
-              )}
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
-
-      {/* Tag Form Dialog */}
-      <Dialog open={showTagForm} onOpenChange={setShowTagForm}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>Add Tag</DialogTitle>
-            <DialogDescription>Create a new tag for ticket classification.</DialogDescription>
-          </DialogHeader>
-          <div className="space-y-4">
-            <div className="space-y-2">
-              <Label htmlFor="tag-name">Name *</Label>
-              <Input
-                id="tag-name"
-                value={tagForm.name}
-                onChange={(e) => setTagForm({ ...tagForm, name: e.target.value })}
-                placeholder="Tag name"
-              />
-            </div>
-            <div className="space-y-2">
-              <Label htmlFor="tag-color">Color</Label>
-              <Input
-                id="tag-color"
-                type="color"
-                value={tagForm.color}
-                onChange={(e) => setTagForm({ ...tagForm, color: e.target.value })}
-              />
-            </div>
-            <div className="space-y-2">
-              <Label htmlFor="tag-desc">Description</Label>
-              <Input
-                id="tag-desc"
-                value={tagForm.description}
-                onChange={(e) => setTagForm({ ...tagForm, description: e.target.value })}
-                placeholder="Brief description"
-              />
-            </div>
-            <div className="flex items-center space-x-2">
-              <Switch
-                id="tag-auto"
-                checked={tagForm.isAutoApplied}
-                onCheckedChange={(checked) => setTagForm({ ...tagForm, isAutoApplied: checked })}
-              />
-              <Label htmlFor="tag-auto">Auto-apply</Label>
-            </div>
-            <div className="flex items-center space-x-2">
-              <Switch
-                id="tag-active"
-                checked={tagForm.isActive}
-                onCheckedChange={(checked) => setTagForm({ ...tagForm, isActive: checked })}
-              />
-              <Label htmlFor="tag-active">Active</Label>
-            </div>
-          </div>
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setShowTagForm(false)}>
-              Cancel
-            </Button>
-            <Button onClick={handleSubmitTag} disabled={createTagMutation.isPending}>
-              {createTagMutation.isPending ? (
-                <>
-                  <Loader2 className="h-4 w-4 animate-spin" />
-                  Creating...
-                </>
-              ) : (
-                "Create"
-              )}
-            </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
