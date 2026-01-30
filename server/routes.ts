@@ -227,6 +227,27 @@ export async function registerRoutes(
     }
   });
 
+  // Admin change user password (for Owner/Admin only)
+  app.patch("/api/users/:id/password", async (req, res) => {
+    try {
+      const { password } = req.body;
+
+      if (!password || password.length < 6) {
+        return res.status(400).json({ error: "Password must be at least 6 characters" });
+      }
+
+      const user = await storage.getUserById(req.params.id);
+      if (!user) {
+        return res.status(404).json({ error: "User not found" });
+      }
+
+      await storage.updateUser(req.params.id, { password });
+      res.json({ message: "Password changed successfully" });
+    } catch (error: any) {
+      res.status(500).json({ error: error.message });
+    }
+  });
+
   // Change password
   app.post("/api/users/change-password", async (req, res) => {
     try {

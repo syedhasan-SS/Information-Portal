@@ -25,6 +25,7 @@ import {
   Edit,
   Trash2,
   MoreVertical,
+  Key,
 } from "lucide-react";
 import {
   DropdownMenu,
@@ -98,6 +99,18 @@ async function deleteUser(id: number): Promise<void> {
   }
 }
 
+async function changeUserPassword(id: number, newPassword: string): Promise<void> {
+  const res = await fetch(`/api/users/${id}/password`, {
+    method: "PATCH",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ password: newPassword }),
+  });
+  if (!res.ok) {
+    const err = await res.json();
+    throw new Error(err.error || "Failed to change password");
+  }
+}
+
 export default function UsersPage() {
   const [, setLocation] = useLocation();
   const [showForm, setShowForm] = useState(false);
@@ -118,6 +131,8 @@ export default function UsersPage() {
     role: "",
     department: "",
   });
+  const [changingPasswordUser, setChangingPasswordUser] = useState<User | null>(null);
+  const [newPassword, setNewPassword] = useState("");
 
   const queryClient = useQueryClient();
 
@@ -163,6 +178,22 @@ export default function UsersPage() {
       queryClient.invalidateQueries({ queryKey: ["users"] });
       setDeletingUserId(null);
       setSuccess("User deleted successfully!");
+      setError("");
+      setTimeout(() => setSuccess(""), 3000);
+    },
+    onError: (err: Error) => {
+      setError(err.message);
+      setSuccess("");
+    },
+  });
+
+  const changePasswordMutation = useMutation({
+    mutationFn: ({ id, password }: { id: number; password: string }) => changeUserPassword(id, password),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["users"] });
+      setChangingPasswordUser(null);
+      setNewPassword("");
+      setSuccess("Password changed successfully!");
       setError("");
       setTimeout(() => setSuccess(""), 3000);
     },
@@ -220,6 +251,22 @@ export default function UsersPage() {
     if (deletingUserId) {
       deleteMutation.mutate(deletingUserId);
     }
+  };
+
+  const handlePasswordChange = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!changingPasswordUser) return;
+
+    setError("");
+    if (!newPassword || newPassword.length < 6) {
+      setError("Password must be at least 6 characters");
+      return;
+    }
+
+    changePasswordMutation.mutate({
+      id: changingPasswordUser.id,
+      password: newPassword,
+    });
   };
 
   const roleColors: Record<string, string> = {
@@ -414,9 +461,12 @@ export default function UsersPage() {
                 <Card key={user.id} className="p-5" data-testid={`card-user-${user.id}`}>
                   <div className="space-y-3">
                     <div className="flex items-start justify-between">
-                      <div>
+                      <div className="flex-1">
                         <h3 className="font-semibold text-foreground">{user.name}</h3>
                         <p className="text-sm text-muted-foreground">{user.email}</p>
+                        <p className="mt-1 text-xs text-muted-foreground">
+                          Password: <span className="font-mono">{user.password}</span>
+                        </p>
                       </div>
                       <DropdownMenu>
                         <DropdownMenuTrigger asChild>
@@ -428,6 +478,10 @@ export default function UsersPage() {
                           <DropdownMenuItem onClick={() => handleEditClick(user)}>
                             <Edit className="mr-2 h-4 w-4" />
                             Edit
+                          </DropdownMenuItem>
+                          <DropdownMenuItem onClick={() => setChangingPasswordUser(user)}>
+                            <Key className="mr-2 h-4 w-4" />
+                            Change Password
                           </DropdownMenuItem>
                           <DropdownMenuItem
                             onClick={() => setDeletingUserId(user.id)}
@@ -608,6 +662,68 @@ export default function UsersPage() {
               )}
             </Button>
           </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Change Password Dialog */}
+      <Dialog open={!!changingPasswordUser} onOpenChange={(open) => !open && setChangingPasswordUser(null)}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Change Password</DialogTitle>
+            <DialogDescription>
+              Set a new password for {changingPasswordUser?.name}
+            </DialogDescription>
+          </DialogHeader>
+          <form onSubmit={handlePasswordChange} className="space-y-4">
+            {error && changingPasswordUser && (
+              <div className="flex items-center gap-2 rounded-lg border border-destructive/20 bg-destructive/10 p-3 text-sm text-destructive">
+                <AlertCircle className="h-4 w-4" />
+                {error}
+              </div>
+            )}
+
+            <div className="space-y-2">
+              <Label htmlFor="new-password">New Password</Label>
+              <PasswordInput
+                id="new-password"
+                placeholder="Enter new password"
+                value={newPassword}
+                onChange={(e) => setNewPassword(e.target.value)}
+                showStrength
+              />
+              <p className="text-xs text-muted-foreground">
+                Password must be at least 6 characters long
+              </p>
+            </div>
+
+            <DialogFooter>
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() => {
+                  setChangingPasswordUser(null);
+                  setNewPassword("");
+                  setError("");
+                }}
+              >
+                Cancel
+              </Button>
+              <Button
+                type="submit"
+                disabled={changePasswordMutation.isPending}
+                className="bg-accent text-accent-foreground hover:bg-accent/90"
+              >
+                {changePasswordMutation.isPending ? (
+                  <>
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                    Changing...
+                  </>
+                ) : (
+                  "Change Password"
+                )}
+              </Button>
+            </DialogFooter>
+          </form>
         </DialogContent>
       </Dialog>
     </div>
