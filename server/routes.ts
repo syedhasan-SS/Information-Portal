@@ -702,5 +702,24 @@ export async function registerRoutes(
     }
   });
 
+  // Unified Ticket Configurations (combines issue types with L1-L4 hierarchy)
+  app.get("/api/config/ticket-configs", async (_req, res) => {
+    try {
+      // For now, return empty array - full implementation coming soon
+      res.json([]);
+    } catch (error: any) {
+      res.status(500).json({ error: error.message });
+    }
+  });
+
+  app.post("/api/config/ticket-configs", async (req, res) => {
+    try {
+      // Placeholder for now
+      res.status(201).json({ ...req.body, id: `config-${Date.now()}`, createdAt: new Date() });
+    } catch (error: any) {
+      res.status(500).json({ error: error.message });
+    }
+  });
+
   return httpServer;
 }
