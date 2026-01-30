@@ -93,6 +93,8 @@ export default function MyTicketsPage() {
   const [orderIdsComboOpen, setOrderIdsComboOpen] = useState(false);
   const [selectedOrderIds, setSelectedOrderIds] = useState<string[]>([]);
   const [availableOrderIds, setAvailableOrderIds] = useState<string[]>([]);
+  const [vendorSearchValue, setVendorSearchValue] = useState("");
+  const [orderIdSearchValue, setOrderIdSearchValue] = useState("");
   const queryClient = useQueryClient();
   const { toast } = useToast();
 
@@ -419,7 +421,13 @@ export default function MyTicketsPage() {
             <div className="grid gap-4 sm:grid-cols-2">
               <div className="space-y-2">
                 <Label htmlFor="vendorHandle">Vendor</Label>
-                <Popover open={vendorComboOpen} onOpenChange={setVendorComboOpen}>
+                <Popover
+                  open={vendorComboOpen}
+                  onOpenChange={(open) => {
+                    setVendorComboOpen(open);
+                    if (!open) setVendorSearchValue("");
+                  }}
+                >
                   <PopoverTrigger asChild>
                     <Button
                       variant="outline"
@@ -433,33 +441,47 @@ export default function MyTicketsPage() {
                     </Button>
                   </PopoverTrigger>
                   <PopoverContent className="w-full p-0" align="start">
-                    <Command shouldFilter={true}>
-                      <CommandInput placeholder="Search vendor handle or name..." />
+                    <Command shouldFilter={false}>
+                      <CommandInput
+                        placeholder="Search vendor handle or name..."
+                        value={vendorSearchValue}
+                        onValueChange={setVendorSearchValue}
+                      />
                       <CommandList>
                         <CommandEmpty>
                           <p className="text-sm text-muted-foreground p-2">
-                            No vendor found. You can type manually in the field.
+                            No vendor found. You can type manually in the field below.
                           </p>
                         </CommandEmpty>
                         <CommandGroup>
-                          {vendors?.map((v) => (
-                            <CommandItem
-                              key={v.handle}
-                              value={`${v.handle} ${v.name}`}
-                              onSelect={() => {
-                                setNewTicket({ ...newTicket, vendorHandle: v.handle });
-                                setVendorComboOpen(false);
-                              }}
-                            >
-                              <Check
-                                className={cn(
-                                  "mr-2 h-4 w-4",
-                                  newTicket.vendorHandle === v.handle ? "opacity-100" : "opacity-0"
-                                )}
-                              />
-                              {v.handle} - {v.name}
-                            </CommandItem>
-                          ))}
+                          {vendors
+                            ?.filter((v) => {
+                              if (!vendorSearchValue) return true;
+                              const search = vendorSearchValue.toLowerCase();
+                              return (
+                                v.handle.toLowerCase().includes(search) ||
+                                v.name.toLowerCase().includes(search)
+                              );
+                            })
+                            .map((v) => (
+                              <CommandItem
+                                key={v.handle}
+                                value={v.handle}
+                                onSelect={() => {
+                                  setNewTicket({ ...newTicket, vendorHandle: v.handle });
+                                  setVendorComboOpen(false);
+                                  setVendorSearchValue("");
+                                }}
+                              >
+                                <Check
+                                  className={cn(
+                                    "mr-2 h-4 w-4",
+                                    newTicket.vendorHandle === v.handle ? "opacity-100" : "opacity-0"
+                                  )}
+                                />
+                                {v.handle} - {v.name}
+                              </CommandItem>
+                            ))}
                         </CommandGroup>
                       </CommandList>
                     </Command>
@@ -552,7 +574,13 @@ export default function MyTicketsPage() {
 
             <div className="space-y-2">
               <Label htmlFor="fleekOrderIds">Fleek Order IDs (optional)</Label>
-              <Popover open={orderIdsComboOpen} onOpenChange={setOrderIdsComboOpen}>
+              <Popover
+                open={orderIdsComboOpen}
+                onOpenChange={(open) => {
+                  setOrderIdsComboOpen(open);
+                  if (!open) setOrderIdSearchValue("");
+                }}
+              >
                 <PopoverTrigger asChild>
                   <Button
                     variant="outline"
@@ -586,8 +614,12 @@ export default function MyTicketsPage() {
                   </Button>
                 </PopoverTrigger>
                 <PopoverContent className="w-full p-0" align="start">
-                  <Command shouldFilter={true}>
-                    <CommandInput placeholder="Search or type order ID..." />
+                  <Command shouldFilter={false}>
+                    <CommandInput
+                      placeholder="Search or type order ID..."
+                      value={orderIdSearchValue}
+                      onValueChange={setOrderIdSearchValue}
+                    />
                     <CommandList>
                       <CommandEmpty>
                         <div className="p-2">
@@ -601,11 +633,10 @@ export default function MyTicketsPage() {
                             variant="ghost"
                             className="w-full"
                             onClick={() => {
-                              const input = document.querySelector('[placeholder="Search or type order ID..."]') as HTMLInputElement;
-                              const value = input?.value?.trim();
+                              const value = orderIdSearchValue.trim();
                               if (value && !selectedOrderIds.includes(value)) {
                                 setSelectedOrderIds(prev => [...prev, value]);
-                                input.value = '';
+                                setOrderIdSearchValue("");
                               }
                             }}
                           >
@@ -615,27 +646,32 @@ export default function MyTicketsPage() {
                         </div>
                       </CommandEmpty>
                       <CommandGroup>
-                        {availableOrderIds.map((orderId) => (
-                          <CommandItem
-                            key={orderId}
-                            value={orderId}
-                            onSelect={(value) => {
-                              setSelectedOrderIds(prev =>
-                                prev.includes(value)
-                                  ? prev.filter(id => id !== value)
-                                  : [...prev, value]
-                              );
-                            }}
-                          >
-                            <Check
-                              className={cn(
-                                "mr-2 h-4 w-4",
-                                selectedOrderIds.includes(orderId) ? "opacity-100" : "opacity-0"
-                              )}
-                            />
-                            {orderId}
-                          </CommandItem>
-                        ))}
+                        {availableOrderIds
+                          .filter((orderId) => {
+                            if (!orderIdSearchValue) return true;
+                            return orderId.toLowerCase().includes(orderIdSearchValue.toLowerCase());
+                          })
+                          .map((orderId) => (
+                            <CommandItem
+                              key={orderId}
+                              value={orderId}
+                              onSelect={(value) => {
+                                setSelectedOrderIds(prev =>
+                                  prev.includes(value)
+                                    ? prev.filter(id => id !== value)
+                                    : [...prev, value]
+                                );
+                              }}
+                            >
+                              <Check
+                                className={cn(
+                                  "mr-2 h-4 w-4",
+                                  selectedOrderIds.includes(orderId) ? "opacity-100" : "opacity-0"
+                                )}
+                              />
+                              {orderId}
+                            </CommandItem>
+                          ))}
                       </CommandGroup>
                     </CommandList>
                   </Command>
