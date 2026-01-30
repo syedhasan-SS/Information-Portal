@@ -527,7 +527,7 @@ export default function AllTicketsPage() {
                           </Button>
                         </TableCell>
                       </TableRow>
-                      );
+                    );
                     })}
                   </TableBody>
                 </Table>

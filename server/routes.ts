@@ -875,6 +875,13 @@ export async function registerRoutes(
       // Get all SLA configurations
       const slaConfigs = await storage.getAllSlaConfigurations();
 
+      // Get all category mappings to find issue types
+      const categoryMappings = await storage.getCategoryMappings();
+
+      // Get all issue types
+      const issueTypes = await storage.getIssueTypes();
+      const issueTypeMap = new Map(issueTypes.map(it => [it.id, it.name]));
+
       // Build a map of category hierarchies
       const categoryMap = new Map();
       hierarchies.forEach(cat => {
@@ -895,9 +902,13 @@ export async function registerRoutes(
             s.l4CategoryId === l4.id
           );
 
+          // Find the issue type from category mapping
+          const mapping = categoryMappings.find(m => m.l4CategoryId === l4.id);
+          const issueTypeName = mapping ? issueTypeMap.get(mapping.issueTypeId) : "Information";
+
           configs.push({
             id: l4.id,
-            issueType: "Information",
+            issueType: issueTypeName || "Information",
             l1: l1.name,
             l2: l2.name,
             l3: l3.name,
@@ -1164,6 +1175,57 @@ export async function registerRoutes(
       });
     } catch (error: any) {
       console.error("Error creating ticket configs:", error);
+      res.status(500).json({ error: error.message });
+    }
+  });
+
+  // Update ticket configuration
+  app.put("/api/config/ticket-configs/:id", async (req, res) => {
+    try {
+      const { id } = req.params;
+      const updates = req.body;
+
+      // Update L4 category
+      const l4Category = await storage.updateCategoryHierarchy(id, {
+        description: updates.description,
+        isActive: updates.isActive,
+      });
+
+      if (!l4Category) {
+        return res.status(404).json({ error: "Configuration not found" });
+      }
+
+      // Update SLA configuration if provided
+      if (updates.slaResponseHours !== undefined || updates.slaResolutionHours !== undefined) {
+        const slaConfigs = await storage.getAllSlaConfigurations();
+        const slaConfig = slaConfigs.find(s => s.l4CategoryId === id);
+
+        if (slaConfig) {
+          await storage.updateSlaConfiguration(slaConfig.id, {
+            responseTimeHours: updates.slaResponseHours || slaConfig.responseTimeHours,
+            resolutionTimeHours: updates.slaResolutionHours || slaConfig.resolutionTimeHours,
+          });
+        }
+      }
+
+      res.json({ message: "Configuration updated successfully" });
+    } catch (error: any) {
+      console.error("Error updating ticket config:", error);
+      res.status(500).json({ error: error.message });
+    }
+  });
+
+  // Delete ticket configuration
+  app.delete("/api/config/ticket-configs/:id", async (req, res) => {
+    try {
+      const { id } = req.params;
+
+      // Delete L4 category (cascade will handle mappings and SLA configs)
+      await storage.deleteCategoryHierarchy(id);
+
+      res.json({ message: "Configuration deleted successfully" });
+    } catch (error: any) {
+      console.error("Error deleting ticket config:", error);
       res.status(500).json({ error: error.message });
     }
   });

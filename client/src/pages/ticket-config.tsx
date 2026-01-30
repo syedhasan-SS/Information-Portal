@@ -150,6 +150,46 @@ export default function TicketConfigPage() {
     },
   });
 
+  // Update configuration mutation
+  const updateConfigMutation = useMutation({
+    mutationFn: async ({ id, data }: { id: string; data: any }) => {
+      const res = await fetch(`/api/config/ticket-configs/${id}`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(data),
+      });
+      if (!res.ok) throw new Error("Failed to update configuration");
+      return res.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["ticket-configs"] });
+      setShowWizard(false);
+      resetWizard();
+      toast({ title: "Success", description: "Configuration updated successfully" });
+    },
+    onError: () => {
+      toast({ title: "Error", description: "Failed to update configuration", variant: "destructive" });
+    },
+  });
+
+  // Delete configuration mutation
+  const deleteConfigMutation = useMutation({
+    mutationFn: async (id: string) => {
+      const res = await fetch(`/api/config/ticket-configs/${id}`, {
+        method: "DELETE",
+      });
+      if (!res.ok) throw new Error("Failed to delete configuration");
+      return res.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["ticket-configs"] });
+      toast({ title: "Success", description: "Configuration deleted successfully" });
+    },
+    onError: () => {
+      toast({ title: "Error", description: "Failed to delete configuration", variant: "destructive" });
+    },
+  });
+
   const resetWizard = () => {
     setCurrentStep(1);
     setEditingConfig(null);
@@ -320,11 +360,27 @@ Information,Tech,Product Listings,Product Information,Category Query,Product cat
   };
 
   const handleSubmit = () => {
-    createConfigMutation.mutate({
+    const data = {
       ...wizardData,
       slaResponseHours: wizardData.slaResponseHours ? parseInt(wizardData.slaResponseHours) : null,
       slaResolutionHours: parseInt(wizardData.slaResolutionHours),
-    });
+    };
+
+    if (editingConfig) {
+      // Update existing configuration
+      updateConfigMutation.mutate({
+        id: editingConfig.id,
+        data: {
+          description: data.description,
+          isActive: data.isActive,
+          slaResponseHours: data.slaResponseHours,
+          slaResolutionHours: data.slaResolutionHours,
+        },
+      });
+    } else {
+      // Create new configuration
+      createConfigMutation.mutate(data);
+    }
   };
 
   const canProceed = () => {
@@ -526,6 +582,57 @@ Information,Tech,Product Listings,Product Information,Category Query,Product cat
                 <FileText className="h-4 w-4" />
                 Download Template
               </Button>
+              <Button
+                onClick={() => {
+                  if (!configs || configs.length === 0) {
+                    toast({
+                      title: "No Data",
+                      description: "No configurations to export",
+                      variant: "destructive"
+                    });
+                    return;
+                  }
+
+                  // Create CSV content
+                  const headers = ['Issue Type', 'L1', 'L2', 'L3', 'L4', 'Description', 'Active', 'SLA Response Hours', 'SLA Resolution Hours'];
+                  const rows = configs.map(config => [
+                    config.issueType,
+                    config.l1,
+                    config.l2,
+                    config.l3,
+                    config.l4,
+                    config.description || '',
+                    config.isActive ? 'true' : 'false',
+                    config.slaResponseHours || '',
+                    config.slaResolutionHours
+                  ]);
+
+                  const csvContent = [headers, ...rows]
+                    .map(row => row.map(cell => `"${cell}"`).join(','))
+                    .join('\n');
+
+                  // Download
+                  const blob = new Blob([csvContent], { type: 'text/csv' });
+                  const url = window.URL.createObjectURL(blob);
+                  const a = document.createElement('a');
+                  a.href = url;
+                  a.download = `ticket-configurations-${new Date().toISOString().split('T')[0]}.csv`;
+                  document.body.appendChild(a);
+                  a.click();
+                  document.body.removeChild(a);
+                  window.URL.revokeObjectURL(url);
+
+                  toast({
+                    title: "Export Successful",
+                    description: `Exported ${configs.length} configurations`
+                  });
+                }}
+                variant="outline"
+                size="sm"
+              >
+                <FileText className="h-4 w-4" />
+                Export CSV
+              </Button>
               <Button onClick={() => csvFileInputRef.current?.click()} variant="outline" size="sm">
                 <Upload className="h-4 w-4" />
                 Upload CSV
@@ -587,7 +694,10 @@ Information,Tech,Product Listings,Product Information,Category Query,Product cat
                           {config.slaResolutionHours}
                         </TableCell>
                         <TableCell>
-                          <Badge variant={config.isActive ? "default" : "secondary"}>
+                          <Badge
+                            variant={config.isActive ? "default" : "secondary"}
+                            className={config.isActive ? "bg-green-500 hover:bg-green-600" : ""}
+                          >
                             {config.isActive ? "Active" : "Inactive"}
                           </Badge>
                         </TableCell>
@@ -615,7 +725,15 @@ Information,Tech,Product Listings,Product Information,Category Query,Product cat
                             >
                               <Edit className="h-4 w-4" />
                             </Button>
-                            <Button variant="ghost" size="sm">
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              onClick={() => {
+                                if (confirm(`Are you sure you want to delete the configuration for "${config.l4}"?`)) {
+                                  deleteConfigMutation.mutate(config.id);
+                                }
+                              }}
+                            >
                               <Trash2 className="h-4 w-4" />
                             </Button>
                           </div>
