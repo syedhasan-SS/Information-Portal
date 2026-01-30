@@ -29,6 +29,7 @@ import {
 } from "@/components/ui/dialog";
 import { Badge } from "@/components/ui/badge";
 import { Switch } from "@/components/ui/switch";
+import { Checkbox } from "@/components/ui/checkbox";
 import { useLocation } from "wouter";
 import {
   ArrowLeft,
@@ -87,6 +88,9 @@ export default function TicketConfigPage() {
   const [showCsvPreview, setShowCsvPreview] = useState(false);
   const [csvData, setCsvData] = useState<any[]>([]);
   const [csvErrors, setCsvErrors] = useState<string[]>([]);
+
+  // Multi-selection state
+  const [selectedConfigs, setSelectedConfigs] = useState<Set<string>>(new Set());
 
   // Fetch configurations
   const { data: configs, isLoading } = useQuery({
@@ -204,6 +208,47 @@ export default function TicketConfigPage() {
       slaResponseHours: "",
       slaResolutionHours: "",
     });
+  };
+
+  // Multi-selection handlers
+  const toggleSelectAll = () => {
+    if (!configs) return;
+    if (selectedConfigs.size === configs.length) {
+      setSelectedConfigs(new Set());
+    } else {
+      setSelectedConfigs(new Set(configs.map(c => c.id)));
+    }
+  };
+
+  const toggleSelect = (id: string) => {
+    const newSelected = new Set(selectedConfigs);
+    if (newSelected.has(id)) {
+      newSelected.delete(id);
+    } else {
+      newSelected.add(id);
+    }
+    setSelectedConfigs(newSelected);
+  };
+
+  const handleBulkDelete = () => {
+    if (selectedConfigs.size === 0) return;
+    if (confirm(`Are you sure you want to delete ${selectedConfigs.size} configuration(s)?`)) {
+      selectedConfigs.forEach(id => {
+        deleteConfigMutation.mutate(id);
+      });
+      setSelectedConfigs(new Set());
+    }
+  };
+
+  const handleBulkActivate = async (activate: boolean) => {
+    if (selectedConfigs.size === 0) return;
+    selectedConfigs.forEach(async (id) => {
+      updateConfigMutation.mutate({
+        id,
+        data: { isActive: activate },
+      });
+    });
+    setSelectedConfigs(new Set());
   };
 
   const parseCsvFile = (file: File) => {
@@ -578,6 +623,36 @@ Information,Tech,Product Listings,Product Information,Category Query,Product cat
               </div>
             </div>
             <div className="flex gap-2">
+              {selectedConfigs.size > 0 && (
+                <>
+                  <Badge variant="secondary" className="px-3 py-1">
+                    {selectedConfigs.size} selected
+                  </Badge>
+                  <Button
+                    onClick={() => handleBulkActivate(true)}
+                    variant="outline"
+                    size="sm"
+                  >
+                    Activate Selected
+                  </Button>
+                  <Button
+                    onClick={() => handleBulkActivate(false)}
+                    variant="outline"
+                    size="sm"
+                  >
+                    Deactivate Selected
+                  </Button>
+                  <Button
+                    onClick={handleBulkDelete}
+                    variant="outline"
+                    size="sm"
+                    className="text-red-600 hover:text-red-700"
+                  >
+                    <Trash2 className="h-4 w-4" />
+                    Delete Selected
+                  </Button>
+                </>
+              )}
               <Button onClick={downloadCsvTemplate} variant="outline" size="sm">
                 <FileText className="h-4 w-4" />
                 Download Template
@@ -656,6 +731,170 @@ Information,Tech,Product Listings,Product Information,Category Query,Product cat
       />
 
       <main className="mx-auto max-w-[1600px] px-6 py-8">
+        {/* Analytics Summary Cards */}
+        {configs && configs.length > 0 && (
+          <div className="mb-6 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+            <Card className="p-6">
+              <div>
+                <p className="text-sm text-muted-foreground">Total Configurations</p>
+                <p className="mt-2 text-3xl font-bold">{configs.length}</p>
+              </div>
+            </Card>
+
+            <Card className="p-6">
+              <div>
+                <p className="text-sm text-muted-foreground">Active Configs</p>
+                <p className="mt-2 text-3xl font-bold text-green-600">
+                  {configs.filter(c => c.isActive).length}
+                </p>
+              </div>
+            </Card>
+
+            <Card className="p-6">
+              <div>
+                <p className="text-sm text-muted-foreground">Inactive Configs</p>
+                <p className="mt-2 text-3xl font-bold text-gray-600">
+                  {configs.filter(c => !c.isActive).length}
+                </p>
+              </div>
+            </Card>
+
+            <Card className="p-6">
+              <div>
+                <p className="text-sm text-muted-foreground">Issue Types</p>
+                <p className="mt-2 text-3xl font-bold">
+                  {new Set(configs.map(c => c.issueType)).size}
+                </p>
+              </div>
+            </Card>
+          </div>
+        )}
+
+        {/* Distribution Charts */}
+        {configs && configs.length > 0 && (
+          <>
+            <div className="mb-4 flex items-center">
+              <h2 className="text-xl font-semibold">Category Distributions</h2>
+            </div>
+
+            <div className="mb-6 grid gap-4 lg:grid-cols-2">
+              {/* Issue Type Distribution */}
+              <Card className="p-6">
+                <h3 className="mb-4 text-lg font-semibold">Issue Type Distribution</h3>
+                <div className="space-y-3">
+                  {Object.entries(
+                    configs.reduce((acc, c) => {
+                      acc[c.issueType] = (acc[c.issueType] || 0) + 1;
+                      return acc;
+                    }, {} as Record<string, number>)
+                  ).map(([type, count]) => (
+                    <div key={type} className="flex items-center justify-between">
+                      <div className="flex items-center gap-2">
+                        <Badge variant="outline">{type}</Badge>
+                        <span className="text-sm text-muted-foreground">
+                          {((count / configs.length) * 100).toFixed(1)}%
+                        </span>
+                      </div>
+                      <span className="font-semibold">{count}</span>
+                    </div>
+                  ))}
+                </div>
+              </Card>
+
+              {/* L1 Distribution */}
+              <Card className="p-6">
+                <h3 className="mb-4 text-lg font-semibold">L1 (Department) Distribution</h3>
+                <div className="space-y-3 max-h-48 overflow-y-auto">
+                  {Object.entries(
+                    configs.reduce((acc, c) => {
+                      acc[c.l1] = (acc[c.l1] || 0) + 1;
+                      return acc;
+                    }, {} as Record<string, number>)
+                  )
+                    .sort((a, b) => b[1] - a[1])
+                    .slice(0, 10)
+                    .map(([l1, count]) => (
+                      <div key={l1} className="flex items-center justify-between">
+                        <span className="text-sm font-medium truncate flex-1">{l1}</span>
+                        <div className="flex items-center gap-2">
+                          <div className="h-2 w-24 bg-gray-200 rounded-full overflow-hidden">
+                            <div
+                              className="h-full bg-purple-500"
+                              style={{ width: `${(count / configs.length) * 100}%` }}
+                            />
+                          </div>
+                          <span className="font-semibold text-sm w-8 text-right">{count}</span>
+                        </div>
+                      </div>
+                    ))}
+                </div>
+              </Card>
+
+              {/* L2 Distribution */}
+              <Card className="p-6">
+                <h3 className="mb-4 text-lg font-semibold">L2 (Sub Department) Distribution</h3>
+                <div className="space-y-3 max-h-48 overflow-y-auto">
+                  {Object.entries(
+                    configs.reduce((acc, c) => {
+                      acc[c.l2] = (acc[c.l2] || 0) + 1;
+                      return acc;
+                    }, {} as Record<string, number>)
+                  )
+                    .sort((a, b) => b[1] - a[1])
+                    .slice(0, 10)
+                    .map(([l2, count]) => (
+                      <div key={l2} className="flex items-center justify-between">
+                        <span className="text-sm font-medium truncate flex-1">{l2}</span>
+                        <div className="flex items-center gap-2">
+                          <div className="h-2 w-24 bg-gray-200 rounded-full overflow-hidden">
+                            <div
+                              className="h-full bg-pink-500"
+                              style={{ width: `${(count / configs.length) * 100}%` }}
+                            />
+                          </div>
+                          <span className="font-semibold text-sm w-8 text-right">{count}</span>
+                        </div>
+                      </div>
+                    ))}
+                </div>
+              </Card>
+
+              {/* L3 Distribution */}
+              <Card className="p-6">
+                <h3 className="mb-4 text-lg font-semibold">L3 (Category) Distribution</h3>
+                <div className="space-y-3 max-h-48 overflow-y-auto">
+                  {Object.entries(
+                    configs.reduce((acc, c) => {
+                      acc[c.l3] = (acc[c.l3] || 0) + 1;
+                      return acc;
+                    }, {} as Record<string, number>)
+                  )
+                    .sort((a, b) => b[1] - a[1])
+                    .slice(0, 10)
+                    .map(([l3, count]) => (
+                      <div key={l3} className="flex items-center justify-between">
+                        <span className="text-sm font-medium truncate flex-1">{l3}</span>
+                        <div className="flex items-center gap-2">
+                          <div className="h-2 w-24 bg-gray-200 rounded-full overflow-hidden">
+                            <div
+                              className="h-full bg-amber-500"
+                              style={{ width: `${(count / configs.length) * 100}%` }}
+                            />
+                          </div>
+                          <span className="font-semibold text-sm w-8 text-right">{count}</span>
+                        </div>
+                      </div>
+                    ))}
+                </div>
+              </Card>
+            </div>
+
+            <div className="mb-4 border-t pt-6">
+              <h2 className="text-xl font-semibold">All Configurations</h2>
+            </div>
+          </>
+        )}
+
         <Card>
           {isLoading ? (
             <div className="flex items-center justify-center p-8">
@@ -666,6 +905,12 @@ Information,Tech,Product Listings,Product Information,Category Query,Product cat
               <Table>
                 <TableHeader>
                   <TableRow>
+                    <TableHead className="w-12">
+                      <Checkbox
+                        checked={configs && configs.length > 0 && selectedConfigs.size === configs.length}
+                        onCheckedChange={toggleSelectAll}
+                      />
+                    </TableHead>
                     <TableHead className="w-12">S.No</TableHead>
                     <TableHead>Request Type</TableHead>
                     <TableHead>Dept (L1)</TableHead>
@@ -681,6 +926,12 @@ Information,Tech,Product Listings,Product Information,Category Query,Product cat
                   {configs && configs.length > 0 ? (
                     configs.map((config, index) => (
                       <TableRow key={config.id}>
+                        <TableCell>
+                          <Checkbox
+                            checked={selectedConfigs.has(config.id)}
+                            onCheckedChange={() => toggleSelect(config.id)}
+                          />
+                        </TableCell>
                         <TableCell>{index + 1}</TableCell>
                         <TableCell>
                           <Badge variant="outline">{config.issueType}</Badge>
@@ -742,7 +993,7 @@ Information,Tech,Product Listings,Product Information,Category Query,Product cat
                     ))
                   ) : (
                     <TableRow>
-                      <TableCell colSpan={9} className="text-center text-muted-foreground">
+                      <TableCell colSpan={10} className="text-center text-muted-foreground">
                         No configurations found. Click "Add Configuration" to create one.
                       </TableCell>
                     </TableRow>
@@ -761,87 +1012,165 @@ Information,Tech,Product Listings,Product Information,Category Query,Product cat
           resetWizard();
         }
       }}>
-        <DialogContent className="max-w-2xl">
+        <DialogContent className="max-w-3xl max-h-[90vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle>
-              {editingConfig ? "Edit" : "Add"} Ticket Configuration - Step {currentStep} of 7
+              {editingConfig ? "Edit" : "Add"} Ticket Configuration
             </DialogTitle>
-            <DialogDescription>{stepTitles[currentStep - 1]}</DialogDescription>
+            <DialogDescription>
+              {editingConfig ? "Update the configuration details below" : "Fill in all required fields to create a new ticket configuration"}
+            </DialogDescription>
           </DialogHeader>
 
-          {/* Progress indicator */}
-          <div className="flex gap-2">
-            {[1, 2, 3, 4, 5, 6, 7].map((step) => (
-              <div
-                key={step}
-                className={`h-2 flex-1 rounded-full ${
-                  step <= currentStep ? "bg-accent" : "bg-muted"
-                }`}
-              />
-            ))}
-          </div>
+          <div className="grid gap-6 py-4">
+            {/* Issue Type & Department Section */}
+            <div className="grid gap-4 sm:grid-cols-2">
+              <div className="space-y-2">
+                <Label htmlFor="issueType">Issue Type *</Label>
+                <Select
+                  value={wizardData.issueType}
+                  onValueChange={(value) => setWizardData({ ...wizardData, issueType: value as any })}
+                >
+                  <SelectTrigger id="issueType">
+                    <SelectValue placeholder="Select issue type" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="Complaint">Complaint</SelectItem>
+                    <SelectItem value="Request">Request</SelectItem>
+                    <SelectItem value="Information">Information</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
 
-          {/* Wizard content */}
-          <div className="py-4">
-            {renderWizardStep()}
-          </div>
-
-          {/* Summary section */}
-          {currentStep > 1 && (
-            <div className="rounded-lg bg-muted p-4">
-              <h4 className="mb-2 text-sm font-medium">Configuration Summary</h4>
-              <div className="space-y-1 text-sm text-muted-foreground">
-                {wizardData.issueType && <p>Issue Type: {wizardData.issueType}</p>}
-                {wizardData.l1 && <p>L1 (Dept): {wizardData.l1}</p>}
-                {wizardData.l2 && <p>L2 (Sub Dept): {wizardData.l2}</p>}
-                {wizardData.l3 && <p>L3 (Category): {wizardData.l3}</p>}
-                {wizardData.l4 && <p>L4 (Problem Area): {wizardData.l4}</p>}
+              <div className="space-y-2">
+                <Label htmlFor="l1">L1 - Department *</Label>
+                <Input
+                  id="l1"
+                  value={wizardData.l1}
+                  onChange={(e) => setWizardData({ ...wizardData, l1: e.target.value })}
+                  placeholder="e.g., Finance, Operations"
+                  disabled={!!editingConfig}
+                />
               </div>
             </div>
-          )}
+
+            {/* Category Hierarchy */}
+            <div className="grid gap-4 sm:grid-cols-2">
+              <div className="space-y-2">
+                <Label htmlFor="l2">L2 - Sub Department *</Label>
+                <Input
+                  id="l2"
+                  value={wizardData.l2}
+                  onChange={(e) => setWizardData({ ...wizardData, l2: e.target.value })}
+                  placeholder="e.g., Accounts Payable"
+                  disabled={!!editingConfig}
+                />
+              </div>
+
+              <div className="space-y-2">
+                <Label htmlFor="l3">L3 - Category *</Label>
+                <Input
+                  id="l3"
+                  value={wizardData.l3}
+                  onChange={(e) => setWizardData({ ...wizardData, l3: e.target.value })}
+                  placeholder="e.g., Invoice Processing"
+                  disabled={!!editingConfig}
+                />
+              </div>
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="l4">L4 - Sub Category / Problem Area *</Label>
+              <Input
+                id="l4"
+                value={wizardData.l4}
+                onChange={(e) => setWizardData({ ...wizardData, l4: e.target.value })}
+                placeholder="e.g., Payment Delay"
+                disabled={!!editingConfig}
+              />
+            </div>
+
+            {/* Description */}
+            <div className="space-y-2">
+              <Label htmlFor="description">Description</Label>
+              <Input
+                id="description"
+                value={wizardData.description}
+                onChange={(e) => setWizardData({ ...wizardData, description: e.target.value })}
+                placeholder="Brief description of this configuration"
+              />
+            </div>
+
+            {/* SLA Configuration */}
+            <div className="grid gap-4 sm:grid-cols-2">
+              <div className="space-y-2">
+                <Label htmlFor="slaResponseHours">SLA Response Time (hours)</Label>
+                <Input
+                  id="slaResponseHours"
+                  type="number"
+                  value={wizardData.slaResponseHours}
+                  onChange={(e) => setWizardData({ ...wizardData, slaResponseHours: e.target.value })}
+                  placeholder="24"
+                />
+              </div>
+
+              <div className="space-y-2">
+                <Label htmlFor="slaResolutionHours">SLA Resolution Time (hours) *</Label>
+                <Input
+                  id="slaResolutionHours"
+                  type="number"
+                  value={wizardData.slaResolutionHours}
+                  onChange={(e) => setWizardData({ ...wizardData, slaResolutionHours: e.target.value })}
+                  placeholder="72"
+                />
+              </div>
+            </div>
+
+            {/* Active Status */}
+            <div className="flex items-center space-x-2">
+              <Switch
+                id="isActive"
+                checked={wizardData.isActive}
+                onCheckedChange={(checked) => setWizardData({ ...wizardData, isActive: checked })}
+              />
+              <Label htmlFor="isActive" className="cursor-pointer">
+                Active Configuration
+              </Label>
+            </div>
+          </div>
 
           <DialogFooter>
-            <div className="flex w-full justify-between">
-              <Button
-                variant="outline"
-                onClick={handleBack}
-                disabled={currentStep === 1}
-              >
-                <ChevronLeft className="h-4 w-4" />
-                Back
-              </Button>
-              <div className="flex gap-2">
-                <Button
-                  variant="outline"
-                  onClick={() => {
-                    setShowWizard(false);
-                    resetWizard();
-                  }}
-                >
-                  Cancel
-                </Button>
-                {currentStep < 7 ? (
-                  <Button onClick={handleNext} disabled={!canProceed()}>
-                    Next
-                    <ChevronRight className="h-4 w-4" />
-                  </Button>
-                ) : (
-                  <Button
-                    onClick={handleSubmit}
-                    disabled={!canProceed() || createConfigMutation.isPending}
-                  >
-                    {createConfigMutation.isPending ? (
-                      <>
-                        <Loader2 className="h-4 w-4 animate-spin" />
-                        Creating...
-                      </>
-                    ) : (
-                      "Create Configuration"
-                    )}
-                  </Button>
-                )}
-              </div>
-            </div>
+            <Button
+              variant="outline"
+              onClick={() => {
+                setShowWizard(false);
+                resetWizard();
+              }}
+            >
+              Cancel
+            </Button>
+            <Button
+              onClick={handleSubmit}
+              disabled={
+                !wizardData.issueType ||
+                !wizardData.l1 ||
+                !wizardData.l2 ||
+                !wizardData.l3 ||
+                !wizardData.l4 ||
+                !wizardData.slaResolutionHours ||
+                createConfigMutation.isPending ||
+                updateConfigMutation.isPending
+              }
+            >
+              {(createConfigMutation.isPending || updateConfigMutation.isPending) ? (
+                <>
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                  {editingConfig ? "Updating..." : "Creating..."}
+                </>
+              ) : (
+                <>{editingConfig ? "Update Configuration" : "Create Configuration"}</>
+              )}
+            </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
