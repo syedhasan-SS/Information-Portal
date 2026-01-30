@@ -443,10 +443,16 @@ export default function TicketDetailPage() {
                   </Button>
                 </div>
 
-                {ticket.fleekOrderId && (
+                {ticket.fleekOrderIds && ticket.fleekOrderIds.length > 0 && (
                   <div>
-                    <label className="text-xs font-medium text-muted-foreground">Fleek Order ID</label>
-                    <p className="mt-1 font-mono text-sm">{ticket.fleekOrderId}</p>
+                    <label className="text-xs font-medium text-muted-foreground">
+                      Fleek Order ID{ticket.fleekOrderIds.length > 1 ? 's' : ''}
+                    </label>
+                    <div className="mt-1 space-y-1">
+                      {ticket.fleekOrderIds.map((orderId, index) => (
+                        <p key={index} className="font-mono text-sm">{orderId}</p>
+                      ))}
+                    </div>
                   </div>
                 )}
               </div>

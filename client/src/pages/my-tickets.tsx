@@ -71,7 +71,7 @@ export default function MyTicketsPage() {
     categoryId: "",
     subject: "",
     description: "",
-    fleekOrderId: "",
+    fleekOrderIds: "",
   });
   const queryClient = useQueryClient();
   const { toast } = useToast();
@@ -106,8 +106,8 @@ export default function MyTicketsPage() {
     mutationFn: async (ticketData: typeof newTicket) => {
       const category = categories?.find((c) => c.id === ticketData.categoryId);
       const vendor = vendors?.find((v) => v.handle === ticketData.vendorHandle);
-      const openTicketCount = tickets?.filter((t) => 
-        t.vendorHandle === ticketData.vendorHandle && 
+      const openTicketCount = tickets?.filter((t) =>
+        t.vendorHandle === ticketData.vendorHandle &&
         ["New", "Open", "Pending"].includes(t.status)
       ).length || 0;
 
@@ -115,7 +115,7 @@ export default function MyTicketsPage() {
       const ticketHistoryPoints = Math.min(openTicketCount * 5, 20);
       const issuePoints = category?.issuePriorityPoints || 10;
       const priorityScore = gmvPoints + ticketHistoryPoints + issuePoints;
-      
+
       let priorityTier: "Critical" | "High" | "Medium" | "Low";
       let priorityBadge: "P0" | "P1" | "P2" | "P3";
       if (priorityScore >= 70) { priorityTier = "Critical"; priorityBadge = "P0"; }
@@ -124,12 +124,23 @@ export default function MyTicketsPage() {
       else { priorityTier = "Low"; priorityBadge = "P3"; }
 
       const ticketNumber = `ESC-${Date.now().toString(36).toUpperCase()}`;
-      
+
+      // Parse comma-separated Fleek Order IDs into array
+      const fleekOrderIdsArray = ticketData.fleekOrderIds
+        ? ticketData.fleekOrderIds.split(',').map(id => id.trim()).filter(id => id.length > 0)
+        : [];
+
       const res = await fetch("/api/tickets", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          ...ticketData,
+          vendorHandle: ticketData.vendorHandle,
+          department: ticketData.department,
+          issueType: ticketData.issueType,
+          categoryId: ticketData.categoryId,
+          subject: ticketData.subject,
+          description: ticketData.description,
+          fleekOrderIds: fleekOrderIdsArray.length > 0 ? fleekOrderIdsArray : null,
           ticketNumber,
           status: "New",
           priorityScore,
@@ -153,7 +164,7 @@ export default function MyTicketsPage() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["tickets"] });
       setShowNewTicketDialog(false);
-      setNewTicket({ vendorHandle: "", department: "", issueType: "", categoryId: "", subject: "", description: "", fleekOrderId: "" });
+      setNewTicket({ vendorHandle: "", department: "", issueType: "", categoryId: "", subject: "", description: "", fleekOrderIds: "" });
       toast({ title: "Success", description: "Ticket created successfully" });
     },
     onError: (error: Error) => {
@@ -448,14 +459,17 @@ export default function MyTicketsPage() {
             </div>
 
             <div className="space-y-2">
-              <Label htmlFor="fleekOrderId">Fleek Order ID (optional)</Label>
+              <Label htmlFor="fleekOrderIds">Fleek Order IDs (optional)</Label>
               <Input
-                id="fleekOrderId"
-                value={newTicket.fleekOrderId}
-                onChange={(e) => setNewTicket({ ...newTicket, fleekOrderId: e.target.value })}
-                placeholder="e.g., ORD-123456"
-                data-testid="input-order-id"
+                id="fleekOrderIds"
+                value={newTicket.fleekOrderIds}
+                onChange={(e) => setNewTicket({ ...newTicket, fleekOrderIds: e.target.value })}
+                placeholder="e.g., ORD-123456, ORD-789012 (comma-separated)"
+                data-testid="input-order-ids"
               />
+              <p className="text-xs text-muted-foreground">
+                Enter multiple order IDs separated by commas
+              </p>
             </div>
 
             <div className="flex justify-end gap-3 pt-4">
