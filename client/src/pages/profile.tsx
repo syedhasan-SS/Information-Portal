@@ -7,22 +7,18 @@ import { Label } from "@/components/ui/label";
 import { PasswordInput } from "@/components/ui/password-input";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { useToast } from "@/hooks/use-toast";
-import { ArrowLeft, Save, User, Shield, Upload, Camera } from "lucide-react";
+import { useAuth } from "@/hooks/use-auth";
+import { ArrowLeft, Save, User, Shield, Camera, Loader2 } from "lucide-react";
 
 export default function ProfilePage() {
   const [, setLocation] = useLocation();
   const { toast } = useToast();
+  const { user, isLoading } = useAuth();
   const [currentPassword, setCurrentPassword] = useState("");
   const [newPassword, setNewPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
   const [profilePicture, setProfilePicture] = useState<string>("");
   const fileInputRef = useRef<HTMLInputElement>(null);
-
-  // For demo purposes - in production, get from auth context
-  const userEmail = localStorage.getItem("userEmail") || "syed.hasan@joinfleek.com";
-  const userName = localStorage.getItem("userName") || "Syed Faez Hasan Rizvi";
-  const userRole = localStorage.getItem("userRole") || "Owner";
-  const storedProfilePic = localStorage.getItem("profilePicture") || "";
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -94,7 +90,9 @@ export default function ProfilePage() {
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    
+
+    if (!user) return;
+
     if (newPassword !== confirmPassword) {
       toast({
         title: "Error",
@@ -114,11 +112,20 @@ export default function ProfilePage() {
     }
 
     changePasswordMutation.mutate({
-      email: userEmail,
+      email: user.email,
       currentPassword,
       newPassword,
     });
   };
+
+  // Show loading state
+  if (isLoading || !user) {
+    return (
+      <div className="flex min-h-screen items-center justify-center bg-background">
+        <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen bg-background">
@@ -152,9 +159,9 @@ export default function ProfilePage() {
               {/* Profile Picture Section */}
               <div className="flex flex-col items-center gap-4 sm:flex-row sm:items-start">
                 <Avatar className="h-24 w-24">
-                  <AvatarImage src={profilePicture || storedProfilePic} alt={userName} />
+                  <AvatarImage src={profilePicture || user.profilePicture || undefined} alt={user.name} />
                   <AvatarFallback className="text-2xl">
-                    {userName.split(' ').map(n => n[0]).join('')}
+                    {user.name.split(' ').map(n => n[0]).join('')}
                   </AvatarFallback>
                 </Avatar>
                 <div className="flex flex-col gap-2">
@@ -183,16 +190,22 @@ export default function ProfilePage() {
               <div className="grid gap-4 sm:grid-cols-2">
                 <div>
                   <Label className="text-muted-foreground text-xs">Name</Label>
-                  <p className="font-medium" data-testid="text-user-name">{userName}</p>
+                  <p className="font-medium" data-testid="text-user-name">{user.name}</p>
                 </div>
                 <div>
                   <Label className="text-muted-foreground text-xs">Email</Label>
-                  <p className="font-medium" data-testid="text-user-email">{userEmail}</p>
+                  <p className="font-medium" data-testid="text-user-email">{user.email}</p>
                 </div>
                 <div>
                   <Label className="text-muted-foreground text-xs">Role</Label>
-                  <p className="font-medium" data-testid="text-user-role">{userRole}</p>
+                  <p className="font-medium" data-testid="text-user-role">{user.role}</p>
                 </div>
+                {user.department && (
+                  <div>
+                    <Label className="text-muted-foreground text-xs">Department</Label>
+                    <p className="font-medium">{user.department}</p>
+                  </div>
+                )}
               </div>
             </CardContent>
           </Card>

@@ -135,6 +135,133 @@ export type InsertTicket = z.infer<typeof insertTicketSchema>;
 export type InsertComment = z.infer<typeof insertCommentSchema>;
 export type InsertUser = z.infer<typeof insertUserSchema>;
 
+// Ticket Configuration Tables
+
+export const issueTypes = pgTable("issue_types", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  name: text("name").notNull().unique(),
+  description: text("description"),
+  isActive: boolean("is_active").notNull().default(true),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+  updatedAt: timestamp("updated_at").notNull().defaultNow(),
+});
+
+export const categoryHierarchy = pgTable("category_hierarchy", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  name: text("name").notNull(),
+  level: integer("level").notNull().$type<1 | 2 | 3>(), // L1, L2, L3
+  parentId: varchar("parent_id").references((): any => categoryHierarchy.id, { onDelete: "cascade" }),
+  description: text("description"),
+  isActive: boolean("is_active").notNull().default(true),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+  updatedAt: timestamp("updated_at").notNull().defaultNow(),
+});
+
+export const categoryMappings = pgTable("category_mappings", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  issueTypeId: varchar("issue_type_id").notNull().references(() => issueTypes.id, { onDelete: "cascade" }),
+  l1CategoryId: varchar("l1_category_id").notNull().references(() => categoryHierarchy.id, { onDelete: "cascade" }),
+  l2CategoryId: varchar("l2_category_id").references(() => categoryHierarchy.id, { onDelete: "cascade" }),
+  l3CategoryId: varchar("l3_category_id").references(() => categoryHierarchy.id, { onDelete: "cascade" }),
+  isActive: boolean("is_active").notNull().default(true),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+  updatedAt: timestamp("updated_at").notNull().defaultNow(),
+});
+
+export const slaConfigurations = pgTable("sla_configurations", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  name: text("name").notNull(),
+  issueTypeId: varchar("issue_type_id").references(() => issueTypes.id, { onDelete: "cascade" }),
+  l1CategoryId: varchar("l1_category_id").references(() => categoryHierarchy.id, { onDelete: "cascade" }),
+  l2CategoryId: varchar("l2_category_id").references(() => categoryHierarchy.id, { onDelete: "cascade" }),
+  l3CategoryId: varchar("l3_category_id").references(() => categoryHierarchy.id, { onDelete: "cascade" }),
+  responseTimeHours: integer("response_time_hours"),
+  resolutionTimeHours: integer("resolution_time_hours").notNull(),
+  useBusinessHours: boolean("use_business_hours").notNull().default(false),
+  isActive: boolean("is_active").notNull().default(true),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+  updatedAt: timestamp("updated_at").notNull().defaultNow(),
+});
+
+export const priorityConfigurations = pgTable("priority_configurations", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  name: text("name").notNull(),
+  level: text("level").notNull().$type<"Critical" | "High" | "Medium" | "Low">(),
+  issueTypeId: varchar("issue_type_id").references(() => issueTypes.id, { onDelete: "cascade" }),
+  l1CategoryId: varchar("l1_category_id").references(() => categoryHierarchy.id, { onDelete: "cascade" }),
+  l2CategoryId: varchar("l2_category_id").references(() => categoryHierarchy.id, { onDelete: "cascade" }),
+  l3CategoryId: varchar("l3_category_id").references(() => categoryHierarchy.id, { onDelete: "cascade" }),
+  points: integer("points").notNull(),
+  isActive: boolean("is_active").notNull().default(true),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+  updatedAt: timestamp("updated_at").notNull().defaultNow(),
+});
+
+export const tags = pgTable("tags", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  name: text("name").notNull().unique(),
+  color: text("color"),
+  description: text("description"),
+  isAutoApplied: boolean("is_auto_applied").notNull().default(false),
+  autoApplyCondition: jsonb("auto_apply_condition").$type<{
+    type: "sla_breach" | "priority" | "category" | "custom";
+    value?: any;
+  }>(),
+  isActive: boolean("is_active").notNull().default(true),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+  updatedAt: timestamp("updated_at").notNull().defaultNow(),
+});
+
+export const insertIssueTypeSchema = createInsertSchema(issueTypes).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+});
+
+export const insertCategoryHierarchySchema = createInsertSchema(categoryHierarchy).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+});
+
+export const insertCategoryMappingSchema = createInsertSchema(categoryMappings).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+});
+
+export const insertSlaConfigurationSchema = createInsertSchema(slaConfigurations).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+});
+
+export const insertPriorityConfigurationSchema = createInsertSchema(priorityConfigurations).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+});
+
+export const insertTagSchema = createInsertSchema(tags).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+});
+
+export type InsertIssueType = z.infer<typeof insertIssueTypeSchema>;
+export type InsertCategoryHierarchy = z.infer<typeof insertCategoryHierarchySchema>;
+export type InsertCategoryMapping = z.infer<typeof insertCategoryMappingSchema>;
+export type InsertSlaConfiguration = z.infer<typeof insertSlaConfigurationSchema>;
+export type InsertPriorityConfiguration = z.infer<typeof insertPriorityConfigurationSchema>;
+export type InsertTag = z.infer<typeof insertTagSchema>;
+
+export type IssueType = typeof issueTypes.$inferSelect;
+export type CategoryHierarchy = typeof categoryHierarchy.$inferSelect;
+export type CategoryMapping = typeof categoryMappings.$inferSelect;
+export type SlaConfiguration = typeof slaConfigurations.$inferSelect;
+export type PriorityConfiguration = typeof priorityConfigurations.$inferSelect;
+export type Tag = typeof tags.$inferSelect;
+
 export type Vendor = typeof vendors.$inferSelect;
 export type Category = typeof categories.$inferSelect;
 export type Ticket = typeof tickets.$inferSelect;

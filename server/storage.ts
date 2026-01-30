@@ -1,4 +1,4 @@
-import { eq, and, desc, sql } from "drizzle-orm";
+import { eq, and, desc, sql, isNull } from "drizzle-orm";
 import { db } from "./db";
 import {
   vendors,
@@ -6,16 +6,34 @@ import {
   tickets,
   comments,
   users,
+  issueTypes,
+  categoryHierarchy,
+  categoryMappings,
+  slaConfigurations,
+  priorityConfigurations,
+  tags,
   type Vendor,
   type Category,
   type Ticket,
   type Comment,
   type User,
+  type IssueType,
+  type CategoryHierarchy,
+  type CategoryMapping,
+  type SlaConfiguration,
+  type PriorityConfiguration,
+  type Tag,
   type InsertVendor,
   type InsertCategory,
   type InsertTicket,
   type InsertComment,
   type InsertUser,
+  type InsertIssueType,
+  type InsertCategoryHierarchy,
+  type InsertCategoryMapping,
+  type InsertSlaConfiguration,
+  type InsertPriorityConfiguration,
+  type InsertTag,
 } from "@shared/schema";
 
 export interface IStorage {
@@ -143,6 +161,182 @@ export class DatabaseStorage implements IStorage {
 
   async deleteUser(id: number): Promise<void> {
     await db.delete(users).where(eq(users.id, id));
+  }
+
+  // Issue Types
+  async getIssueTypes(): Promise<IssueType[]> {
+    return await db.select().from(issueTypes).orderBy(issueTypes.name);
+  }
+
+  async getIssueTypeById(id: string): Promise<IssueType | undefined> {
+    const results = await db.select().from(issueTypes).where(eq(issueTypes.id, id)).limit(1);
+    return results[0];
+  }
+
+  async createIssueType(issueType: InsertIssueType): Promise<IssueType> {
+    const results = await db.insert(issueTypes).values(issueType).returning();
+    return results[0];
+  }
+
+  async updateIssueType(id: string, updates: Partial<InsertIssueType>): Promise<IssueType | undefined> {
+    const results = await db
+      .update(issueTypes)
+      .set({ ...updates, updatedAt: new Date() })
+      .where(eq(issueTypes.id, id))
+      .returning();
+    return results[0];
+  }
+
+  async deleteIssueType(id: string): Promise<void> {
+    await db.delete(issueTypes).where(eq(issueTypes.id, id));
+  }
+
+  // Category Hierarchy
+  async getCategoryHierarchy(): Promise<CategoryHierarchy[]> {
+    return await db.select().from(categoryHierarchy).orderBy(categoryHierarchy.level, categoryHierarchy.name);
+  }
+
+  async getCategoryHierarchyByLevel(level: 1 | 2 | 3): Promise<CategoryHierarchy[]> {
+    return await db.select().from(categoryHierarchy).where(eq(categoryHierarchy.level, level)).orderBy(categoryHierarchy.name);
+  }
+
+  async getCategoryHierarchyByParent(parentId: string | null): Promise<CategoryHierarchy[]> {
+    const condition = parentId === null ? isNull(categoryHierarchy.parentId) : eq(categoryHierarchy.parentId, parentId);
+    return await db.select().from(categoryHierarchy).where(condition).orderBy(categoryHierarchy.name);
+  }
+
+  async getCategoryHierarchyById(id: string): Promise<CategoryHierarchy | undefined> {
+    const results = await db.select().from(categoryHierarchy).where(eq(categoryHierarchy.id, id)).limit(1);
+    return results[0];
+  }
+
+  async createCategoryHierarchy(category: InsertCategoryHierarchy): Promise<CategoryHierarchy> {
+    const results = await db.insert(categoryHierarchy).values(category).returning();
+    return results[0];
+  }
+
+  async updateCategoryHierarchy(id: string, updates: Partial<InsertCategoryHierarchy>): Promise<CategoryHierarchy | undefined> {
+    const results = await db
+      .update(categoryHierarchy)
+      .set({ ...updates, updatedAt: new Date() })
+      .where(eq(categoryHierarchy.id, id))
+      .returning();
+    return results[0];
+  }
+
+  async deleteCategoryHierarchy(id: string): Promise<void> {
+    await db.delete(categoryHierarchy).where(eq(categoryHierarchy.id, id));
+  }
+
+  // Category Mappings
+  async getCategoryMappings(): Promise<CategoryMapping[]> {
+    return await db.select().from(categoryMappings).orderBy(desc(categoryMappings.createdAt));
+  }
+
+  async getCategoryMappingsByIssueType(issueTypeId: string): Promise<CategoryMapping[]> {
+    return await db.select().from(categoryMappings).where(eq(categoryMappings.issueTypeId, issueTypeId));
+  }
+
+  async createCategoryMapping(mapping: InsertCategoryMapping): Promise<CategoryMapping> {
+    const results = await db.insert(categoryMappings).values(mapping).returning();
+    return results[0];
+  }
+
+  async updateCategoryMapping(id: string, updates: Partial<InsertCategoryMapping>): Promise<CategoryMapping | undefined> {
+    const results = await db
+      .update(categoryMappings)
+      .set({ ...updates, updatedAt: new Date() })
+      .where(eq(categoryMappings.id, id))
+      .returning();
+    return results[0];
+  }
+
+  async deleteCategoryMapping(id: string): Promise<void> {
+    await db.delete(categoryMappings).where(eq(categoryMappings.id, id));
+  }
+
+  // SLA Configurations
+  async getSlaConfigurations(): Promise<SlaConfiguration[]> {
+    return await db.select().from(slaConfigurations).orderBy(desc(slaConfigurations.createdAt));
+  }
+
+  async getSlaConfigurationById(id: string): Promise<SlaConfiguration | undefined> {
+    const results = await db.select().from(slaConfigurations).where(eq(slaConfigurations.id, id)).limit(1);
+    return results[0];
+  }
+
+  async createSlaConfiguration(sla: InsertSlaConfiguration): Promise<SlaConfiguration> {
+    const results = await db.insert(slaConfigurations).values(sla).returning();
+    return results[0];
+  }
+
+  async updateSlaConfiguration(id: string, updates: Partial<InsertSlaConfiguration>): Promise<SlaConfiguration | undefined> {
+    const results = await db
+      .update(slaConfigurations)
+      .set({ ...updates, updatedAt: new Date() })
+      .where(eq(slaConfigurations.id, id))
+      .returning();
+    return results[0];
+  }
+
+  async deleteSlaConfiguration(id: string): Promise<void> {
+    await db.delete(slaConfigurations).where(eq(slaConfigurations.id, id));
+  }
+
+  // Priority Configurations
+  async getPriorityConfigurations(): Promise<PriorityConfiguration[]> {
+    return await db.select().from(priorityConfigurations).orderBy(desc(priorityConfigurations.points));
+  }
+
+  async getPriorityConfigurationById(id: string): Promise<PriorityConfiguration | undefined> {
+    const results = await db.select().from(priorityConfigurations).where(eq(priorityConfigurations.id, id)).limit(1);
+    return results[0];
+  }
+
+  async createPriorityConfiguration(priority: InsertPriorityConfiguration): Promise<PriorityConfiguration> {
+    const results = await db.insert(priorityConfigurations).values(priority).returning();
+    return results[0];
+  }
+
+  async updatePriorityConfiguration(id: string, updates: Partial<InsertPriorityConfiguration>): Promise<PriorityConfiguration | undefined> {
+    const results = await db
+      .update(priorityConfigurations)
+      .set({ ...updates, updatedAt: new Date() })
+      .where(eq(priorityConfigurations.id, id))
+      .returning();
+    return results[0];
+  }
+
+  async deletePriorityConfiguration(id: string): Promise<void> {
+    await db.delete(priorityConfigurations).where(eq(priorityConfigurations.id, id));
+  }
+
+  // Tags
+  async getTags(): Promise<Tag[]> {
+    return await db.select().from(tags).orderBy(tags.name);
+  }
+
+  async getTagById(id: string): Promise<Tag | undefined> {
+    const results = await db.select().from(tags).where(eq(tags.id, id)).limit(1);
+    return results[0];
+  }
+
+  async createTag(tag: InsertTag): Promise<Tag> {
+    const results = await db.insert(tags).values(tag).returning();
+    return results[0];
+  }
+
+  async updateTag(id: string, updates: Partial<InsertTag>): Promise<Tag | undefined> {
+    const results = await db
+      .update(tags)
+      .set({ ...updates, updatedAt: new Date() })
+      .where(eq(tags.id, id))
+      .returning();
+    return results[0];
+  }
+
+  async deleteTag(id: string): Promise<void> {
+    await db.delete(tags).where(eq(tags.id, id));
   }
 }
 

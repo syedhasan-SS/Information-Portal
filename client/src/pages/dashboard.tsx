@@ -3,7 +3,17 @@ import { useLocation } from "wouter";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import { cn } from "@/lib/utils";
+import { useAuth } from "@/hooks/use-auth";
 import {
   AlertTriangle,
   Clock,
@@ -19,6 +29,7 @@ import {
   User,
   AlertCircle,
   LogOut,
+  Bell,
 } from "lucide-react";
 import type { Ticket as TicketType, User as UserType } from "@shared/schema";
 
@@ -36,7 +47,8 @@ async function getUsers(): Promise<UserType[]> {
 
 export default function DashboardPage() {
   const [, setLocation] = useLocation();
-  
+  const { user, hasPermission, logout } = useAuth();
+
   const { data: tickets, isLoading: ticketsLoading } = useQuery({
     queryKey: ["tickets"],
     queryFn: getTickets,
@@ -45,6 +57,7 @@ export default function DashboardPage() {
   const { data: users } = useQuery({
     queryKey: ["users"],
     queryFn: getUsers,
+    enabled: hasPermission("view:users"), // Only fetch if user has permission
   });
 
   const today = new Date();
@@ -104,32 +117,78 @@ export default function DashboardPage() {
               </div>
             </div>
 
-            <nav className="hidden items-center gap-2 md:flex">
-              <NavButton onClick={() => setLocation("/tickets")} icon={Ticket} label="All Tickets" />
-              <NavButton onClick={() => setLocation("/my-tickets")} icon={User} label="My Tickets" />
-              <NavButton onClick={() => setLocation("/vendors")} icon={Store} label="Vendors" />
-              <NavButton onClick={() => setLocation("/users")} icon={Users} label="Users" />
-              <NavButton onClick={() => setLocation("/analytics")} icon={BarChart3} label="Analytics" />
-              <NavButton onClick={() => setLocation("/profile")} icon={Settings} label="Profile" />
-              <Button
-                variant="ghost"
-                size="sm"
-                onClick={() => {
-                  // Clear session and redirect to login
-                  fetch("/api/logout", { method: "POST" })
-                    .then(() => {
-                      window.location.href = "/";
-                    })
-                    .catch(() => {
-                      window.location.href = "/";
-                    });
-                }}
-                className="gap-2"
-              >
-                <LogOut className="h-4 w-4" />
-                <span>Logout</span>
+            <div className="flex items-center gap-4">
+              <nav className="hidden items-center gap-2 md:flex">
+                {hasPermission("view:all_tickets") && (
+                  <NavButton onClick={() => setLocation("/tickets")} icon={Ticket} label="All Tickets" />
+                )}
+                <NavButton onClick={() => setLocation("/my-tickets")} icon={User} label="My Tickets" />
+                {hasPermission("view:vendors") && (
+                  <NavButton onClick={() => setLocation("/vendors")} icon={Store} label="Vendors" />
+                )}
+                {hasPermission("view:users") && (
+                  <NavButton onClick={() => setLocation("/users")} icon={Users} label="Users" />
+                )}
+                {hasPermission("view:analytics") && (
+                  <NavButton onClick={() => setLocation("/analytics")} icon={BarChart3} label="Analytics" />
+                )}
+                {hasPermission("view:config") && (
+                  <NavButton onClick={() => setLocation("/ticket-config")} icon={Settings} label="Config" />
+                )}
+              </nav>
+
+              {/* Notifications */}
+              <Button variant="ghost" size="sm" className="relative">
+                <Bell className="h-4 w-4" />
+                <span className="absolute right-1 top-1 flex h-2 w-2">
+                  <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-red-400 opacity-75"></span>
+                  <span className="relative inline-flex h-2 w-2 rounded-full bg-red-500"></span>
+                </span>
               </Button>
-            </nav>
+
+              {/* User Profile Dropdown */}
+              {user && (
+                <DropdownMenu>
+                  <DropdownMenuTrigger asChild>
+                    <Button variant="ghost" size="sm" className="gap-2">
+                      <Avatar className="h-8 w-8">
+                        <AvatarImage src={user.profilePicture || undefined} alt={user.name} />
+                        <AvatarFallback className="text-xs">
+                          {user.name.split(' ').map(n => n[0]).join('')}
+                        </AvatarFallback>
+                      </Avatar>
+                      <div className="hidden flex-col items-start lg:flex">
+                        <span className="text-sm font-medium">{user.name}</span>
+                        <span className="text-xs text-muted-foreground">{user.role}</span>
+                      </div>
+                    </Button>
+                  </DropdownMenuTrigger>
+                  <DropdownMenuContent align="end" className="w-56">
+                    <DropdownMenuLabel>
+                      <div className="flex flex-col space-y-1">
+                        <p className="text-sm font-medium">{user.name}</p>
+                        <p className="text-xs text-muted-foreground">{user.email}</p>
+                        <p className="text-xs text-muted-foreground">{user.role}</p>
+                      </div>
+                    </DropdownMenuLabel>
+                    <DropdownMenuSeparator />
+                    <DropdownMenuItem onClick={() => setLocation("/profile")}>
+                      <User className="mr-2 h-4 w-4" />
+                      Profile
+                    </DropdownMenuItem>
+                    <DropdownMenuItem onClick={() => setLocation("/my-tickets")}>
+                      <Ticket className="mr-2 h-4 w-4" />
+                      My Tickets
+                    </DropdownMenuItem>
+                    <DropdownMenuSeparator />
+                    <DropdownMenuItem onClick={logout} className="text-destructive focus:text-destructive">
+                      <LogOut className="mr-2 h-4 w-4" />
+                      Logout
+                    </DropdownMenuItem>
+                  </DropdownMenuContent>
+                </DropdownMenu>
+              )}
+            </div>
           </div>
         </div>
       </header>

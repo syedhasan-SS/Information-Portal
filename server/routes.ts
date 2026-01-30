@@ -252,6 +252,60 @@ export async function registerRoutes(
     }
   });
 
+  // Authentication
+  app.post("/api/auth/login", async (req, res) => {
+    try {
+      const { email, password } = req.body;
+
+      if (!email || !password) {
+        return res.status(400).json({ error: "Email and password are required" });
+      }
+
+      const user = await storage.getUserByEmail(email);
+      if (!user) {
+        return res.status(401).json({ error: "Invalid credentials" });
+      }
+
+      // In production, use proper password hashing (bcrypt, etc.)
+      if (user.password !== password) {
+        return res.status(401).json({ error: "Invalid credentials" });
+      }
+
+      if (!user.isActive) {
+        return res.status(403).json({ error: "Account is inactive" });
+      }
+
+      // Store user session (in production, use express-session or JWT)
+      // For now, we'll send the user data back
+      const { password: _, ...userWithoutPassword } = user;
+      res.json(userWithoutPassword);
+    } catch (error: any) {
+      res.status(500).json({ error: error.message });
+    }
+  });
+
+  app.get("/api/auth/me", async (req, res) => {
+    try {
+      // In a real app, get user from session/JWT
+      // For demo, we'll use a simple approach with email from headers or query
+      const email = req.headers["x-user-email"] as string || req.query.email as string;
+
+      if (!email) {
+        return res.status(401).json({ error: "Not authenticated" });
+      }
+
+      const user = await storage.getUserByEmail(email);
+      if (!user || !user.isActive) {
+        return res.status(401).json({ error: "Not authenticated" });
+      }
+
+      const { password: _, ...userWithoutPassword } = user;
+      res.json(userWithoutPassword);
+    } catch (error: any) {
+      res.status(500).json({ error: error.message });
+    }
+  });
+
   // Logout
   app.post("/api/logout", async (req, res) => {
     try {
@@ -260,6 +314,337 @@ export async function registerRoutes(
       res.json({ message: "Logged out successfully" });
     } catch (error: any) {
       res.status(500).json({ message: error.message });
+    }
+  });
+
+  // ===== Ticket Configuration APIs =====
+
+  // Issue Types
+  app.get("/api/config/issue-types", async (_req, res) => {
+    try {
+      const issueTypes = await storage.getIssueTypes();
+      res.json(issueTypes);
+    } catch (error: any) {
+      res.status(500).json({ error: error.message });
+    }
+  });
+
+  app.get("/api/config/issue-types/:id", async (req, res) => {
+    try {
+      const issueType = await storage.getIssueTypeById(req.params.id);
+      if (!issueType) {
+        return res.status(404).json({ error: "Issue type not found" });
+      }
+      res.json(issueType);
+    } catch (error: any) {
+      res.status(500).json({ error: error.message });
+    }
+  });
+
+  app.post("/api/config/issue-types", async (req, res) => {
+    try {
+      const issueType = await storage.createIssueType(req.body);
+      res.status(201).json(issueType);
+    } catch (error: any) {
+      res.status(500).json({ error: error.message });
+    }
+  });
+
+  app.put("/api/config/issue-types/:id", async (req, res) => {
+    try {
+      const issueType = await storage.updateIssueType(req.params.id, req.body);
+      if (!issueType) {
+        return res.status(404).json({ error: "Issue type not found" });
+      }
+      res.json(issueType);
+    } catch (error: any) {
+      res.status(500).json({ error: error.message });
+    }
+  });
+
+  app.delete("/api/config/issue-types/:id", async (req, res) => {
+    try {
+      await storage.deleteIssueType(req.params.id);
+      res.status(204).send();
+    } catch (error: any) {
+      res.status(500).json({ error: error.message });
+    }
+  });
+
+  // Category Hierarchy
+  app.get("/api/config/categories", async (_req, res) => {
+    try {
+      const categories = await storage.getCategoryHierarchy();
+      res.json(categories);
+    } catch (error: any) {
+      res.status(500).json({ error: error.message });
+    }
+  });
+
+  app.get("/api/config/categories/level/:level", async (req, res) => {
+    try {
+      const level = parseInt(req.params.level) as 1 | 2 | 3;
+      const categories = await storage.getCategoryHierarchyByLevel(level);
+      res.json(categories);
+    } catch (error: any) {
+      res.status(500).json({ error: error.message });
+    }
+  });
+
+  app.get("/api/config/categories/parent/:parentId", async (req, res) => {
+    try {
+      const parentId = req.params.parentId === "null" ? null : req.params.parentId;
+      const categories = await storage.getCategoryHierarchyByParent(parentId);
+      res.json(categories);
+    } catch (error: any) {
+      res.status(500).json({ error: error.message });
+    }
+  });
+
+  app.get("/api/config/categories/:id", async (req, res) => {
+    try {
+      const category = await storage.getCategoryHierarchyById(req.params.id);
+      if (!category) {
+        return res.status(404).json({ error: "Category not found" });
+      }
+      res.json(category);
+    } catch (error: any) {
+      res.status(500).json({ error: error.message });
+    }
+  });
+
+  app.post("/api/config/categories", async (req, res) => {
+    try {
+      const category = await storage.createCategoryHierarchy(req.body);
+      res.status(201).json(category);
+    } catch (error: any) {
+      res.status(500).json({ error: error.message });
+    }
+  });
+
+  app.put("/api/config/categories/:id", async (req, res) => {
+    try {
+      const category = await storage.updateCategoryHierarchy(req.params.id, req.body);
+      if (!category) {
+        return res.status(404).json({ error: "Category not found" });
+      }
+      res.json(category);
+    } catch (error: any) {
+      res.status(500).json({ error: error.message });
+    }
+  });
+
+  app.delete("/api/config/categories/:id", async (req, res) => {
+    try {
+      await storage.deleteCategoryHierarchy(req.params.id);
+      res.status(204).send();
+    } catch (error: any) {
+      res.status(500).json({ error: error.message });
+    }
+  });
+
+  // Category Mappings
+  app.get("/api/config/mappings", async (_req, res) => {
+    try {
+      const mappings = await storage.getCategoryMappings();
+      res.json(mappings);
+    } catch (error: any) {
+      res.status(500).json({ error: error.message });
+    }
+  });
+
+  app.get("/api/config/mappings/issue-type/:issueTypeId", async (req, res) => {
+    try {
+      const mappings = await storage.getCategoryMappingsByIssueType(req.params.issueTypeId);
+      res.json(mappings);
+    } catch (error: any) {
+      res.status(500).json({ error: error.message });
+    }
+  });
+
+  app.post("/api/config/mappings", async (req, res) => {
+    try {
+      const mapping = await storage.createCategoryMapping(req.body);
+      res.status(201).json(mapping);
+    } catch (error: any) {
+      res.status(500).json({ error: error.message });
+    }
+  });
+
+  app.put("/api/config/mappings/:id", async (req, res) => {
+    try {
+      const mapping = await storage.updateCategoryMapping(req.params.id, req.body);
+      if (!mapping) {
+        return res.status(404).json({ error: "Mapping not found" });
+      }
+      res.json(mapping);
+    } catch (error: any) {
+      res.status(500).json({ error: error.message });
+    }
+  });
+
+  app.delete("/api/config/mappings/:id", async (req, res) => {
+    try {
+      await storage.deleteCategoryMapping(req.params.id);
+      res.status(204).send();
+    } catch (error: any) {
+      res.status(500).json({ error: error.message });
+    }
+  });
+
+  // SLA Configurations
+  app.get("/api/config/sla", async (_req, res) => {
+    try {
+      const slas = await storage.getSlaConfigurations();
+      res.json(slas);
+    } catch (error: any) {
+      res.status(500).json({ error: error.message });
+    }
+  });
+
+  app.get("/api/config/sla/:id", async (req, res) => {
+    try {
+      const sla = await storage.getSlaConfigurationById(req.params.id);
+      if (!sla) {
+        return res.status(404).json({ error: "SLA configuration not found" });
+      }
+      res.json(sla);
+    } catch (error: any) {
+      res.status(500).json({ error: error.message });
+    }
+  });
+
+  app.post("/api/config/sla", async (req, res) => {
+    try {
+      const sla = await storage.createSlaConfiguration(req.body);
+      res.status(201).json(sla);
+    } catch (error: any) {
+      res.status(500).json({ error: error.message });
+    }
+  });
+
+  app.put("/api/config/sla/:id", async (req, res) => {
+    try {
+      const sla = await storage.updateSlaConfiguration(req.params.id, req.body);
+      if (!sla) {
+        return res.status(404).json({ error: "SLA configuration not found" });
+      }
+      res.json(sla);
+    } catch (error: any) {
+      res.status(500).json({ error: error.message });
+    }
+  });
+
+  app.delete("/api/config/sla/:id", async (req, res) => {
+    try {
+      await storage.deleteSlaConfiguration(req.params.id);
+      res.status(204).send();
+    } catch (error: any) {
+      res.status(500).json({ error: error.message });
+    }
+  });
+
+  // Priority Configurations
+  app.get("/api/config/priorities", async (_req, res) => {
+    try {
+      const priorities = await storage.getPriorityConfigurations();
+      res.json(priorities);
+    } catch (error: any) {
+      res.status(500).json({ error: error.message });
+    }
+  });
+
+  app.get("/api/config/priorities/:id", async (req, res) => {
+    try {
+      const priority = await storage.getPriorityConfigurationById(req.params.id);
+      if (!priority) {
+        return res.status(404).json({ error: "Priority configuration not found" });
+      }
+      res.json(priority);
+    } catch (error: any) {
+      res.status(500).json({ error: error.message });
+    }
+  });
+
+  app.post("/api/config/priorities", async (req, res) => {
+    try {
+      const priority = await storage.createPriorityConfiguration(req.body);
+      res.status(201).json(priority);
+    } catch (error: any) {
+      res.status(500).json({ error: error.message });
+    }
+  });
+
+  app.put("/api/config/priorities/:id", async (req, res) => {
+    try {
+      const priority = await storage.updatePriorityConfiguration(req.params.id, req.body);
+      if (!priority) {
+        return res.status(404).json({ error: "Priority configuration not found" });
+      }
+      res.json(priority);
+    } catch (error: any) {
+      res.status(500).json({ error: error.message });
+    }
+  });
+
+  app.delete("/api/config/priorities/:id", async (req, res) => {
+    try {
+      await storage.deletePriorityConfiguration(req.params.id);
+      res.status(204).send();
+    } catch (error: any) {
+      res.status(500).json({ error: error.message });
+    }
+  });
+
+  // Tags
+  app.get("/api/config/tags", async (_req, res) => {
+    try {
+      const tags = await storage.getTags();
+      res.json(tags);
+    } catch (error: any) {
+      res.status(500).json({ error: error.message });
+    }
+  });
+
+  app.get("/api/config/tags/:id", async (req, res) => {
+    try {
+      const tag = await storage.getTagById(req.params.id);
+      if (!tag) {
+        return res.status(404).json({ error: "Tag not found" });
+      }
+      res.json(tag);
+    } catch (error: any) {
+      res.status(500).json({ error: error.message });
+    }
+  });
+
+  app.post("/api/config/tags", async (req, res) => {
+    try {
+      const tag = await storage.createTag(req.body);
+      res.status(201).json(tag);
+    } catch (error: any) {
+      res.status(500).json({ error: error.message });
+    }
+  });
+
+  app.put("/api/config/tags/:id", async (req, res) => {
+    try {
+      const tag = await storage.updateTag(req.params.id, req.body);
+      if (!tag) {
+        return res.status(404).json({ error: "Tag not found" });
+      }
+      res.json(tag);
+    } catch (error: any) {
+      res.status(500).json({ error: error.message });
+    }
+  });
+
+  app.delete("/api/config/tags/:id", async (req, res) => {
+    try {
+      await storage.deleteTag(req.params.id);
+      res.status(204).send();
+    } catch (error: any) {
+      res.status(500).json({ error: error.message });
     }
   });
 

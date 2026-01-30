@@ -1,10 +1,13 @@
 import type { Vendor, Category, Ticket, Comment } from "@shared/schema";
 
 async function fetchAPI<T>(url: string, options?: RequestInit): Promise<T> {
+  const userEmail = localStorage.getItem("userEmail");
+
   const response = await fetch(url, {
     ...options,
     headers: {
       "Content-Type": "application/json",
+      ...(userEmail ? { "x-user-email": userEmail } : {}),
       ...options?.headers,
     },
   });

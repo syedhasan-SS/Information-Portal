@@ -3,6 +3,8 @@ import { queryClient } from "./lib/queryClient";
 import { QueryClientProvider } from "@tanstack/react-query";
 import { Toaster } from "@/components/ui/toaster";
 import { TooltipProvider } from "@/components/ui/tooltip";
+import { AuthProvider } from "@/hooks/use-auth";
+import { ProtectedRoute } from "@/components/ProtectedRoute";
 import NotFound from "@/pages/not-found";
 import LoginPage from "@/pages/login";
 import DashboardPage from "@/pages/dashboard";
@@ -14,20 +16,62 @@ import VendorsPage from "@/pages/vendors";
 import VendorProfilePage from "@/pages/vendor-profile";
 import ProfilePage from "@/pages/profile";
 import AnalyticsPage from "@/pages/analytics";
+import TicketConfigPage from "@/pages/ticket-config";
 
 function Router() {
   return (
     <Switch>
       <Route path="/" component={LoginPage} />
-      <Route path="/dashboard" component={DashboardPage} />
-      <Route path="/users" component={UsersPage} />
-      <Route path="/tickets" component={AllTicketsPage} />
-      <Route path="/tickets/:id" component={TicketDetailPage} />
-      <Route path="/my-tickets" component={MyTicketsPage} />
-      <Route path="/vendors" component={VendorsPage} />
-      <Route path="/vendors/:handle" component={VendorProfilePage} />
-      <Route path="/profile" component={ProfilePage} />
-      <Route path="/analytics" component={AnalyticsPage} />
+      <Route path="/dashboard">
+        <ProtectedRoute>
+          <DashboardPage />
+        </ProtectedRoute>
+      </Route>
+      <Route path="/users">
+        <ProtectedRoute requiredPermission="view:users">
+          <UsersPage />
+        </ProtectedRoute>
+      </Route>
+      <Route path="/tickets">
+        <ProtectedRoute requiredPermission="view:all_tickets">
+          <AllTicketsPage />
+        </ProtectedRoute>
+      </Route>
+      <Route path="/tickets/:id">
+        <ProtectedRoute>
+          <TicketDetailPage />
+        </ProtectedRoute>
+      </Route>
+      <Route path="/my-tickets">
+        <ProtectedRoute>
+          <MyTicketsPage />
+        </ProtectedRoute>
+      </Route>
+      <Route path="/vendors">
+        <ProtectedRoute requiredPermission="view:vendors">
+          <VendorsPage />
+        </ProtectedRoute>
+      </Route>
+      <Route path="/vendors/:handle">
+        <ProtectedRoute requiredPermission="view:vendors">
+          <VendorProfilePage />
+        </ProtectedRoute>
+      </Route>
+      <Route path="/profile">
+        <ProtectedRoute>
+          <ProfilePage />
+        </ProtectedRoute>
+      </Route>
+      <Route path="/analytics">
+        <ProtectedRoute requiredPermission="view:analytics">
+          <AnalyticsPage />
+        </ProtectedRoute>
+      </Route>
+      <Route path="/ticket-config">
+        <ProtectedRoute requiredPermission="view:config">
+          <TicketConfigPage />
+        </ProtectedRoute>
+      </Route>
       {/* Fallback to 404 */}
       <Route component={NotFound} />
     </Switch>
@@ -37,10 +81,12 @@ function Router() {
 function App() {
   return (
     <QueryClientProvider client={queryClient}>
-      <TooltipProvider>
-        <Toaster />
-        <Router />
-      </TooltipProvider>
+      <AuthProvider>
+        <TooltipProvider>
+          <Toaster />
+          <Router />
+        </TooltipProvider>
+      </AuthProvider>
     </QueryClientProvider>
   );
 }
