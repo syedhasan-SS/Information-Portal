@@ -149,7 +149,7 @@ export const issueTypes = pgTable("issue_types", {
 export const categoryHierarchy = pgTable("category_hierarchy", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
   name: text("name").notNull(),
-  level: integer("level").notNull().$type<1 | 2 | 3>(), // L1, L2, L3
+  level: integer("level").notNull().$type<1 | 2 | 3 | 4>(), // L1, L2, L3, L4
   parentId: varchar("parent_id").references((): any => categoryHierarchy.id, { onDelete: "cascade" }),
   description: text("description"),
   isActive: boolean("is_active").notNull().default(true),
@@ -163,6 +163,7 @@ export const categoryMappings = pgTable("category_mappings", {
   l1CategoryId: varchar("l1_category_id").notNull().references(() => categoryHierarchy.id, { onDelete: "cascade" }),
   l2CategoryId: varchar("l2_category_id").references(() => categoryHierarchy.id, { onDelete: "cascade" }),
   l3CategoryId: varchar("l3_category_id").references(() => categoryHierarchy.id, { onDelete: "cascade" }),
+  l4CategoryId: varchar("l4_category_id").references(() => categoryHierarchy.id, { onDelete: "cascade" }),
   isActive: boolean("is_active").notNull().default(true),
   createdAt: timestamp("created_at").notNull().defaultNow(),
   updatedAt: timestamp("updated_at").notNull().defaultNow(),
@@ -175,6 +176,7 @@ export const slaConfigurations = pgTable("sla_configurations", {
   l1CategoryId: varchar("l1_category_id").references(() => categoryHierarchy.id, { onDelete: "cascade" }),
   l2CategoryId: varchar("l2_category_id").references(() => categoryHierarchy.id, { onDelete: "cascade" }),
   l3CategoryId: varchar("l3_category_id").references(() => categoryHierarchy.id, { onDelete: "cascade" }),
+  l4CategoryId: varchar("l4_category_id").references(() => categoryHierarchy.id, { onDelete: "cascade" }),
   responseTimeHours: integer("response_time_hours"),
   resolutionTimeHours: integer("resolution_time_hours").notNull(),
   useBusinessHours: boolean("use_business_hours").notNull().default(false),
@@ -191,6 +193,7 @@ export const priorityConfigurations = pgTable("priority_configurations", {
   l1CategoryId: varchar("l1_category_id").references(() => categoryHierarchy.id, { onDelete: "cascade" }),
   l2CategoryId: varchar("l2_category_id").references(() => categoryHierarchy.id, { onDelete: "cascade" }),
   l3CategoryId: varchar("l3_category_id").references(() => categoryHierarchy.id, { onDelete: "cascade" }),
+  l4CategoryId: varchar("l4_category_id").references(() => categoryHierarchy.id, { onDelete: "cascade" }),
   points: integer("points").notNull(),
   isActive: boolean("is_active").notNull().default(true),
   createdAt: timestamp("created_at").notNull().defaultNow(),

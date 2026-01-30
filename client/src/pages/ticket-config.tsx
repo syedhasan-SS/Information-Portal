@@ -56,7 +56,7 @@ type IssueType = {
 type CategoryHierarchy = {
   id: string;
   name: string;
-  level: 1 | 2 | 3;
+  level: 1 | 2 | 3 | 4;
   parentId: string | null;
   description: string | null;
   isActive: boolean;
@@ -70,6 +70,7 @@ type CategoryMapping = {
   l1CategoryId: string;
   l2CategoryId: string | null;
   l3CategoryId: string | null;
+  l4CategoryId: string | null;
   isActive: boolean;
   createdAt: Date;
   updatedAt: Date;
@@ -82,6 +83,7 @@ type SlaConfiguration = {
   l1CategoryId: string | null;
   l2CategoryId: string | null;
   l3CategoryId: string | null;
+  l4CategoryId: string | null;
   responseTimeHours: number | null;
   resolutionTimeHours: number;
   useBusinessHours: boolean;
@@ -98,6 +100,7 @@ type PriorityConfiguration = {
   l1CategoryId: string | null;
   l2CategoryId: string | null;
   l3CategoryId: string | null;
+  l4CategoryId: string | null;
   points: number;
   isActive: boolean;
   createdAt: Date;
@@ -185,13 +188,14 @@ export default function TicketConfigPage() {
   const [showTagForm, setShowTagForm] = useState(false);
 
   const [issueTypeForm, setIssueTypeForm] = useState({ name: "", description: "", isActive: true });
-  const [categoryForm, setCategoryForm] = useState({ name: "", level: 1 as 1 | 2 | 3, parentId: "", description: "", isActive: true });
+  const [categoryForm, setCategoryForm] = useState({ name: "", level: 1 as 1 | 2 | 3 | 4, parentId: "", description: "", isActive: true });
   const [slaForm, setSlaForm] = useState({
     name: "",
     issueTypeId: "",
     l1CategoryId: "",
     l2CategoryId: "",
     l3CategoryId: "",
+    l4CategoryId: "",
     responseTimeHours: "",
     resolutionTimeHours: "",
     useBusinessHours: false,
@@ -204,6 +208,7 @@ export default function TicketConfigPage() {
     l1CategoryId: "",
     l2CategoryId: "",
     l3CategoryId: "",
+    l4CategoryId: "",
     points: "",
     isActive: true,
   });
@@ -273,6 +278,7 @@ export default function TicketConfigPage() {
         l1CategoryId: "",
         l2CategoryId: "",
         l3CategoryId: "",
+        l4CategoryId: "",
         responseTimeHours: "",
         resolutionTimeHours: "",
         useBusinessHours: false,
@@ -306,6 +312,7 @@ export default function TicketConfigPage() {
         l1CategoryId: "",
         l2CategoryId: "",
         l3CategoryId: "",
+        l4CategoryId: "",
         points: "",
         isActive: true,
       });
@@ -356,6 +363,7 @@ export default function TicketConfigPage() {
       l1CategoryId: slaForm.l1CategoryId || null,
       l2CategoryId: slaForm.l2CategoryId || null,
       l3CategoryId: slaForm.l3CategoryId || null,
+      l4CategoryId: slaForm.l4CategoryId || null,
       responseTimeHours: slaForm.responseTimeHours ? parseInt(slaForm.responseTimeHours) : null,
       resolutionTimeHours: parseInt(slaForm.resolutionTimeHours),
     });
@@ -368,6 +376,7 @@ export default function TicketConfigPage() {
       l1CategoryId: priorityForm.l1CategoryId || null,
       l2CategoryId: priorityForm.l2CategoryId || null,
       l3CategoryId: priorityForm.l3CategoryId || null,
+      l4CategoryId: priorityForm.l4CategoryId || null,
       points: parseInt(priorityForm.points),
     });
   };
@@ -542,7 +551,7 @@ export default function TicketConfigPage() {
 
                 {/* L3 Categories */}
                 <div>
-                  <h3 className="mb-2 text-sm font-medium text-muted-foreground">L3 Categories (Issue Cause)</h3>
+                  <h3 className="mb-2 text-sm font-medium text-muted-foreground">L3 Categories (Category)</h3>
                   <Table>
                     <TableHeader>
                       <TableRow>
@@ -554,6 +563,35 @@ export default function TicketConfigPage() {
                     </TableHeader>
                     <TableBody>
                       {categories?.filter((c) => c.level === 3).map((item) => (
+                        <TableRow key={item.id}>
+                          <TableCell className="font-medium">{item.name}</TableCell>
+                          <TableCell>{getCategoryName(item.parentId)}</TableCell>
+                          <TableCell>{item.description || "N/A"}</TableCell>
+                          <TableCell>
+                            <Badge variant={item.isActive ? "default" : "secondary"}>
+                              {item.isActive ? "Active" : "Inactive"}
+                            </Badge>
+                          </TableCell>
+                        </TableRow>
+                      ))}
+                    </TableBody>
+                  </Table>
+                </div>
+
+                {/* L4 Categories */}
+                <div>
+                  <h3 className="mb-2 text-sm font-medium text-muted-foreground">L4 Categories (Sub-Category/Problem Area)</h3>
+                  <Table>
+                    <TableHeader>
+                      <TableRow>
+                        <TableHead>Name</TableHead>
+                        <TableHead>Parent (L3)</TableHead>
+                        <TableHead>Description</TableHead>
+                        <TableHead>Status</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {categories?.filter((c) => c.level === 4).map((item) => (
                         <TableRow key={item.id}>
                           <TableCell className="font-medium">{item.name}</TableCell>
                           <TableCell>{getCategoryName(item.parentId)}</TableCell>
@@ -809,7 +847,7 @@ export default function TicketConfigPage() {
               <Label htmlFor="category-level">Level *</Label>
               <Select
                 value={categoryForm.level.toString()}
-                onValueChange={(value) => setCategoryForm({ ...categoryForm, level: parseInt(value) as 1 | 2 | 3 })}
+                onValueChange={(value) => setCategoryForm({ ...categoryForm, level: parseInt(value) as 1 | 2 | 3 | 4 })}
               >
                 <SelectTrigger id="category-level">
                   <SelectValue />
@@ -817,7 +855,8 @@ export default function TicketConfigPage() {
                 <SelectContent>
                   <SelectItem value="1">L1 (Department)</SelectItem>
                   <SelectItem value="2">L2 (Sub-Department)</SelectItem>
-                  <SelectItem value="3">L3 (Issue Cause)</SelectItem>
+                  <SelectItem value="3">L3 (Category)</SelectItem>
+                  <SelectItem value="4">L4 (Sub-Category/Problem Area)</SelectItem>
                 </SelectContent>
               </Select>
             </div>
