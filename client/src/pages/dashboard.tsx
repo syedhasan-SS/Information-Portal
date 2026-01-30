@@ -45,6 +45,13 @@ async function getUsers(): Promise<UserType[]> {
   return res.json();
 }
 
+async function getUnreadNotificationsCount(userId: string): Promise<number> {
+  const res = await fetch(`/api/notifications/unread?userId=${userId}`);
+  if (!res.ok) return 0;
+  const notifications = await res.json();
+  return notifications.length;
+}
+
 export default function DashboardPage() {
   const [, setLocation] = useLocation();
   const { user, hasPermission, logout } = useAuth();
@@ -87,6 +94,13 @@ export default function DashboardPage() {
     queryKey: ["users"],
     queryFn: getUsers,
     enabled: hasPermission("view:users"), // Only fetch if user has permission
+  });
+
+  const { data: unreadCount = 0 } = useQuery({
+    queryKey: ["unreadNotifications", user?.id],
+    queryFn: () => getUnreadNotificationsCount(user!.id),
+    enabled: !!user?.id,
+    refetchInterval: 30000, // Refetch every 30 seconds
   });
 
   const today = new Date();
@@ -185,12 +199,21 @@ export default function DashboardPage() {
               </nav>
 
               {/* Notifications */}
-              <Button variant="ghost" size="sm" className="relative">
+              <Button
+                variant="ghost"
+                size="sm"
+                className="relative"
+                onClick={() => setLocation("/notifications")}
+              >
                 <Bell className="h-4 w-4" />
-                <span className="absolute right-1 top-1 flex h-2 w-2">
-                  <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-red-400 opacity-75"></span>
-                  <span className="relative inline-flex h-2 w-2 rounded-full bg-red-500"></span>
-                </span>
+                {unreadCount > 0 && (
+                  <Badge
+                    variant="destructive"
+                    className="absolute -right-1 -top-1 h-5 min-w-[20px] px-1 text-xs flex items-center justify-center"
+                  >
+                    {unreadCount > 99 ? '99+' : unreadCount}
+                  </Badge>
+                )}
               </Button>
 
               {/* User Profile Dropdown */}
