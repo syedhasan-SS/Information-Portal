@@ -6,6 +6,7 @@ import {
   tickets,
   comments,
   users,
+  notifications,
   issueTypes,
   categoryHierarchy,
   categoryMappings,
@@ -17,6 +18,7 @@ import {
   type Ticket,
   type Comment,
   type User,
+  type Notification,
   type IssueType,
   type CategoryHierarchy,
   type CategoryMapping,
@@ -28,6 +30,7 @@ import {
   type InsertTicket,
   type InsertComment,
   type InsertUser,
+  type InsertNotification,
   type InsertIssueType,
   type InsertCategoryHierarchy,
   type InsertCategoryMapping,
@@ -63,6 +66,14 @@ export interface IStorage {
   getUserByEmail(email: string): Promise<User | undefined>;
   createUser(user: InsertUser): Promise<User>;
   updateUser(id: string, updates: Partial<InsertUser>): Promise<User | undefined>;
+
+  // Notifications
+  getNotifications(userId: string): Promise<Notification[]>;
+  getUnreadNotifications(userId: string): Promise<Notification[]>;
+  createNotification(notification: InsertNotification): Promise<Notification>;
+  markNotificationAsRead(id: string): Promise<Notification | undefined>;
+  markAllNotificationsAsRead(userId: string): Promise<void>;
+  deleteNotification(id: string): Promise<void>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -337,6 +348,48 @@ export class DatabaseStorage implements IStorage {
 
   async deleteTag(id: string): Promise<void> {
     await db.delete(tags).where(eq(tags.id, id));
+  }
+
+  // Notifications
+  async getNotifications(userId: string): Promise<Notification[]> {
+    return await db
+      .select()
+      .from(notifications)
+      .where(eq(notifications.userId, userId))
+      .orderBy(desc(notifications.createdAt));
+  }
+
+  async getUnreadNotifications(userId: string): Promise<Notification[]> {
+    return await db
+      .select()
+      .from(notifications)
+      .where(and(eq(notifications.userId, userId), eq(notifications.isRead, false)))
+      .orderBy(desc(notifications.createdAt));
+  }
+
+  async createNotification(notification: InsertNotification): Promise<Notification> {
+    const results = await db.insert(notifications).values(notification).returning();
+    return results[0];
+  }
+
+  async markNotificationAsRead(id: string): Promise<Notification | undefined> {
+    const results = await db
+      .update(notifications)
+      .set({ isRead: true, readAt: new Date() })
+      .where(eq(notifications.id, id))
+      .returning();
+    return results[0];
+  }
+
+  async markAllNotificationsAsRead(userId: string): Promise<void> {
+    await db
+      .update(notifications)
+      .set({ isRead: true, readAt: new Date() })
+      .where(and(eq(notifications.userId, userId), eq(notifications.isRead, false)));
+  }
+
+  async deleteNotification(id: string): Promise<void> {
+    await db.delete(notifications).where(eq(notifications.id, id));
   }
 }
 

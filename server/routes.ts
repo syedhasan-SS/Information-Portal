@@ -7,6 +7,7 @@ import {
   insertTicketSchema,
   insertCommentSchema,
   insertUserSchema,
+  insertNotificationSchema,
 } from "@shared/schema";
 import { z } from "zod";
 import { sendNewUserEmail } from "./email";
@@ -232,6 +233,80 @@ export async function registerRoutes(
       }
 
       await storage.deleteUser(userId);
+      res.status(204).send();
+    } catch (error: any) {
+      res.status(500).json({ error: error.message });
+    }
+  });
+
+  // Notifications
+  app.get("/api/notifications", async (req, res) => {
+    try {
+      const userId = req.query.userId as string;
+      if (!userId) {
+        return res.status(400).json({ error: "userId query parameter is required" });
+      }
+      const notifications = await storage.getNotifications(userId);
+      res.json(notifications);
+    } catch (error: any) {
+      res.status(500).json({ error: error.message });
+    }
+  });
+
+  app.get("/api/notifications/unread", async (req, res) => {
+    try {
+      const userId = req.query.userId as string;
+      if (!userId) {
+        return res.status(400).json({ error: "userId query parameter is required" });
+      }
+      const notifications = await storage.getUnreadNotifications(userId);
+      res.json(notifications);
+    } catch (error: any) {
+      res.status(500).json({ error: error.message });
+    }
+  });
+
+  app.post("/api/notifications", async (req, res) => {
+    try {
+      const parsed = insertNotificationSchema.safeParse(req.body);
+      if (!parsed.success) {
+        return res.status(400).json({ error: parsed.error.message });
+      }
+      const notification = await storage.createNotification(parsed.data);
+      res.status(201).json(notification);
+    } catch (error: any) {
+      res.status(500).json({ error: error.message });
+    }
+  });
+
+  app.patch("/api/notifications/:id/read", async (req, res) => {
+    try {
+      const notification = await storage.markNotificationAsRead(req.params.id);
+      if (!notification) {
+        return res.status(404).json({ error: "Notification not found" });
+      }
+      res.json(notification);
+    } catch (error: any) {
+      res.status(500).json({ error: error.message });
+    }
+  });
+
+  app.post("/api/notifications/mark-all-read", async (req, res) => {
+    try {
+      const { userId } = req.body;
+      if (!userId) {
+        return res.status(400).json({ error: "userId is required" });
+      }
+      await storage.markAllNotificationsAsRead(userId);
+      res.status(204).send();
+    } catch (error: any) {
+      res.status(500).json({ error: error.message });
+    }
+  });
+
+  app.delete("/api/notifications/:id", async (req, res) => {
+    try {
+      await storage.deleteNotification(req.params.id);
       res.status(204).send();
     } catch (error: any) {
       res.status(500).json({ error: error.message });

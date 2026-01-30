@@ -18,6 +18,7 @@ import ProfilePage from "@/pages/profile";
 import AnalyticsPage from "@/pages/analytics";
 import TicketConfigPage from "@/pages/ticket-config";
 import DepartmentTicketsPage from "@/pages/department-tickets";
+import NotificationsPage from "@/pages/notifications";
 
 function Router() {
   return (
@@ -66,6 +67,11 @@ function Router() {
       <Route path="/profile">
         <ProtectedRoute>
           <ProfilePage />
+        </ProtectedRoute>
+      </Route>
+      <Route path="/notifications">
+        <ProtectedRoute>
+          <NotificationsPage />
         </ProtectedRoute>
       </Route>
       <Route path="/analytics">

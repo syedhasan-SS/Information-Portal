@@ -108,6 +108,26 @@ export const users = pgTable("users", {
   updatedAt: timestamp("updated_at").notNull().defaultNow(),
 });
 
+export const notifications = pgTable("notifications", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  userId: varchar("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+  type: text("type").notNull().$type<"case_created" | "comment_mention" | "ticket_assigned" | "ticket_solved" | "comment_added">(),
+  title: text("title").notNull(),
+  message: text("message").notNull(),
+  ticketId: varchar("ticket_id").references(() => tickets.id, { onDelete: "cascade" }),
+  commentId: varchar("comment_id").references(() => comments.id, { onDelete: "cascade" }),
+  actorId: varchar("actor_id").references(() => users.id, { onDelete: "set null" }),
+  metadata: jsonb("metadata").$type<{
+    ticketNumber?: string;
+    vendorHandle?: string;
+    mentionedBy?: string;
+    [key: string]: any;
+  }>(),
+  isRead: boolean("is_read").notNull().default(false),
+  readAt: timestamp("read_at"),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+});
+
 export const insertVendorSchema = createInsertSchema(vendors).omit({
   id: true,
   createdAt: true,
@@ -136,11 +156,17 @@ export const insertUserSchema = createInsertSchema(users).omit({
   updatedAt: true,
 });
 
+export const insertNotificationSchema = createInsertSchema(notifications).omit({
+  id: true,
+  createdAt: true,
+});
+
 export type InsertVendor = z.infer<typeof insertVendorSchema>;
 export type InsertCategory = z.infer<typeof insertCategorySchema>;
 export type InsertTicket = z.infer<typeof insertTicketSchema>;
 export type InsertComment = z.infer<typeof insertCommentSchema>;
 export type InsertUser = z.infer<typeof insertUserSchema>;
+export type InsertNotification = z.infer<typeof insertNotificationSchema>;
 
 // Ticket Configuration Tables
 
@@ -277,3 +303,4 @@ export type Category = typeof categories.$inferSelect;
 export type Ticket = typeof tickets.$inferSelect;
 export type Comment = typeof comments.$inferSelect;
 export type User = typeof users.$inferSelect;
+export type Notification = typeof notifications.$inferSelect;
