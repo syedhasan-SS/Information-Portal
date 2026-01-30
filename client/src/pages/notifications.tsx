@@ -5,6 +5,7 @@ import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { useAuth } from "@/hooks/use-auth";
 import {
   ArrowLeft,
   Bell,
@@ -46,16 +47,19 @@ async function deleteNotification(id: string): Promise<void> {
 }
 
 export default function NotificationsPage() {
+  console.log("NotificationsPage rendering");
   const [, setLocation] = useLocation();
   const [activeTab, setActiveTab] = useState<"all" | "case_created" | "comment_mention" | "ticket_assigned" | "ticket_solved">("all");
   const queryClient = useQueryClient();
+  const { user } = useAuth();
 
-  // TODO: Replace with actual user ID from auth context
-  const userId = "dummy-user-id";
+  const userId = user?.id || "";
+  console.log("NotificationsPage user:", user, "userId:", userId);
 
   const { data: notifications, isLoading } = useQuery({
     queryKey: ["notifications", userId],
     queryFn: () => getNotifications(userId),
+    enabled: !!userId,
   });
 
   const markAsReadMutation = useMutation({

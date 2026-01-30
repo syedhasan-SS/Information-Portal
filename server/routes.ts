@@ -869,9 +869,51 @@ export async function registerRoutes(
   // Unified Ticket Configurations (combines issue types with L1-L4 hierarchy)
   app.get("/api/config/ticket-configs", async (_req, res) => {
     try {
-      // For now, return empty array - full implementation coming soon
-      res.json([]);
+      // Fetch all category hierarchies and their SLA configurations
+      const hierarchies = await storage.getAllCategoryHierarchies();
+
+      // Get all SLA configurations
+      const slaConfigs = await storage.getAllSlaConfigurations();
+
+      // Build a map of category hierarchies
+      const categoryMap = new Map();
+      hierarchies.forEach(cat => {
+        categoryMap.set(cat.id, cat);
+      });
+
+      // Build configurations from L4 categories
+      const configs: any[] = [];
+      const l4Categories = hierarchies.filter(h => h.level === 4);
+
+      for (const l4 of l4Categories) {
+        let l3 = l4.parentId ? categoryMap.get(l4.parentId) : null;
+        let l2 = l3?.parentId ? categoryMap.get(l3.parentId) : null;
+        let l1 = l2?.parentId ? categoryMap.get(l2.parentId) : null;
+
+        if (l1 && l2 && l3) {
+          const sla = slaConfigs.find(s =>
+            s.l4CategoryId === l4.id
+          );
+
+          configs.push({
+            id: l4.id,
+            issueType: "Information",
+            l1: l1.name,
+            l2: l2.name,
+            l3: l3.name,
+            l4: l4.name,
+            description: l4.description || "",
+            isActive: l4.isActive,
+            slaResponseHours: sla?.responseTimeHours || null,
+            slaResolutionHours: sla?.resolutionTimeHours || 24,
+            createdAt: l4.createdAt,
+          });
+        }
+      }
+
+      res.json(configs);
     } catch (error: any) {
+      console.error("Error fetching ticket configs:", error);
       res.status(500).json({ error: error.message });
     }
   });

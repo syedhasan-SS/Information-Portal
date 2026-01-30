@@ -203,7 +203,10 @@ export default function DashboardPage() {
                 variant="ghost"
                 size="sm"
                 className="relative"
-                onClick={() => setLocation("/notifications")}
+                onClick={() => {
+                  console.log("Notification bell clicked, navigating to /notifications");
+                  setLocation("/notifications");
+                }}
               >
                 <Bell className="h-4 w-4" />
                 {unreadCount > 0 && (
@@ -214,6 +217,18 @@ export default function DashboardPage() {
                     {unreadCount > 99 ? '99+' : unreadCount}
                   </Badge>
                 )}
+              </Button>
+
+              {/* TEST LINK - Remove after testing */}
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => {
+                  console.log("TEST: Navigating to notifications");
+                  setLocation("/notifications");
+                }}
+              >
+                TEST Notifications
               </Button>
 
               {/* User Profile Dropdown */}

@@ -74,6 +74,10 @@ export interface IStorage {
   markNotificationAsRead(id: string): Promise<Notification | undefined>;
   markAllNotificationsAsRead(userId: string): Promise<void>;
   deleteNotification(id: string): Promise<void>;
+
+  // Category Hierarchy & SLA
+  getAllCategoryHierarchies(): Promise<CategoryHierarchy[]>;
+  getAllSlaConfigurations(): Promise<SlaConfiguration[]>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -390,6 +394,15 @@ export class DatabaseStorage implements IStorage {
 
   async deleteNotification(id: string): Promise<void> {
     await db.delete(notifications).where(eq(notifications.id, id));
+  }
+
+  // Category Hierarchy & SLA
+  async getAllCategoryHierarchies(): Promise<CategoryHierarchy[]> {
+    return await db.select().from(categoryHierarchy).orderBy(categoryHierarchy.level, categoryHierarchy.name);
+  }
+
+  async getAllSlaConfigurations(): Promise<SlaConfiguration[]> {
+    return await db.select().from(slaConfigurations).where(eq(slaConfigurations.isActive, true));
   }
 }
 
