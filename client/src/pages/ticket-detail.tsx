@@ -399,6 +399,32 @@ export default function TicketDetailPage() {
                   <label className="text-xs font-medium text-muted-foreground">Issue Type</label>
                   <p className="mt-1 text-sm">{ticket.issueType}</p>
                 </div>
+
+                <div>
+                  <label className="text-xs font-medium text-muted-foreground">Case Creator</label>
+                  <div className="mt-1 flex items-center gap-2">
+                    <div className="flex h-6 w-6 items-center justify-center rounded-full bg-accent text-accent-foreground font-semibold text-xs">
+                      {userMap[ticket.createdBy]?.name.charAt(0).toUpperCase() || "?"}
+                    </div>
+                    <span className="text-sm">{userMap[ticket.createdBy]?.name || "Unknown"}</span>
+                  </div>
+                </div>
+
+                <div>
+                  <label className="text-xs font-medium text-muted-foreground">Tags</label>
+                  <div className="mt-1 flex flex-wrap gap-1">
+                    {ticket.tags && ticket.tags.length > 0 ? (
+                      ticket.tags.map((tag, index) => (
+                        <Badge key={index} variant="secondary" className="text-xs">
+                          <Tag className="mr-1 h-3 w-3" />
+                          {tag}
+                        </Badge>
+                      ))
+                    ) : (
+                      <span className="text-sm text-muted-foreground">No tags</span>
+                    )}
+                  </div>
+                </div>
               </div>
             </Card>
 
