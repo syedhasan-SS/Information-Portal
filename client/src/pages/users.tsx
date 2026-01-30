@@ -26,6 +26,7 @@ import {
   Trash2,
   MoreVertical,
   Key,
+  Shield,
 } from "lucide-react";
 import {
   DropdownMenu,
@@ -41,10 +42,34 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
+import { Checkbox } from "@/components/ui/checkbox";
 import type { User } from "@shared/schema";
 
 const ROLES = ["Owner", "Admin", "Seller Support Agent", "Department Head", "Department Manager", "Department Agent"] as const;
 const DEPARTMENTS = ["Finance", "Operations", "Marketplace", "Tech", "Experience", "CX", "Seller Support"] as const;
+
+// All available permissions
+const ALL_PERMISSIONS = [
+  { id: "view:dashboard", label: "View Dashboard", category: "General" },
+  { id: "view:tickets", label: "View Tickets", category: "Tickets" },
+  { id: "create:tickets", label: "Create Tickets", category: "Tickets" },
+  { id: "edit:tickets", label: "Edit Tickets", category: "Tickets" },
+  { id: "delete:tickets", label: "Delete Tickets", category: "Tickets" },
+  { id: "view:all_tickets", label: "View All Tickets", category: "Tickets" },
+  { id: "view:department_tickets", label: "View Department Tickets", category: "Tickets" },
+  { id: "view:assigned_tickets", label: "View Assigned Tickets", category: "Tickets" },
+  { id: "view:users", label: "View Users", category: "Users" },
+  { id: "create:users", label: "Create Users", category: "Users" },
+  { id: "edit:users", label: "Edit Users", category: "Users" },
+  { id: "delete:users", label: "Delete Users", category: "Users" },
+  { id: "view:vendors", label: "View Vendors", category: "Vendors" },
+  { id: "create:vendors", label: "Create Vendors", category: "Vendors" },
+  { id: "edit:vendors", label: "Edit Vendors", category: "Vendors" },
+  { id: "delete:vendors", label: "Delete Vendors", category: "Vendors" },
+  { id: "view:analytics", label: "View Analytics", category: "Analytics" },
+  { id: "view:config", label: "View Configuration", category: "Settings" },
+  { id: "edit:config", label: "Edit Configuration", category: "Settings" },
+] as const;
 
 async function getUsers(): Promise<User[]> {
   const res = await fetch("/api/users");
@@ -111,6 +136,18 @@ async function changeUserPassword(id: number, newPassword: string): Promise<void
   }
 }
 
+async function updateUserPermissions(id: string, permissions: string[]): Promise<void> {
+  const res = await fetch(`/api/users/${id}/permissions`, {
+    method: "PATCH",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ customPermissions: permissions }),
+  });
+  if (!res.ok) {
+    const err = await res.json();
+    throw new Error(err.error || "Failed to update permissions");
+  }
+}
+
 export default function UsersPage() {
   const [, setLocation] = useLocation();
   const [showForm, setShowForm] = useState(false);
@@ -133,6 +170,8 @@ export default function UsersPage() {
   });
   const [changingPasswordUser, setChangingPasswordUser] = useState<User | null>(null);
   const [newPassword, setNewPassword] = useState("");
+  const [managingPermissionsUser, setManagingPermissionsUser] = useState<User | null>(null);
+  const [selectedPermissions, setSelectedPermissions] = useState<string[]>([]);
 
   const queryClient = useQueryClient();
 
@@ -194,6 +233,23 @@ export default function UsersPage() {
       setChangingPasswordUser(null);
       setNewPassword("");
       setSuccess("Password changed successfully!");
+      setError("");
+      setTimeout(() => setSuccess(""), 3000);
+    },
+    onError: (err: Error) => {
+      setError(err.message);
+      setSuccess("");
+    },
+  });
+
+  const updatePermissionsMutation = useMutation({
+    mutationFn: ({ id, permissions }: { id: string; permissions: string[] }) =>
+      updateUserPermissions(id, permissions),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["users"] });
+      setManagingPermissionsUser(null);
+      setSelectedPermissions([]);
+      setSuccess("Permissions updated successfully!");
       setError("");
       setTimeout(() => setSuccess(""), 3000);
     },
@@ -267,6 +323,27 @@ export default function UsersPage() {
       id: changingPasswordUser.id,
       password: newPassword,
     });
+  };
+
+  const handleManagePermissions = (user: User) => {
+    setManagingPermissionsUser(user);
+    setSelectedPermissions(user.customPermissions || []);
+  };
+
+  const handlePermissionsSubmit = () => {
+    if (!managingPermissionsUser) return;
+    updatePermissionsMutation.mutate({
+      id: managingPermissionsUser.id,
+      permissions: selectedPermissions,
+    });
+  };
+
+  const togglePermission = (permissionId: string) => {
+    setSelectedPermissions((prev) =>
+      prev.includes(permissionId)
+        ? prev.filter((p) => p !== permissionId)
+        : [...prev, permissionId]
+    );
   };
 
   const roleColors: Record<string, string> = {
@@ -482,6 +559,10 @@ export default function UsersPage() {
                           <DropdownMenuItem onClick={() => setChangingPasswordUser(user)}>
                             <Key className="mr-2 h-4 w-4" />
                             Change Password
+                          </DropdownMenuItem>
+                          <DropdownMenuItem onClick={() => handleManagePermissions(user)}>
+                            <Shield className="mr-2 h-4 w-4" />
+                            Manage Permissions
                           </DropdownMenuItem>
                           <DropdownMenuItem
                             onClick={() => setDeletingUserId(user.id)}
@@ -724,6 +805,90 @@ export default function UsersPage() {
               </Button>
             </DialogFooter>
           </form>
+        </DialogContent>
+      </Dialog>
+
+      {/* Manage Permissions Dialog */}
+      <Dialog open={!!managingPermissionsUser} onOpenChange={(open) => !open && setManagingPermissionsUser(null)}>
+        <DialogContent className="max-w-3xl max-h-[80vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle>Manage Permissions - {managingPermissionsUser?.name}</DialogTitle>
+            <DialogDescription>
+              Customize agent-level permissions. These override default role permissions.
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="space-y-6">
+            {/* Group permissions by category */}
+            {Object.entries(
+              ALL_PERMISSIONS.reduce((acc, perm) => {
+                if (!acc[perm.category]) acc[perm.category] = [];
+                acc[perm.category].push(perm);
+                return acc;
+              }, {} as Record<string, typeof ALL_PERMISSIONS>)
+            ).map(([category, perms]) => (
+              <div key={category} className="space-y-3">
+                <h4 className="font-medium text-sm">{category}</h4>
+                <div className="grid grid-cols-2 gap-3">
+                  {perms.map((permission) => (
+                    <div key={permission.id} className="flex items-center space-x-2">
+                      <Checkbox
+                        id={permission.id}
+                        checked={selectedPermissions.includes(permission.id)}
+                        onCheckedChange={() => togglePermission(permission.id)}
+                      />
+                      <Label
+                        htmlFor={permission.id}
+                        className="text-sm font-normal cursor-pointer"
+                      >
+                        {permission.label}
+                      </Label>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            ))}
+
+            {/* Show current role permissions for reference */}
+            {managingPermissionsUser && (
+              <div className="mt-4 p-4 bg-muted rounded-lg">
+                <h4 className="text-sm font-medium mb-2">
+                  Default Role Permissions ({managingPermissionsUser.role})
+                </h4>
+                <p className="text-xs text-muted-foreground">
+                  Custom permissions override these default permissions.
+                </p>
+              </div>
+            )}
+          </div>
+
+          <DialogFooter>
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => {
+                setManagingPermissionsUser(null);
+                setSelectedPermissions([]);
+                setError("");
+              }}
+            >
+              Cancel
+            </Button>
+            <Button
+              onClick={handlePermissionsSubmit}
+              disabled={updatePermissionsMutation.isPending}
+              className="bg-accent text-accent-foreground hover:bg-accent/90"
+            >
+              {updatePermissionsMutation.isPending ? (
+                <>
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                  Updating...
+                </>
+              ) : (
+                "Update Permissions"
+              )}
+            </Button>
+          </DialogFooter>
         </DialogContent>
       </Dialog>
     </div>

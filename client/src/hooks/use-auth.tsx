@@ -8,6 +8,7 @@ type User = {
   role: "Owner" | "Admin" | "Seller Support Agent" | "Department Head" | "Department Manager" | "Department Agent";
   department: string | null;
   profilePicture: string | null;
+  customPermissions: string[] | null; // Agent-level custom permissions
   isActive: boolean;
 };
 
@@ -140,6 +141,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const hasPermission = (permission: string): boolean => {
     if (!currentUser) return false;
+
+    // Check custom permissions first (agent-level overrides)
+    if (currentUser.customPermissions && currentUser.customPermissions.length > 0) {
+      return currentUser.customPermissions.includes(permission);
+    }
+
+    // Fall back to role-based permissions
     const permissions = ROLE_PERMISSIONS[currentUser.role] || [];
     return permissions.includes(permission);
   };

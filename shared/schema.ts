@@ -101,6 +101,7 @@ export const users = pgTable("users", {
   role: text("role").notNull().$type<"Owner" | "Admin" | "Seller Support Agent" | "Department Head" | "Department Manager" | "Department Agent">(),
   department: text("department").$type<"Finance" | "Operations" | "Marketplace" | "Tech" | "Experience" | "CX" | "Seller Support">(),
   profilePicture: text("profile_picture"),
+  customPermissions: text("custom_permissions").array(), // Agent-level custom permissions
   isActive: boolean("is_active").notNull().default(true),
   passwordChangedAt: timestamp("password_changed_at"),
   createdAt: timestamp("created_at").notNull().defaultNow(),

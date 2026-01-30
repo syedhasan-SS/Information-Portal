@@ -248,6 +248,27 @@ export async function registerRoutes(
     }
   });
 
+  // Update user permissions (for Owner/Admin only)
+  app.patch("/api/users/:id/permissions", async (req, res) => {
+    try {
+      const { customPermissions } = req.body;
+
+      if (!Array.isArray(customPermissions)) {
+        return res.status(400).json({ error: "customPermissions must be an array" });
+      }
+
+      const user = await storage.getUserById(req.params.id);
+      if (!user) {
+        return res.status(404).json({ error: "User not found" });
+      }
+
+      await storage.updateUser(req.params.id, { customPermissions });
+      res.json({ message: "Permissions updated successfully" });
+    } catch (error: any) {
+      res.status(500).json({ error: error.message });
+    }
+  });
+
   // Change password
   app.post("/api/users/change-password", async (req, res) => {
     try {
@@ -716,6 +737,50 @@ export async function registerRoutes(
     try {
       // Placeholder for now
       res.status(201).json({ ...req.body, id: `config-${Date.now()}`, createdAt: new Date() });
+    } catch (error: any) {
+      res.status(500).json({ error: error.message });
+    }
+  });
+
+  app.post("/api/config/ticket-configs/bulk", async (req, res) => {
+    try {
+      const { configs } = req.body;
+
+      if (!Array.isArray(configs) || configs.length === 0) {
+        return res.status(400).json({ error: "configs must be a non-empty array" });
+      }
+
+      // Validate each config
+      for (let i = 0; i < configs.length; i++) {
+        const config = configs[i];
+        if (!config.issueType || !config.l1 || !config.l2 || !config.l3 || !config.l4) {
+          return res.status(400).json({
+            error: `Configuration at index ${i} is missing required fields`
+          });
+        }
+        if (!['Complaint', 'Request', 'Information'].includes(config.issueType)) {
+          return res.status(400).json({
+            error: `Configuration at index ${i} has invalid issue type`
+          });
+        }
+        if (!config.slaResolutionHours || isNaN(config.slaResolutionHours)) {
+          return res.status(400).json({
+            error: `Configuration at index ${i} has invalid SLA resolution hours`
+          });
+        }
+      }
+
+      // For now, just return success with count
+      // In the future, this will insert into the database
+      res.status(201).json({
+        message: "Configurations created successfully",
+        count: configs.length,
+        configs: configs.map((config, index) => ({
+          ...config,
+          id: `config-${Date.now()}-${index}`,
+          createdAt: new Date()
+        }))
+      });
     } catch (error: any) {
       res.status(500).json({ error: error.message });
     }
