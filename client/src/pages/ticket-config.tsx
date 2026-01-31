@@ -1714,6 +1714,41 @@ Information,Tech,Product Listings,Product Information,Category Query,Product cat
                 Active Configuration
               </Label>
             </div>
+
+            {/* Audit Trail Section - Only shown when editing */}
+            {editingConfig && (
+              <div className="mt-6 border-t pt-4">
+                <h3 className="mb-3 text-sm font-semibold text-muted-foreground">Audit Information</h3>
+                <div className="grid gap-3 text-sm">
+                  <div className="flex justify-between">
+                    <span className="text-muted-foreground">Created Date:</span>
+                    <span className="font-medium">
+                      {editingConfig.createdAt ? new Date(editingConfig.createdAt).toLocaleString() : "N/A"}
+                    </span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-muted-foreground">Last Update Date:</span>
+                    <span className="font-medium">
+                      {editingConfig.updatedAt ? new Date(editingConfig.updatedAt).toLocaleString() : "N/A"}
+                    </span>
+                  </div>
+                  {editingConfig.updatedById && (
+                    <div className="flex justify-between">
+                      <span className="text-muted-foreground">Last Update By:</span>
+                      <span className="font-medium">
+                        {editingConfig.updatedByName || editingConfig.updatedById}
+                      </span>
+                    </div>
+                  )}
+                  <div className="flex justify-between">
+                    <span className="text-muted-foreground">Version:</span>
+                    <span className="font-medium">
+                      {editingConfig.version || 1}
+                    </span>
+                  </div>
+                </div>
+              </div>
+            )}
           </div>
 
           <DialogFooter>
@@ -1925,6 +1960,41 @@ Information,Tech,Product Listings,Product Information,Category Query,Product cat
                 </SelectContent>
               </Select>
             </div>
+
+            {/* Audit Trail Section - Only shown when editing */}
+            {editingTag && (
+              <div className="mt-4 border-t pt-4">
+                <h3 className="mb-3 text-sm font-semibold text-muted-foreground">Audit Information</h3>
+                <div className="grid gap-3 text-sm">
+                  <div className="flex justify-between">
+                    <span className="text-muted-foreground">Created Date:</span>
+                    <span className="font-medium">
+                      {editingTag.createdAt ? new Date(editingTag.createdAt).toLocaleString() : "N/A"}
+                    </span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-muted-foreground">Last Update Date:</span>
+                    <span className="font-medium">
+                      {editingTag.updatedAt ? new Date(editingTag.updatedAt).toLocaleString() : "N/A"}
+                    </span>
+                  </div>
+                  {editingTag.updatedById && (
+                    <div className="flex justify-between">
+                      <span className="text-muted-foreground">Last Update By:</span>
+                      <span className="font-medium">
+                        {editingTag.updatedByName || editingTag.updatedById}
+                      </span>
+                    </div>
+                  )}
+                  <div className="flex justify-between">
+                    <span className="text-muted-foreground">Version:</span>
+                    <span className="font-medium">
+                      {editingTag.version || 1}
+                    </span>
+                  </div>
+                </div>
+              </div>
+            )}
           </div>
 
           <DialogFooter>
@@ -2113,6 +2183,41 @@ Information,Tech,Product Listings,Product Information,Category Query,Product cat
                 placeholder="Enter help text for users"
               />
             </div>
+
+            {/* Audit Trail Section - Only shown when editing */}
+            {editingField && (
+              <div className="mt-4 border-t pt-4">
+                <h3 className="mb-3 text-sm font-semibold text-muted-foreground">Audit Information</h3>
+                <div className="grid gap-3 text-sm">
+                  <div className="flex justify-between">
+                    <span className="text-muted-foreground">Created Date:</span>
+                    <span className="font-medium">
+                      {editingField.createdAt ? new Date(editingField.createdAt).toLocaleString() : "N/A"}
+                    </span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-muted-foreground">Last Update Date:</span>
+                    <span className="font-medium">
+                      {editingField.updatedAt ? new Date(editingField.updatedAt).toLocaleString() : "N/A"}
+                    </span>
+                  </div>
+                  {editingField.updatedById && (
+                    <div className="flex justify-between">
+                      <span className="text-muted-foreground">Last Update By:</span>
+                      <span className="font-medium">
+                        {editingField.updatedByName || editingField.updatedById}
+                      </span>
+                    </div>
+                  )}
+                  <div className="flex justify-between">
+                    <span className="text-muted-foreground">Version:</span>
+                    <span className="font-medium">
+                      {editingField.version || 1}
+                    </span>
+                  </div>
+                </div>
+              </div>
+            )}
           </div>
 
           <DialogFooter>
