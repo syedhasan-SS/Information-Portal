@@ -164,13 +164,12 @@ export default function DashboardPage() {
         <div className="mx-auto max-w-[1600px] px-6">
           <div className="flex h-16 items-center justify-between">
             <div className="flex items-center gap-3">
-              <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-accent">
-                <Ticket className="h-5 w-5 text-accent-foreground" />
-              </div>
+              <img
+                src="/fleek-logo.png"
+                alt="Fleek Logo"
+                className="h-10"
+              />
               <div>
-                <h1 className="font-serif text-xl font-semibold tracking-tight text-foreground">
-                  FLOW
-                </h1>
                 <p className="text-xs text-muted-foreground">Fleek Complaint Management Portal</p>
               </div>
             </div>

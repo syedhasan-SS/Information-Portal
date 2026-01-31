@@ -1371,6 +1371,45 @@ Information,Tech,Product Listings,Product Information,Category Query,Product cat
         </Card>
 
         {/* Tags Management Section */}
+        <div className="mt-6">
+          <h2 className="mb-4 text-xl font-semibold">Tags Summary</h2>
+          <div className="mb-6 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+            <Card className="p-6">
+              <div>
+                <p className="text-sm text-muted-foreground">Total Tags</p>
+                <p className="mt-2 text-3xl font-bold">{filteredTags?.length || 0}</p>
+              </div>
+            </Card>
+
+            <Card className="p-6">
+              <div>
+                <p className="text-sm text-muted-foreground">Active Tags</p>
+                <p className="mt-2 text-3xl font-bold text-green-600">
+                  {filteredTags?.filter(t => t.isActive).length || 0}
+                </p>
+              </div>
+            </Card>
+
+            <Card className="p-6">
+              <div>
+                <p className="text-sm text-muted-foreground">Inactive Tags</p>
+                <p className="mt-2 text-3xl font-bold text-gray-600">
+                  {filteredTags?.filter(t => !t.isActive).length || 0}
+                </p>
+              </div>
+            </Card>
+
+            <Card className="p-6">
+              <div>
+                <p className="text-sm text-muted-foreground">Auto-Applied</p>
+                <p className="mt-2 text-3xl font-bold">
+                  {filteredTags?.filter(t => t.isAutoApplied).length || 0}
+                </p>
+              </div>
+            </Card>
+          </div>
+        </div>
+
         <Card className="mt-6">
           <div className="flex items-center justify-between border-b p-6">
             <div>
@@ -1440,6 +1479,45 @@ Information,Tech,Product Listings,Product Information,Category Query,Product cat
         </Card>
 
         {/* Custom Field Manager Section */}
+        <div className="mt-6">
+          <h2 className="mb-4 text-xl font-semibold">Custom Fields Summary</h2>
+          <div className="mb-6 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+            <Card className="p-6">
+              <div>
+                <p className="text-sm text-muted-foreground">Total Fields</p>
+                <p className="mt-2 text-3xl font-bold">{filteredFields?.length || 0}</p>
+              </div>
+            </Card>
+
+            <Card className="p-6">
+              <div>
+                <p className="text-sm text-muted-foreground">Enabled Fields</p>
+                <p className="mt-2 text-3xl font-bold text-green-600">
+                  {filteredFields?.filter(f => f.isEnabled).length || 0}
+                </p>
+              </div>
+            </Card>
+
+            <Card className="p-6">
+              <div>
+                <p className="text-sm text-muted-foreground">Disabled Fields</p>
+                <p className="mt-2 text-3xl font-bold text-gray-600">
+                  {filteredFields?.filter(f => !f.isEnabled).length || 0}
+                </p>
+              </div>
+            </Card>
+
+            <Card className="p-6">
+              <div>
+                <p className="text-sm text-muted-foreground">Required Fields</p>
+                <p className="mt-2 text-3xl font-bold">
+                  {filteredFields?.filter(f => f.isRequired).length || 0}
+                </p>
+              </div>
+            </Card>
+          </div>
+        </div>
+
         <Card className="mt-6">
           <div className="flex items-center justify-between border-b p-6">
             <div>
