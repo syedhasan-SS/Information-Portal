@@ -868,6 +868,29 @@ Information,Tech,Product Listings,Product Information,Category Query,Product cat
                   <p className="text-xs text-muted-foreground">Manage categories, tags, and field configurations</p>
                 </div>
               </div>
+              <div className="ml-8 flex gap-2">
+                <Button
+                  variant={departmentFilter === "All" ? "default" : "outline"}
+                  size="sm"
+                  onClick={() => setDepartmentFilter("All")}
+                >
+                  All
+                </Button>
+                <Button
+                  variant={departmentFilter === "Seller Support" ? "default" : "outline"}
+                  size="sm"
+                  onClick={() => setDepartmentFilter("Seller Support")}
+                >
+                  Seller Support
+                </Button>
+                <Button
+                  variant={departmentFilter === "Customer Support" ? "default" : "outline"}
+                  size="sm"
+                  onClick={() => setDepartmentFilter("Customer Support")}
+                >
+                  Customer Support
+                </Button>
+              </div>
             </div>
             <div className="flex gap-2">
               <Button onClick={downloadCsvTemplate} variant="outline" size="sm">
@@ -931,7 +954,7 @@ Information,Tech,Product Listings,Product Information,Category Query,Product cat
               </Button>
               <Button onClick={() => setShowWizard(true)} size="sm">
                 <Plus className="h-4 w-4" />
-                Add Configuration
+                Add Category
               </Button>
             </div>
           </div>
@@ -949,130 +972,99 @@ Information,Tech,Product Listings,Product Information,Category Query,Product cat
 
       <main className="mx-auto max-w-[1600px] px-6 py-8">
         {/* Filters Section */}
-        <Card className="mb-6 p-6">
-          <h2 className="mb-4 text-lg font-semibold">Filters</h2>
-          <div className="space-y-4">
-            {/* Department Filter */}
-            <div>
-              <Label className="mb-2 block text-sm font-medium">Department</Label>
-              <div className="flex flex-wrap gap-2">
-                <Button
-                  variant={departmentFilter === "All" ? "default" : "outline"}
-                  size="sm"
-                  onClick={() => setDepartmentFilter("All")}
-                >
-                  All
-                </Button>
-                <Button
-                  variant={departmentFilter === "Seller Support" ? "default" : "outline"}
-                  size="sm"
-                  onClick={() => setDepartmentFilter("Seller Support")}
-                >
-                  Seller Support
-                </Button>
-                <Button
-                  variant={departmentFilter === "Customer Support" ? "default" : "outline"}
-                  size="sm"
-                  onClick={() => setDepartmentFilter("Customer Support")}
-                >
-                  Customer Support
-                </Button>
-              </div>
+        <Card className="mb-6 p-4">
+          <div className="flex flex-wrap items-center gap-4">
+            <span className="text-sm font-medium text-muted-foreground">Request Type:</span>
+            <div className="flex flex-wrap gap-2">
+              <Button
+                variant={requestTypeFilter === "All" ? "default" : "outline"}
+                size="sm"
+                onClick={() => setRequestTypeFilter("All")}
+              >
+                All
+              </Button>
+              <Button
+                variant={requestTypeFilter === "Complaint" ? "default" : "outline"}
+                size="sm"
+                onClick={() => setRequestTypeFilter("Complaint")}
+              >
+                Complaint
+              </Button>
+              <Button
+                variant={requestTypeFilter === "Request" ? "default" : "outline"}
+                size="sm"
+                onClick={() => setRequestTypeFilter("Request")}
+              >
+                Request
+              </Button>
+              <Button
+                variant={requestTypeFilter === "Information" ? "default" : "outline"}
+                size="sm"
+                onClick={() => setRequestTypeFilter("Information")}
+              >
+                Information
+              </Button>
             </div>
 
-            {/* Request Type Filter */}
-            <div>
-              <Label className="mb-2 block text-sm font-medium">Request Type</Label>
-              <div className="flex flex-wrap gap-2">
-                <Button
-                  variant={requestTypeFilter === "All" ? "default" : "outline"}
-                  size="sm"
-                  onClick={() => setRequestTypeFilter("All")}
-                >
-                  All
-                </Button>
-                <Button
-                  variant={requestTypeFilter === "Complaint" ? "default" : "outline"}
-                  size="sm"
-                  onClick={() => setRequestTypeFilter("Complaint")}
-                >
-                  Complaint
-                </Button>
-                <Button
-                  variant={requestTypeFilter === "Request" ? "default" : "outline"}
-                  size="sm"
-                  onClick={() => setRequestTypeFilter("Request")}
-                >
-                  Request
-                </Button>
-                <Button
-                  variant={requestTypeFilter === "Information" ? "default" : "outline"}
-                  size="sm"
-                  onClick={() => setRequestTypeFilter("Information")}
-                >
-                  Information
-                </Button>
-              </div>
+            <div className="h-6 w-px bg-border" />
+
+            <span className="text-sm font-medium text-muted-foreground">Status:</span>
+            <div className="flex flex-wrap gap-2">
+              <Button
+                variant={statusFilter === "All" ? "default" : "outline"}
+                size="sm"
+                onClick={() => setStatusFilter("All")}
+              >
+                All
+              </Button>
+              <Button
+                variant={statusFilter === "Active" ? "default" : "outline"}
+                size="sm"
+                onClick={() => setStatusFilter("Active")}
+              >
+                Active
+              </Button>
+              <Button
+                variant={statusFilter === "Inactive" ? "default" : "outline"}
+                size="sm"
+                onClick={() => setStatusFilter("Inactive")}
+              >
+                Inactive
+              </Button>
             </div>
 
-            {/* Status Filter */}
-            <div>
-              <Label className="mb-2 block text-sm font-medium">Status</Label>
-              <div className="flex flex-wrap gap-2">
-                <Button
-                  variant={statusFilter === "All" ? "default" : "outline"}
-                  size="sm"
-                  onClick={() => setStatusFilter("All")}
-                >
-                  All
-                </Button>
-                <Button
-                  variant={statusFilter === "Active" ? "default" : "outline"}
-                  size="sm"
-                  onClick={() => setStatusFilter("Active")}
-                >
-                  Active
-                </Button>
-                <Button
-                  variant={statusFilter === "Inactive" ? "default" : "outline"}
-                  size="sm"
-                  onClick={() => setStatusFilter("Inactive")}
-                >
-                  Inactive
-                </Button>
-              </div>
-            </div>
+            <div className="h-6 w-px bg-border" />
 
-            {/* SLA Filter */}
-            <div>
-              <Label className="mb-2 block text-sm font-medium">SLA Configuration</Label>
-              <div className="flex flex-wrap gap-2">
-                <Button
-                  variant={slaFilter === "All" ? "default" : "outline"}
-                  size="sm"
-                  onClick={() => setSlaFilter("All")}
-                >
-                  All
-                </Button>
-                <Button
-                  variant={slaFilter === "With Response SLA" ? "default" : "outline"}
-                  size="sm"
-                  onClick={() => setSlaFilter("With Response SLA")}
-                >
-                  With Response SLA
-                </Button>
-                <Button
-                  variant={slaFilter === "Resolution Only" ? "default" : "outline"}
-                  size="sm"
-                  onClick={() => setSlaFilter("Resolution Only")}
-                >
-                  Resolution Only
-                </Button>
-              </div>
+            <span className="text-sm font-medium text-muted-foreground">SLA:</span>
+            <div className="flex flex-wrap gap-2">
+              <Button
+                variant={slaFilter === "All" ? "default" : "outline"}
+                size="sm"
+                onClick={() => setSlaFilter("All")}
+              >
+                All
+              </Button>
+              <Button
+                variant={slaFilter === "With Response SLA" ? "default" : "outline"}
+                size="sm"
+                onClick={() => setSlaFilter("With Response SLA")}
+              >
+                With Response SLA
+              </Button>
+              <Button
+                variant={slaFilter === "Resolution Only" ? "default" : "outline"}
+                size="sm"
+                onClick={() => setSlaFilter("Resolution Only")}
+              >
+                Resolution Only
+              </Button>
             </div>
           </div>
         </Card>
 
+        {/* Summary Section */}
+        <div className="mb-6">
+          <h2 className="mb-4 text-xl font-semibold">Summary</h2>
         {/* Analytics Summary Cards */}
         <div className="mb-6 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
           <Card className="p-6">
@@ -1108,6 +1100,7 @@ Information,Tech,Product Listings,Product Information,Category Query,Product cat
               </p>
             </div>
           </Card>
+        </div>
         </div>
 
         {/* Distribution Charts */}
