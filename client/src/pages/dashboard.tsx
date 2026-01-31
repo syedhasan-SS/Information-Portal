@@ -194,7 +194,7 @@ export default function DashboardPage() {
                   <NavButton onClick={() => setLocation("/analytics")} icon={BarChart3} label="Analytics" />
                 )}
                 {hasPermission("view:config") && (
-                  <NavButton onClick={() => setLocation("/ticket-config")} icon={Settings} label="Config" />
+                  <NavButton onClick={() => setLocation("/ticket-config")} icon={Settings} label="Ticket Manager" />
                 )}
               </nav>
 
