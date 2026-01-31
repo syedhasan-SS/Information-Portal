@@ -100,6 +100,14 @@ export default function TicketConfigPage() {
   const [statusFilter, setStatusFilter] = useState<"All" | "Active" | "Inactive">("All");
   const [slaFilter, setSlaFilter] = useState<"All" | "With Response SLA" | "Resolution Only">("All");
 
+  // Tag filter state
+  const [tagStatusFilter, setTagStatusFilter] = useState<"All" | "Active" | "Inactive">("All");
+  const [tagAutoAppliedFilter, setTagAutoAppliedFilter] = useState<"All" | "Yes" | "No">("All");
+
+  // Custom field filter state
+  const [fieldStatusFilter, setFieldStatusFilter] = useState<"All" | "Enabled" | "Disabled">("All");
+  const [fieldRequiredFilter, setFieldRequiredFilter] = useState<"All" | "Yes" | "No">("All");
+
   // Tags state
   const [showTagDialog, setShowTagDialog] = useState(false);
   const [editingTag, setEditingTag] = useState<any | null>(null);
@@ -140,9 +148,10 @@ export default function TicketConfigPage() {
     return configs.filter(config => {
       // Department filter
       const configDept = config.departmentType || "All";
-      const deptMatch = departmentFilter === "All" ||
-                        configDept === departmentFilter ||
-                        configDept === "All";
+      const deptMatch =
+        departmentFilter === "All"
+          ? true  // Show all configs when "All" is selected
+          : configDept === departmentFilter;  // Show only exact matches
 
       // Request Type filter
       const requestTypeMatch = requestTypeFilter === "All" ||
@@ -182,27 +191,61 @@ export default function TicketConfigPage() {
     },
   });
 
-  // Filter tags based on department
+  // Filter tags based on department and other criteria
   const filteredTags = React.useMemo(() => {
     if (!tags) return [];
-    if (departmentFilter === "All") return tags;
 
     return tags.filter((tag: any) => {
+      // Department filter
       const tagDept = tag.departmentType || "All";
-      return tagDept === departmentFilter || tagDept === "All";
-    });
-  }, [tags, departmentFilter]);
+      const deptMatch =
+        departmentFilter === "All"
+          ? true
+          : tagDept === departmentFilter;
 
-  // Filter custom fields based on department
+      // Status filter
+      const statusMatch =
+        tagStatusFilter === "All" ||
+        (tagStatusFilter === "Active" && tag.isActive) ||
+        (tagStatusFilter === "Inactive" && !tag.isActive);
+
+      // Auto-applied filter
+      const autoAppliedMatch =
+        tagAutoAppliedFilter === "All" ||
+        (tagAutoAppliedFilter === "Yes" && tag.isAutoApplied) ||
+        (tagAutoAppliedFilter === "No" && !tag.isAutoApplied);
+
+      return deptMatch && statusMatch && autoAppliedMatch;
+    });
+  }, [tags, departmentFilter, tagStatusFilter, tagAutoAppliedFilter]);
+
+  // Filter custom fields based on department and other criteria
   const filteredFields = React.useMemo(() => {
     if (!customFields) return [];
-    if (departmentFilter === "All") return customFields;
 
     return customFields.filter((field: any) => {
+      // Department filter
       const fieldDept = field.departmentType || "All";
-      return fieldDept === departmentFilter || fieldDept === "All";
+      const deptMatch =
+        departmentFilter === "All"
+          ? true
+          : fieldDept === departmentFilter;
+
+      // Status filter
+      const statusMatch =
+        fieldStatusFilter === "All" ||
+        (fieldStatusFilter === "Enabled" && field.isEnabled) ||
+        (fieldStatusFilter === "Disabled" && !field.isEnabled);
+
+      // Required filter
+      const requiredMatch =
+        fieldRequiredFilter === "All" ||
+        (fieldRequiredFilter === "Yes" && field.isRequired) ||
+        (fieldRequiredFilter === "No" && !field.isRequired);
+
+      return deptMatch && statusMatch && requiredMatch;
     });
-  }, [customFields, departmentFilter]);
+  }, [customFields, departmentFilter, fieldStatusFilter, fieldRequiredFilter]);
 
   // Create configuration mutation
   const createConfigMutation = useMutation({
@@ -971,136 +1014,46 @@ Information,Tech,Product Listings,Product Information,Category Query,Product cat
       />
 
       <main className="mx-auto max-w-[1600px] px-6 py-8">
-        {/* Filters Section */}
-        <Card className="mb-6 p-4">
-          <div className="flex flex-wrap items-center gap-4">
-            <span className="text-sm font-medium text-muted-foreground">Request Type:</span>
-            <div className="flex flex-wrap gap-2">
-              <Button
-                variant={requestTypeFilter === "All" ? "default" : "outline"}
-                size="sm"
-                onClick={() => setRequestTypeFilter("All")}
-              >
-                All
-              </Button>
-              <Button
-                variant={requestTypeFilter === "Complaint" ? "default" : "outline"}
-                size="sm"
-                onClick={() => setRequestTypeFilter("Complaint")}
-              >
-                Complaint
-              </Button>
-              <Button
-                variant={requestTypeFilter === "Request" ? "default" : "outline"}
-                size="sm"
-                onClick={() => setRequestTypeFilter("Request")}
-              >
-                Request
-              </Button>
-              <Button
-                variant={requestTypeFilter === "Information" ? "default" : "outline"}
-                size="sm"
-                onClick={() => setRequestTypeFilter("Information")}
-              >
-                Information
-              </Button>
-            </div>
-
-            <div className="h-6 w-px bg-border" />
-
-            <span className="text-sm font-medium text-muted-foreground">Status:</span>
-            <div className="flex flex-wrap gap-2">
-              <Button
-                variant={statusFilter === "All" ? "default" : "outline"}
-                size="sm"
-                onClick={() => setStatusFilter("All")}
-              >
-                All
-              </Button>
-              <Button
-                variant={statusFilter === "Active" ? "default" : "outline"}
-                size="sm"
-                onClick={() => setStatusFilter("Active")}
-              >
-                Active
-              </Button>
-              <Button
-                variant={statusFilter === "Inactive" ? "default" : "outline"}
-                size="sm"
-                onClick={() => setStatusFilter("Inactive")}
-              >
-                Inactive
-              </Button>
-            </div>
-
-            <div className="h-6 w-px bg-border" />
-
-            <span className="text-sm font-medium text-muted-foreground">SLA:</span>
-            <div className="flex flex-wrap gap-2">
-              <Button
-                variant={slaFilter === "All" ? "default" : "outline"}
-                size="sm"
-                onClick={() => setSlaFilter("All")}
-              >
-                All
-              </Button>
-              <Button
-                variant={slaFilter === "With Response SLA" ? "default" : "outline"}
-                size="sm"
-                onClick={() => setSlaFilter("With Response SLA")}
-              >
-                With Response SLA
-              </Button>
-              <Button
-                variant={slaFilter === "Resolution Only" ? "default" : "outline"}
-                size="sm"
-                onClick={() => setSlaFilter("Resolution Only")}
-              >
-                Resolution Only
-              </Button>
-            </div>
-          </div>
-        </Card>
-
         {/* Summary Section */}
         <div className="mb-6">
           <h2 className="mb-4 text-xl font-semibold">Summary</h2>
-        {/* Analytics Summary Cards */}
-        <div className="mb-6 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-          <Card className="p-6">
-            <div>
-              <p className="text-sm text-muted-foreground">Total Configurations</p>
-              <p className="mt-2 text-3xl font-bold">{filteredConfigs?.length || 0}</p>
-            </div>
-          </Card>
-
-          <Card className="p-6">
-            <div>
-              <p className="text-sm text-muted-foreground">Active Configs</p>
-              <p className="mt-2 text-3xl font-bold text-green-600">
+          <div className="grid gap-4 sm:grid-cols-3 lg:grid-cols-6">
+            {/* Categories Stats */}
+            <Card className="p-4">
+              <p className="text-xs text-muted-foreground">Total Categories</p>
+              <p className="mt-1 text-2xl font-bold">{filteredConfigs?.length || 0}</p>
+            </Card>
+            <Card className="p-4">
+              <p className="text-xs text-muted-foreground">Active</p>
+              <p className="mt-1 text-2xl font-bold text-green-600">
                 {filteredConfigs?.filter(c => c.isActive).length || 0}
               </p>
-            </div>
-          </Card>
-
-          <Card className="p-6">
-            <div>
-              <p className="text-sm text-muted-foreground">Inactive Configs</p>
-              <p className="mt-2 text-3xl font-bold text-gray-600">
-                {filteredConfigs?.filter(c => !c.isActive).length || 0}
-              </p>
-            </div>
-          </Card>
-
-          <Card className="p-6">
-            <div>
-              <p className="text-sm text-muted-foreground">Issue Types</p>
-              <p className="mt-2 text-3xl font-bold">
+            </Card>
+            <Card className="p-4">
+              <p className="text-xs text-muted-foreground">Issue Types</p>
+              <p className="mt-1 text-2xl font-bold">
                 {filteredConfigs && filteredConfigs.length > 0 ? new Set(filteredConfigs.map(c => c.issueType)).size : 0}
               </p>
-            </div>
-          </Card>
-        </div>
+            </Card>
+
+            {/* Tags Stats */}
+            <Card className="p-4">
+              <p className="text-xs text-muted-foreground">Total Tags</p>
+              <p className="mt-1 text-2xl font-bold">{filteredTags?.length || 0}</p>
+            </Card>
+            <Card className="p-4">
+              <p className="text-xs text-muted-foreground">Active Tags</p>
+              <p className="mt-1 text-2xl font-bold text-green-600">
+                {filteredTags?.filter(t => t.isActive).length || 0}
+              </p>
+            </Card>
+
+            {/* Custom Fields Stats */}
+            <Card className="p-4">
+              <p className="text-xs text-muted-foreground">Total Fields</p>
+              <p className="mt-1 text-2xl font-bold">{filteredFields?.length || 0}</p>
+            </Card>
+          </div>
         </div>
 
         {/* Distribution Charts */}
@@ -1256,6 +1209,97 @@ Information,Tech,Product Listings,Product Information,Category Query,Product cat
                   </div>
                 )}
               </div>
+
+              {/* Category Filters */}
+              <Card className="mb-4 p-4">
+                <div className="flex flex-wrap items-center gap-4">
+                  <span className="text-sm font-medium text-muted-foreground">Request Type:</span>
+                  <div className="flex flex-wrap gap-2">
+                    <Button
+                      variant={requestTypeFilter === "All" ? "default" : "outline"}
+                      size="sm"
+                      onClick={() => setRequestTypeFilter("All")}
+                    >
+                      All
+                    </Button>
+                    <Button
+                      variant={requestTypeFilter === "Complaint" ? "default" : "outline"}
+                      size="sm"
+                      onClick={() => setRequestTypeFilter("Complaint")}
+                    >
+                      Complaint
+                    </Button>
+                    <Button
+                      variant={requestTypeFilter === "Request" ? "default" : "outline"}
+                      size="sm"
+                      onClick={() => setRequestTypeFilter("Request")}
+                    >
+                      Request
+                    </Button>
+                    <Button
+                      variant={requestTypeFilter === "Information" ? "default" : "outline"}
+                      size="sm"
+                      onClick={() => setRequestTypeFilter("Information")}
+                    >
+                      Information
+                    </Button>
+                  </div>
+
+                  <div className="h-6 w-px bg-border" />
+
+                  <span className="text-sm font-medium text-muted-foreground">Status:</span>
+                  <div className="flex flex-wrap gap-2">
+                    <Button
+                      variant={statusFilter === "All" ? "default" : "outline"}
+                      size="sm"
+                      onClick={() => setStatusFilter("All")}
+                    >
+                      All
+                    </Button>
+                    <Button
+                      variant={statusFilter === "Active" ? "default" : "outline"}
+                      size="sm"
+                      onClick={() => setStatusFilter("Active")}
+                    >
+                      Active
+                    </Button>
+                    <Button
+                      variant={statusFilter === "Inactive" ? "default" : "outline"}
+                      size="sm"
+                      onClick={() => setStatusFilter("Inactive")}
+                    >
+                      Inactive
+                    </Button>
+                  </div>
+
+                  <div className="h-6 w-px bg-border" />
+
+                  <span className="text-sm font-medium text-muted-foreground">SLA:</span>
+                  <div className="flex flex-wrap gap-2">
+                    <Button
+                      variant={slaFilter === "All" ? "default" : "outline"}
+                      size="sm"
+                      onClick={() => setSlaFilter("All")}
+                    >
+                      All
+                    </Button>
+                    <Button
+                      variant={slaFilter === "With Response SLA" ? "default" : "outline"}
+                      size="sm"
+                      onClick={() => setSlaFilter("With Response SLA")}
+                    >
+                      With Response SLA
+                    </Button>
+                    <Button
+                      variant={slaFilter === "Resolution Only" ? "default" : "outline"}
+                      size="sm"
+                      onClick={() => setSlaFilter("Resolution Only")}
+                    >
+                      Resolution Only
+                    </Button>
+                  </div>
+                </div>
+              </Card>
             </div>
           </>
         )}
@@ -1371,45 +1415,6 @@ Information,Tech,Product Listings,Product Information,Category Query,Product cat
         </Card>
 
         {/* Tags Management Section */}
-        <div className="mt-6">
-          <h2 className="mb-4 text-xl font-semibold">Tags Summary</h2>
-          <div className="mb-6 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-            <Card className="p-6">
-              <div>
-                <p className="text-sm text-muted-foreground">Total Tags</p>
-                <p className="mt-2 text-3xl font-bold">{filteredTags?.length || 0}</p>
-              </div>
-            </Card>
-
-            <Card className="p-6">
-              <div>
-                <p className="text-sm text-muted-foreground">Active Tags</p>
-                <p className="mt-2 text-3xl font-bold text-green-600">
-                  {filteredTags?.filter(t => t.isActive).length || 0}
-                </p>
-              </div>
-            </Card>
-
-            <Card className="p-6">
-              <div>
-                <p className="text-sm text-muted-foreground">Inactive Tags</p>
-                <p className="mt-2 text-3xl font-bold text-gray-600">
-                  {filteredTags?.filter(t => !t.isActive).length || 0}
-                </p>
-              </div>
-            </Card>
-
-            <Card className="p-6">
-              <div>
-                <p className="text-sm text-muted-foreground">Auto-Applied</p>
-                <p className="mt-2 text-3xl font-bold">
-                  {filteredTags?.filter(t => t.isAutoApplied).length || 0}
-                </p>
-              </div>
-            </Card>
-          </div>
-        </div>
-
         <Card className="mt-6">
           <div className="flex items-center justify-between border-b p-6">
             <div>
@@ -1423,6 +1428,63 @@ Information,Tech,Product Listings,Product Information,Category Query,Product cat
               <Plus className="mr-2 h-4 w-4" />
               Add Tag
             </Button>
+          </div>
+
+          {/* Tag Filters */}
+          <div className="border-b p-4">
+            <div className="flex flex-wrap items-center gap-4">
+              <span className="text-sm font-medium text-muted-foreground">Status:</span>
+              <div className="flex flex-wrap gap-2">
+                <Button
+                  variant={tagStatusFilter === "All" ? "default" : "outline"}
+                  size="sm"
+                  onClick={() => setTagStatusFilter("All")}
+                >
+                  All
+                </Button>
+                <Button
+                  variant={tagStatusFilter === "Active" ? "default" : "outline"}
+                  size="sm"
+                  onClick={() => setTagStatusFilter("Active")}
+                >
+                  Active
+                </Button>
+                <Button
+                  variant={tagStatusFilter === "Inactive" ? "default" : "outline"}
+                  size="sm"
+                  onClick={() => setTagStatusFilter("Inactive")}
+                >
+                  Inactive
+                </Button>
+              </div>
+
+              <div className="h-6 w-px bg-border" />
+
+              <span className="text-sm font-medium text-muted-foreground">Auto-Applied:</span>
+              <div className="flex flex-wrap gap-2">
+                <Button
+                  variant={tagAutoAppliedFilter === "All" ? "default" : "outline"}
+                  size="sm"
+                  onClick={() => setTagAutoAppliedFilter("All")}
+                >
+                  All
+                </Button>
+                <Button
+                  variant={tagAutoAppliedFilter === "Yes" ? "default" : "outline"}
+                  size="sm"
+                  onClick={() => setTagAutoAppliedFilter("Yes")}
+                >
+                  Yes
+                </Button>
+                <Button
+                  variant={tagAutoAppliedFilter === "No" ? "default" : "outline"}
+                  size="sm"
+                  onClick={() => setTagAutoAppliedFilter("No")}
+                >
+                  No
+                </Button>
+              </div>
+            </div>
           </div>
 
           {isLoadingTags ? (
@@ -1479,45 +1541,6 @@ Information,Tech,Product Listings,Product Information,Category Query,Product cat
         </Card>
 
         {/* Custom Field Manager Section */}
-        <div className="mt-6">
-          <h2 className="mb-4 text-xl font-semibold">Custom Fields Summary</h2>
-          <div className="mb-6 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-            <Card className="p-6">
-              <div>
-                <p className="text-sm text-muted-foreground">Total Fields</p>
-                <p className="mt-2 text-3xl font-bold">{filteredFields?.length || 0}</p>
-              </div>
-            </Card>
-
-            <Card className="p-6">
-              <div>
-                <p className="text-sm text-muted-foreground">Enabled Fields</p>
-                <p className="mt-2 text-3xl font-bold text-green-600">
-                  {filteredFields?.filter(f => f.isEnabled).length || 0}
-                </p>
-              </div>
-            </Card>
-
-            <Card className="p-6">
-              <div>
-                <p className="text-sm text-muted-foreground">Disabled Fields</p>
-                <p className="mt-2 text-3xl font-bold text-gray-600">
-                  {filteredFields?.filter(f => !f.isEnabled).length || 0}
-                </p>
-              </div>
-            </Card>
-
-            <Card className="p-6">
-              <div>
-                <p className="text-sm text-muted-foreground">Required Fields</p>
-                <p className="mt-2 text-3xl font-bold">
-                  {filteredFields?.filter(f => f.isRequired).length || 0}
-                </p>
-              </div>
-            </Card>
-          </div>
-        </div>
-
         <Card className="mt-6">
           <div className="flex items-center justify-between border-b p-6">
             <div>
@@ -1531,6 +1554,63 @@ Information,Tech,Product Listings,Product Information,Category Query,Product cat
               <Plus className="mr-2 h-4 w-4" />
               Add Custom Field
             </Button>
+          </div>
+
+          {/* Custom Field Filters */}
+          <div className="border-b p-4">
+            <div className="flex flex-wrap items-center gap-4">
+              <span className="text-sm font-medium text-muted-foreground">Status:</span>
+              <div className="flex flex-wrap gap-2">
+                <Button
+                  variant={fieldStatusFilter === "All" ? "default" : "outline"}
+                  size="sm"
+                  onClick={() => setFieldStatusFilter("All")}
+                >
+                  All
+                </Button>
+                <Button
+                  variant={fieldStatusFilter === "Enabled" ? "default" : "outline"}
+                  size="sm"
+                  onClick={() => setFieldStatusFilter("Enabled")}
+                >
+                  Enabled
+                </Button>
+                <Button
+                  variant={fieldStatusFilter === "Disabled" ? "default" : "outline"}
+                  size="sm"
+                  onClick={() => setFieldStatusFilter("Disabled")}
+                >
+                  Disabled
+                </Button>
+              </div>
+
+              <div className="h-6 w-px bg-border" />
+
+              <span className="text-sm font-medium text-muted-foreground">Required:</span>
+              <div className="flex flex-wrap gap-2">
+                <Button
+                  variant={fieldRequiredFilter === "All" ? "default" : "outline"}
+                  size="sm"
+                  onClick={() => setFieldRequiredFilter("All")}
+                >
+                  All
+                </Button>
+                <Button
+                  variant={fieldRequiredFilter === "Yes" ? "default" : "outline"}
+                  size="sm"
+                  onClick={() => setFieldRequiredFilter("Yes")}
+                >
+                  Yes
+                </Button>
+                <Button
+                  variant={fieldRequiredFilter === "No" ? "default" : "outline"}
+                  size="sm"
+                  onClick={() => setFieldRequiredFilter("No")}
+                >
+                  No
+                </Button>
+              </div>
+            </div>
           </div>
 
           {isLoadingFields ? (

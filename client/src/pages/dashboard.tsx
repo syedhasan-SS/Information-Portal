@@ -167,9 +167,12 @@ export default function DashboardPage() {
               <img
                 src="/fleek-logo.png"
                 alt="Fleek Logo"
-                className="h-10"
+                className="h-10 w-10 rounded-full object-cover"
               />
               <div>
+                <h1 className="font-serif text-xl font-bold tracking-tight text-black">
+                  FLOW
+                </h1>
                 <p className="text-xs text-muted-foreground">Fleek Complaint Management Portal</p>
               </div>
             </div>
@@ -222,13 +225,16 @@ export default function DashboardPage() {
               {user && (
                 <DropdownMenu>
                   <DropdownMenuTrigger asChild>
-                    <Button variant="ghost" size="icon" className="relative">
+                    <Button variant="ghost" className="relative gap-2 px-3">
                       <Avatar className="h-9 w-9">
                         <AvatarImage src={user.profilePicture || undefined} alt={user.name} />
                         <AvatarFallback className="text-sm font-medium">
                           {user.name.split(' ').map(n => n[0]).join('').toUpperCase()}
                         </AvatarFallback>
                       </Avatar>
+                      <span className="text-sm font-medium">
+                        {user.name.split(' ').map(n => n[0]).join('').toUpperCase()}
+                      </span>
                     </Button>
                   </DropdownMenuTrigger>
                   <DropdownMenuContent align="end" className="w-56">
