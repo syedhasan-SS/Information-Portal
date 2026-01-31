@@ -6,6 +6,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { PasswordInput } from "@/components/ui/password-input";
 import { Badge } from "@/components/ui/badge";
+import { Avatar, AvatarImage, AvatarFallback } from "@/components/ui/avatar";
 import {
   Select,
   SelectContent,
@@ -27,6 +28,8 @@ import {
   MoreVertical,
   Key,
   Shield,
+  Eye,
+  EyeOff,
 } from "lucide-react";
 import {
   DropdownMenu,
@@ -83,6 +86,7 @@ async function createUser(data: {
   password: string;
   name: string;
   role: string;
+  roles?: string[];
   department?: string;
 }): Promise<User> {
   const res = await fetch("/api/users", {
@@ -101,6 +105,7 @@ async function updateUser(id: number, data: {
   name?: string;
   email?: string;
   role?: string;
+  roles?: string[];
   department?: string;
 }): Promise<User> {
   const res = await fetch(`/api/users/${id}`, {
@@ -159,6 +164,7 @@ export default function UsersPage() {
     role: "",
     department: "",
   });
+  const [selectedRoles, setSelectedRoles] = useState<string[]>([]);
   const [error, setError] = useState("");
   const [success, setSuccess] = useState("");
   const [editingUser, setEditingUser] = useState<User | null>(null);
@@ -169,10 +175,12 @@ export default function UsersPage() {
     role: "",
     department: "",
   });
+  const [editSelectedRoles, setEditSelectedRoles] = useState<string[]>([]);
   const [changingPasswordUser, setChangingPasswordUser] = useState<User | null>(null);
   const [newPassword, setNewPassword] = useState("");
   const [managingPermissionsUser, setManagingPermissionsUser] = useState<User | null>(null);
   const [selectedPermissions, setSelectedPermissions] = useState<string[]>([]);
+  const [visiblePasswords, setVisiblePasswords] = useState<Set<number>>(new Set());
 
   const queryClient = useQueryClient();
 
@@ -186,6 +194,7 @@ export default function UsersPage() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["users"] });
       setFormData({ name: "", email: "", password: "", role: "", department: "" });
+      setSelectedRoles([]);
       setShowForm(false);
       setSuccess("User created successfully!");
       setError("");
@@ -202,6 +211,7 @@ export default function UsersPage() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["users"] });
       setEditingUser(null);
+      setEditSelectedRoles([]);
       setSuccess("User updated successfully!");
       setError("");
       setTimeout(() => setSuccess(""), 3000);
@@ -271,6 +281,7 @@ export default function UsersPage() {
 
     mutation.mutate({
       ...formData,
+      roles: selectedRoles.length > 0 ? selectedRoles : undefined,
       department: formData.department || undefined,
     });
   };
@@ -283,6 +294,7 @@ export default function UsersPage() {
       role: user.role,
       department: user.department || "",
     });
+    setEditSelectedRoles(user.roles || []);
   };
 
   const handleEditSubmit = (e: React.FormEvent) => {
@@ -299,6 +311,7 @@ export default function UsersPage() {
       id: editingUser.id,
       data: {
         ...editFormData,
+        roles: editSelectedRoles.length > 0 ? editSelectedRoles : undefined,
         department: editFormData.department || undefined,
       },
     });
@@ -349,6 +362,30 @@ export default function UsersPage() {
         ? prev.filter((p) => p !== permissionId)
         : [...prev, permissionId]
     );
+  };
+
+  const togglePasswordVisibility = (userId: number) => {
+    setVisiblePasswords((prev) => {
+      const newSet = new Set(prev);
+      if (newSet.has(userId)) {
+        newSet.delete(userId);
+      } else {
+        newSet.add(userId);
+      }
+      return newSet;
+    });
+  };
+
+  const toggleRole = (role: string, isEdit: boolean = false) => {
+    if (isEdit) {
+      setEditSelectedRoles((prev) =>
+        prev.includes(role) ? prev.filter((r) => r !== role) : [...prev, role]
+      );
+    } else {
+      setSelectedRoles((prev) =>
+        prev.includes(role) ? prev.filter((r) => r !== role) : [...prev, role]
+      );
+    }
   };
 
   const roleColors: Record<string, string> = {
@@ -524,13 +561,13 @@ export default function UsersPage() {
                 </div>
 
                 <div className="space-y-2">
-                  <Label htmlFor="role">Role *</Label>
+                  <Label htmlFor="role">Primary Role *</Label>
                   <Select
                     value={formData.role}
                     onValueChange={(value) => setFormData({ ...formData, role: value })}
                   >
                     <SelectTrigger data-testid="select-role">
-                      <SelectValue placeholder="Select role" />
+                      <SelectValue placeholder="Select primary role" />
                     </SelectTrigger>
                     <SelectContent>
                       {ROLES.map((role) => (
@@ -540,6 +577,30 @@ export default function UsersPage() {
                       ))}
                     </SelectContent>
                   </Select>
+                </div>
+
+                <div className="space-y-2 sm:col-span-2">
+                  <Label>Additional Roles (optional)</Label>
+                  <div className="grid grid-cols-2 gap-3 rounded-lg border p-4">
+                    {ROLES.map((role) => (
+                      <div key={role} className="flex items-center space-x-2">
+                        <Checkbox
+                          id={`role-${role}`}
+                          checked={selectedRoles.includes(role)}
+                          onCheckedChange={() => toggleRole(role, false)}
+                        />
+                        <Label
+                          htmlFor={`role-${role}`}
+                          className="text-sm font-normal cursor-pointer"
+                        >
+                          {role}
+                        </Label>
+                      </div>
+                    ))}
+                  </div>
+                  <p className="text-xs text-muted-foreground">
+                    Select additional roles to assign multiple responsibilities (e.g., Department Head + Admin)
+                  </p>
                 </div>
 
                 <div className="space-y-2 sm:col-span-2">
@@ -603,61 +664,97 @@ export default function UsersPage() {
             </div>
           ) : users && users.length > 0 ? (
             <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-              {users.map((user) => (
-                <Card key={user.id} className="p-5" data-testid={`card-user-${user.id}`}>
-                  <div className="space-y-3">
-                    <div className="flex items-start justify-between">
-                      <div className="flex-1">
-                        <h3 className="font-semibold text-foreground">{user.name}</h3>
-                        <p className="text-sm text-muted-foreground">{user.email}</p>
-                        <p className="mt-1 text-xs text-muted-foreground">
-                          Password: <span className="font-mono">{user.password}</span>
-                        </p>
+              {users.map((user) => {
+                const initials = user.name.split(' ').map(n => n[0]).join('').toUpperCase();
+                const isPasswordVisible = visiblePasswords.has(user.id);
+
+                return (
+                  <Card key={user.id} className="p-5" data-testid={`card-user-${user.id}`}>
+                    <div className="space-y-3">
+                      <div className="flex items-start gap-3">
+                        <Avatar className="h-12 w-12 flex-shrink-0">
+                          <AvatarImage src={user.profilePicture || undefined} alt={user.name} />
+                          <AvatarFallback className="text-sm font-medium bg-accent text-accent-foreground">
+                            {initials}
+                          </AvatarFallback>
+                        </Avatar>
+                        <div className="flex-1 min-w-0">
+                          <div className="flex items-start justify-between">
+                            <div className="flex-1 min-w-0">
+                              <h3 className="font-semibold text-foreground truncate">{user.name}</h3>
+                              <p className="text-sm text-muted-foreground truncate">{user.email}</p>
+                              <div className="mt-1 flex items-center gap-2">
+                                <p className="text-xs text-muted-foreground">
+                                  Password: <span className="font-mono">{isPasswordVisible ? user.password : '••••••••'}</span>
+                                </p>
+                                <Button
+                                  variant="ghost"
+                                  size="sm"
+                                  className="h-5 w-5 p-0"
+                                  onClick={() => togglePasswordVisibility(user.id)}
+                                >
+                                  {isPasswordVisible ? (
+                                    <EyeOff className="h-3 w-3" />
+                                  ) : (
+                                    <Eye className="h-3 w-3" />
+                                  )}
+                                </Button>
+                              </div>
+                            </div>
+                            <DropdownMenu>
+                              <DropdownMenuTrigger asChild>
+                                <Button variant="ghost" size="sm" className="h-8 w-8 p-0">
+                                  <MoreVertical className="h-4 w-4" />
+                                </Button>
+                              </DropdownMenuTrigger>
+                              <DropdownMenuContent align="end">
+                                <DropdownMenuItem onClick={() => handleEditClick(user)}>
+                                  <Edit className="mr-2 h-4 w-4" />
+                                  Edit
+                                </DropdownMenuItem>
+                                <DropdownMenuItem onClick={() => setChangingPasswordUser(user)}>
+                                  <Key className="mr-2 h-4 w-4" />
+                                  Change Password
+                                </DropdownMenuItem>
+                                <DropdownMenuItem onClick={() => handleManagePermissions(user)}>
+                                  <Shield className="mr-2 h-4 w-4" />
+                                  Manage Permissions
+                                </DropdownMenuItem>
+                                <DropdownMenuItem
+                                  onClick={() => setDeletingUserId(user.id)}
+                                  className="text-destructive focus:text-destructive"
+                                >
+                                  <Trash2 className="mr-2 h-4 w-4" />
+                                  Delete
+                                </DropdownMenuItem>
+                              </DropdownMenuContent>
+                            </DropdownMenu>
+                          </div>
+                        </div>
                       </div>
-                      <DropdownMenu>
-                        <DropdownMenuTrigger asChild>
-                          <Button variant="ghost" size="sm" className="h-8 w-8 p-0">
-                            <MoreVertical className="h-4 w-4" />
-                          </Button>
-                        </DropdownMenuTrigger>
-                        <DropdownMenuContent align="end">
-                          <DropdownMenuItem onClick={() => handleEditClick(user)}>
-                            <Edit className="mr-2 h-4 w-4" />
-                            Edit
-                          </DropdownMenuItem>
-                          <DropdownMenuItem onClick={() => setChangingPasswordUser(user)}>
-                            <Key className="mr-2 h-4 w-4" />
-                            Change Password
-                          </DropdownMenuItem>
-                          <DropdownMenuItem onClick={() => handleManagePermissions(user)}>
-                            <Shield className="mr-2 h-4 w-4" />
-                            Manage Permissions
-                          </DropdownMenuItem>
-                          <DropdownMenuItem
-                            onClick={() => setDeletingUserId(user.id)}
-                            className="text-destructive focus:text-destructive"
-                          >
-                            <Trash2 className="mr-2 h-4 w-4" />
-                            Delete
-                          </DropdownMenuItem>
-                        </DropdownMenuContent>
-                      </DropdownMenu>
+                      <div className="flex flex-wrap items-center gap-2">
+                        <Badge className={cn("border", roleColors[user.role])} variant="outline">
+                          {user.role}
+                        </Badge>
+                        {user.roles && user.roles.length > 0 && user.roles.map((role) => (
+                          role !== user.role && (
+                            <Badge key={role} className={cn("border", roleColors[role])} variant="outline">
+                              {role}
+                            </Badge>
+                          )
+                        ))}
+                        {user.department && (
+                          <Badge variant="secondary">{user.department}</Badge>
+                        )}
+                      </div>
+                      <div className="flex items-center justify-between text-xs text-muted-foreground">
+                        <span>{user.isActive ? "Active" : "Inactive"}</span>
+                        <span>Created {new Date(user.createdAt).toLocaleDateString()}</span>
+                      </div>
                     </div>
-                    <div className="flex flex-wrap items-center gap-2">
-                      <Badge className={cn("border", roleColors[user.role])} variant="outline">
-                        {user.role}
-                      </Badge>
-                      {user.department && (
-                        <Badge variant="secondary">{user.department}</Badge>
-                      )}
-                    </div>
-                    <div className="flex items-center justify-between text-xs text-muted-foreground">
-                      <span>{user.isActive ? "Active" : "Inactive"}</span>
-                      <span>Created {new Date(user.createdAt).toLocaleDateString()}</span>
-                    </div>
-                  </div>
-                </Card>
-              ))}
+                  </Card>
+                );
+              })}
             </div>
           ) : (
             <Card className="p-12 text-center">
@@ -715,13 +812,13 @@ export default function UsersPage() {
             </div>
 
             <div className="space-y-2">
-              <Label htmlFor="edit-role">Role *</Label>
+              <Label htmlFor="edit-role">Primary Role *</Label>
               <Select
                 value={editFormData.role}
                 onValueChange={(value) => setEditFormData({ ...editFormData, role: value })}
               >
                 <SelectTrigger>
-                  <SelectValue placeholder="Select role" />
+                  <SelectValue placeholder="Select primary role" />
                 </SelectTrigger>
                 <SelectContent>
                   {ROLES.map((role) => (
@@ -731,6 +828,30 @@ export default function UsersPage() {
                   ))}
                 </SelectContent>
               </Select>
+            </div>
+
+            <div className="space-y-2">
+              <Label>Additional Roles (optional)</Label>
+              <div className="grid grid-cols-2 gap-3 rounded-lg border p-4">
+                {ROLES.map((role) => (
+                  <div key={role} className="flex items-center space-x-2">
+                    <Checkbox
+                      id={`edit-role-${role}`}
+                      checked={editSelectedRoles.includes(role)}
+                      onCheckedChange={() => toggleRole(role, true)}
+                    />
+                    <Label
+                      htmlFor={`edit-role-${role}`}
+                      className="text-sm font-normal cursor-pointer"
+                    >
+                      {role}
+                    </Label>
+                  </div>
+                ))}
+              </div>
+              <p className="text-xs text-muted-foreground">
+                Select additional roles to assign multiple responsibilities
+              </p>
             </div>
 
             <div className="space-y-2">

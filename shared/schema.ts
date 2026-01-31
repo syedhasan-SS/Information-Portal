@@ -148,6 +148,7 @@ export const users = pgTable("users", {
   password: text("password").notNull(),
   name: text("name").notNull(),
   role: text("role").notNull().$type<"Owner" | "Admin" | "Seller Support Agent" | "Department Head" | "Department Manager" | "Department Agent">(),
+  roles: text("roles").array().$type<Array<"Owner" | "Admin" | "Seller Support Agent" | "Department Head" | "Department Manager" | "Department Agent">>(), // Multi-role support
   department: text("department").$type<"Finance" | "Operations" | "Marketplace" | "Tech" | "Experience" | "CX" | "Seller Support">(),
   profilePicture: text("profile_picture"),
   customPermissions: text("custom_permissions").array(), // Agent-level custom permissions
