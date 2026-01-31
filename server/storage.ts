@@ -128,8 +128,148 @@ export class DatabaseStorage implements IStorage {
   }
 
   async createTicket(ticket: InsertTicket): Promise<Ticket> {
-    const results = await db.insert(tickets).values(ticket).returning();
+    // Capture configuration snapshots
+    const snapshots = await this.captureConfigurationSnapshots(ticket);
+
+    // Insert ticket with snapshots
+    const results = await db.insert(tickets).values({
+      ...ticket,
+      ...snapshots,
+    }).returning();
+
     return results[0];
+  }
+
+  /**
+   * Captures immutable snapshots of all configuration data at ticket creation time
+   */
+  private async captureConfigurationSnapshots(ticketData: InsertTicket) {
+    // Fetch configuration data in parallel
+    const [category, slaConfig, tagsData] = await Promise.all([
+      this.getCategoryById(ticketData.categoryId),
+      this.findMatchingSlaConfiguration(ticketData.categoryId, ticketData.department),
+      ticketData.tags ? this.getTagsByNames(ticketData.tags) : Promise.resolve([]),
+    ]);
+
+    if (!category) {
+      throw new Error(`Category ${ticketData.categoryId} not found`);
+    }
+
+    // Build category snapshot
+    const categorySnapshot = {
+      categoryId: ticketData.categoryId,
+      issueType: ticketData.issueType,
+      l1: category.l1,
+      l2: category.l2,
+      l3: category.l3,
+      l4: category.l4,
+      path: category.path,
+      departmentType: category.departmentType,
+      issuePriorityPoints: category.issuePriorityPoints,
+    };
+
+    // Build SLA snapshot
+    const now = ticketData.createdAt || new Date();
+    const slaSnapshot = {
+      configurationId: slaConfig?.id,
+      responseTimeHours: slaConfig?.responseTimeHours || null,
+      resolutionTimeHours: slaConfig?.resolutionTimeHours || 24,
+      useBusinessHours: slaConfig?.useBusinessHours || false,
+      responseTarget: slaConfig?.responseTimeHours
+        ? this.calculateSlaTarget(now, slaConfig.responseTimeHours, slaConfig.useBusinessHours || false)
+        : null,
+      resolveTarget: this.calculateSlaTarget(
+        now,
+        slaConfig?.resolutionTimeHours || 24,
+        slaConfig?.useBusinessHours || false
+      ),
+    };
+
+    // Build priority snapshot (using existing priority calculation data)
+    const prioritySnapshot = {
+      configurationId: undefined, // Could be added if priority configs are matched
+      score: ticketData.priorityScore || 0,
+      tier: ticketData.priorityTier || "Low",
+      badge: ticketData.priorityBadge || "P3",
+      breakdown: ticketData.priorityBreakdown || {
+        vendorTicketVolume: 0,
+        vendorGmvTier: "Unknown",
+        issuePriorityPoints: 0,
+        gmvPoints: 0,
+        ticketHistoryPoints: 0,
+        issuePoints: 0,
+      },
+    };
+
+    // Build tags snapshot
+    const tagsSnapshot = tagsData.map(tag => ({
+      id: tag.id,
+      name: tag.name,
+      color: tag.color || undefined,
+      departmentType: tag.departmentType || undefined,
+      appliedAt: now.toISOString(),
+    }));
+
+    return {
+      categorySnapshot,
+      slaSnapshot,
+      prioritySnapshot,
+      tagsSnapshot,
+      snapshotVersion: 1,
+      snapshotCapturedAt: now,
+    };
+  }
+
+  /**
+   * Calculates SLA target timestamp
+   */
+  private calculateSlaTarget(startTime: Date, hours: number, useBusinessHours: boolean): string {
+    // For now, simple calculation (business hours logic can be added later)
+    const targetTime = new Date(startTime);
+    targetTime.setHours(targetTime.getHours() + hours);
+    return targetTime.toISOString();
+  }
+
+  /**
+   * Finds matching SLA configuration for a category and department
+   */
+  private async findMatchingSlaConfiguration(
+    categoryId: string,
+    department: string
+  ): Promise<SlaConfiguration | undefined> {
+    const allConfigs = await this.getSlaConfigurations();
+
+    // Try to find exact match first
+    let match = allConfigs.find(
+      config =>
+        config.isActive &&
+        config.categoryId === categoryId &&
+        config.department === department
+    );
+
+    // Fallback to "All" department if no exact match
+    if (!match) {
+      match = allConfigs.find(
+        config =>
+          config.isActive &&
+          config.categoryId === categoryId &&
+          config.department === "All"
+      );
+    }
+
+    return match;
+  }
+
+  /**
+   * Gets tags by their names
+   */
+  private async getTagsByNames(tagNames: string[]): Promise<Tag[]> {
+    if (!tagNames || tagNames.length === 0) {
+      return [];
+    }
+
+    const allTags = await this.getTags();
+    return allTags.filter(tag => tagNames.includes(tag.name));
   }
 
   async updateTicket(id: string, updates: Partial<InsertTicket>): Promise<Ticket | undefined> {
@@ -252,8 +392,34 @@ export class DatabaseStorage implements IStorage {
     return results[0];
   }
 
-  async deleteCategoryHierarchy(id: string): Promise<void> {
-    await db.delete(categoryHierarchy).where(eq(categoryHierarchy.id, id));
+  async deleteCategoryHierarchy(id: string, userId?: string): Promise<CategoryHierarchy | undefined> {
+    const results = await db
+      .update(categoryHierarchy)
+      .set({
+        deletedAt: new Date(),
+        deletedById: userId || null,
+        updatedAt: new Date(),
+        updatedById: userId || null,
+        isActive: false,
+      })
+      .where(eq(categoryHierarchy.id, id))
+      .returning();
+    return results[0];
+  }
+
+  async restoreCategoryHierarchy(id: string, userId?: string): Promise<CategoryHierarchy | undefined> {
+    const results = await db
+      .update(categoryHierarchy)
+      .set({
+        deletedAt: null,
+        deletedById: null,
+        updatedAt: new Date(),
+        updatedById: userId || null,
+        isActive: true,
+      })
+      .where(eq(categoryHierarchy.id, id))
+      .returning();
+    return results[0];
   }
 
   // Category Mappings
@@ -340,8 +506,15 @@ export class DatabaseStorage implements IStorage {
   }
 
   // Tags
-  async getTags(): Promise<Tag[]> {
-    return await db.select().from(tags).orderBy(tags.name);
+  async getTags(includeDeleted: boolean = false): Promise<Tag[]> {
+    if (includeDeleted) {
+      return await db.select().from(tags).orderBy(tags.name);
+    }
+    return await db
+      .select()
+      .from(tags)
+      .where(isNull(tags.deletedAt))
+      .orderBy(tags.name);
   }
 
   async getTagById(id: string): Promise<Tag | undefined> {
@@ -363,8 +536,34 @@ export class DatabaseStorage implements IStorage {
     return results[0];
   }
 
-  async deleteTag(id: string): Promise<void> {
-    await db.delete(tags).where(eq(tags.id, id));
+  async deleteTag(id: string, userId?: string): Promise<Tag | undefined> {
+    const results = await db
+      .update(tags)
+      .set({
+        deletedAt: new Date(),
+        deletedById: userId || null,
+        updatedAt: new Date(),
+        updatedById: userId || null,
+        isActive: false,
+      })
+      .where(eq(tags.id, id))
+      .returning();
+    return results[0];
+  }
+
+  async restoreTag(id: string, userId?: string): Promise<Tag | undefined> {
+    const results = await db
+      .update(tags)
+      .set({
+        deletedAt: null,
+        deletedById: null,
+        updatedAt: new Date(),
+        updatedById: userId || null,
+        isActive: true,
+      })
+      .where(eq(tags.id, id))
+      .returning();
+    return results[0];
   }
 
   // Category Settings
@@ -391,8 +590,32 @@ export class DatabaseStorage implements IStorage {
     return results[0];
   }
 
-  async deleteCategorySettings(id: string): Promise<void> {
-    await db.delete(categorySettings).where(eq(categorySettings.id, id));
+  async deleteCategorySettings(id: string, userId?: string): Promise<CategorySettings | undefined> {
+    const results = await db
+      .update(categorySettings)
+      .set({
+        deletedAt: new Date(),
+        deletedById: userId || null,
+        updatedAt: new Date(),
+        updatedById: userId || null,
+      })
+      .where(eq(categorySettings.id, id))
+      .returning();
+    return results[0];
+  }
+
+  async restoreCategorySettings(id: string, userId?: string): Promise<CategorySettings | undefined> {
+    const results = await db
+      .update(categorySettings)
+      .set({
+        deletedAt: null,
+        deletedById: null,
+        updatedAt: new Date(),
+        updatedById: userId || null,
+      })
+      .where(eq(categorySettings.id, id))
+      .returning();
+    return results[0];
   }
 
   // Ticket Field Configurations
@@ -425,8 +648,32 @@ export class DatabaseStorage implements IStorage {
     return results[0];
   }
 
-  async deleteTicketFieldConfiguration(id: string): Promise<void> {
-    await db.delete(ticketFieldConfigurations).where(eq(ticketFieldConfigurations.id, id));
+  async deleteTicketFieldConfiguration(id: string, userId?: string): Promise<TicketFieldConfiguration | undefined> {
+    const results = await db
+      .update(ticketFieldConfigurations)
+      .set({
+        deletedAt: new Date(),
+        deletedById: userId || null,
+        updatedAt: new Date(),
+        updatedById: userId || null,
+      })
+      .where(eq(ticketFieldConfigurations.id, id))
+      .returning();
+    return results[0];
+  }
+
+  async restoreTicketFieldConfiguration(id: string, userId?: string): Promise<TicketFieldConfiguration | undefined> {
+    const results = await db
+      .update(ticketFieldConfigurations)
+      .set({
+        deletedAt: null,
+        deletedById: null,
+        updatedAt: new Date(),
+        updatedById: userId || null,
+      })
+      .where(eq(ticketFieldConfigurations.id, id))
+      .returning();
+    return results[0];
   }
 
   // Notifications
@@ -472,8 +719,15 @@ export class DatabaseStorage implements IStorage {
   }
 
   // Category Hierarchy & SLA
-  async getAllCategoryHierarchies(): Promise<CategoryHierarchy[]> {
-    return await db.select().from(categoryHierarchy).orderBy(categoryHierarchy.level, categoryHierarchy.name);
+  async getAllCategoryHierarchies(includeDeleted: boolean = false): Promise<CategoryHierarchy[]> {
+    if (includeDeleted) {
+      return await db.select().from(categoryHierarchy).orderBy(categoryHierarchy.level, categoryHierarchy.name);
+    }
+    return await db
+      .select()
+      .from(categoryHierarchy)
+      .where(isNull(categoryHierarchy.deletedAt))
+      .orderBy(categoryHierarchy.level, categoryHierarchy.name);
   }
 
   async getAllSlaConfigurations(): Promise<SlaConfiguration[]> {

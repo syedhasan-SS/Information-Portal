@@ -20,6 +20,7 @@ import {
   notifyMentions,
   getCurrentUser,
 } from "./notifications";
+import { auditService } from "./audit-service";
 
 export async function registerRoutes(
   httpServer: Server,
@@ -1468,6 +1469,166 @@ export async function registerRoutes(
         configured: !!(process.env.BIGQUERY_PROJECT_ID),
       });
     } catch (error: any) {
+      res.status(500).json({ error: error.message });
+    }
+  });
+
+  // ===== Configuration Audit & History APIs =====
+
+  // Get audit history for a specific entity
+  app.get("/api/config/:entityType/:id/history", async (req, res) => {
+    try {
+      const { entityType, id } = req.params;
+      const limit = parseInt(req.query.limit as string) || 50;
+
+      const validEntityTypes = [
+        "issueType",
+        "categoryHierarchy",
+        "categoryMapping",
+        "slaConfiguration",
+        "priorityConfiguration",
+        "tag",
+        "categorySettings",
+        "ticketFieldConfiguration",
+      ];
+
+      if (!validEntityTypes.includes(entityType)) {
+        return res.status(400).json({ error: "Invalid entity type" });
+      }
+
+      const history = await auditService.getEntityHistory(
+        entityType as any,
+        id,
+        limit
+      );
+      res.json(history);
+    } catch (error: any) {
+      console.error("Error fetching audit history:", error);
+      res.status(500).json({ error: error.message });
+    }
+  });
+
+  // Get recent audit activity across all entities
+  app.get("/api/config/audit/recent", async (req, res) => {
+    try {
+      const limit = parseInt(req.query.limit as string) || 50;
+      const activity = await auditService.getRecentActivity(limit);
+      res.json(activity);
+    } catch (error: any) {
+      console.error("Error fetching recent audit activity:", error);
+      res.status(500).json({ error: error.message });
+    }
+  });
+
+  // Get audit activity by entity type
+  app.get("/api/config/audit/:entityType", async (req, res) => {
+    try {
+      const { entityType } = req.params;
+      const limit = parseInt(req.query.limit as string) || 50;
+
+      const validEntityTypes = [
+        "issueType",
+        "categoryHierarchy",
+        "categoryMapping",
+        "slaConfiguration",
+        "priorityConfiguration",
+        "tag",
+        "categorySettings",
+        "ticketFieldConfiguration",
+      ];
+
+      if (!validEntityTypes.includes(entityType)) {
+        return res.status(400).json({ error: "Invalid entity type" });
+      }
+
+      const activity = await auditService.getActivityByEntityType(
+        entityType as any,
+        limit
+      );
+      res.json(activity);
+    } catch (error: any) {
+      console.error("Error fetching audit activity by type:", error);
+      res.status(500).json({ error: error.message });
+    }
+  });
+
+  // Get user activity log
+  app.get("/api/config/audit/user/:userId", async (req, res) => {
+    try {
+      const { userId } = req.params;
+      const limit = parseInt(req.query.limit as string) || 100;
+      const activity = await auditService.getUserActivityLog(userId, limit);
+      res.json(activity);
+    } catch (error: any) {
+      console.error("Error fetching user activity log:", error);
+      res.status(500).json({ error: error.message });
+    }
+  });
+
+  // Restore deleted configuration
+  app.post("/api/config/:entityType/:id/restore", async (req, res) => {
+    try {
+      const { entityType, id } = req.params;
+      const userId = req.body.userId;
+
+      let restored;
+      switch (entityType) {
+        case "categoryHierarchy":
+          restored = await storage.restoreCategoryHierarchy(id, userId);
+          break;
+        case "tag":
+          restored = await storage.restoreTag(id, userId);
+          break;
+        case "categorySettings":
+          restored = await storage.restoreCategorySettings(id, userId);
+          break;
+        case "ticketFieldConfiguration":
+          restored = await storage.restoreTicketFieldConfiguration(id, userId);
+          break;
+        default:
+          return res.status(400).json({ error: "Entity type does not support restore" });
+      }
+
+      if (!restored) {
+        return res.status(404).json({ error: "Entity not found" });
+      }
+
+      res.json(restored);
+    } catch (error: any) {
+      console.error("Error restoring entity:", error);
+      res.status(500).json({ error: error.message });
+    }
+  });
+
+  // ===== Configuration Enums API =====
+
+  // Get all enum values for dropdowns (UI decoupling)
+  app.get("/api/config/enums", async (_req, res) => {
+    try {
+      const [departments, issueTypes, tags] = await Promise.all([
+        storage.getAllCategoryHierarchies(false),
+        storage.getIssueTypes(),
+        storage.getTags(false),
+      ]);
+
+      const enums = {
+        statuses: ["New", "Open", "Pending", "Solved", "Closed"],
+        priorities: ["Critical", "High", "Medium", "Low"],
+        departments: Array.from(
+          new Set(
+            departments
+              .filter((c) => c.level === 1)
+              .map((c) => c.departmentType)
+              .filter(Boolean)
+          )
+        ),
+        issueTypes: issueTypes.map((it) => it.name),
+        tags: tags.map((t) => ({ id: t.id, name: t.name, color: t.color })),
+      };
+
+      res.json(enums);
+    } catch (error: any) {
+      console.error("Error fetching config enums:", error);
       res.status(500).json({ error: error.message });
     }
   });
