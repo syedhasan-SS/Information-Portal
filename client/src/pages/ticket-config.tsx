@@ -96,6 +96,9 @@ export default function TicketConfigPage() {
 
   // Department filter state
   const [departmentFilter, setDepartmentFilter] = useState<"All" | "Seller Support" | "Customer Support">("All");
+  const [requestTypeFilter, setRequestTypeFilter] = useState<"All" | "Complaint" | "Request" | "Information">("All");
+  const [statusFilter, setStatusFilter] = useState<"All" | "Active" | "Inactive">("All");
+  const [slaFilter, setSlaFilter] = useState<"All" | "With Response SLA" | "Resolution Only">("All");
 
   // Tags state
   const [showTagDialog, setShowTagDialog] = useState(false);
@@ -133,13 +136,31 @@ export default function TicketConfigPage() {
   // Filter configurations based on department
   const filteredConfigs = React.useMemo(() => {
     if (!configs) return [];
-    if (departmentFilter === "All") return configs;
 
     return configs.filter(config => {
+      // Department filter
       const configDept = config.departmentType || "All";
-      return configDept === departmentFilter || configDept === "All";
+      const deptMatch = departmentFilter === "All" ||
+                        configDept === departmentFilter ||
+                        configDept === "All";
+
+      // Request Type filter
+      const requestTypeMatch = requestTypeFilter === "All" ||
+                                config.issueType === requestTypeFilter;
+
+      // Status filter
+      const statusMatch = statusFilter === "All" ||
+                          (statusFilter === "Active" && config.isActive) ||
+                          (statusFilter === "Inactive" && !config.isActive);
+
+      // SLA filter
+      const slaMatch = slaFilter === "All" ||
+                       (slaFilter === "With Response SLA" && config.slaResponseHours) ||
+                       (slaFilter === "Resolution Only" && !config.slaResponseHours);
+
+      return deptMatch && requestTypeMatch && statusMatch && slaMatch;
     });
-  }, [configs, departmentFilter]);
+  }, [configs, departmentFilter, requestTypeFilter, statusFilter, slaFilter]);
 
   // Fetch tags
   const { data: tags, isLoading: isLoadingTags } = useQuery({
@@ -847,61 +868,8 @@ Information,Tech,Product Listings,Product Information,Category Query,Product cat
                   <p className="text-xs text-muted-foreground">Manage categories, tags, and field configurations</p>
                 </div>
               </div>
-              <div className="flex gap-2 ml-8">
-                <Button
-                  variant={departmentFilter === "All" ? "default" : "outline"}
-                  size="sm"
-                  onClick={() => setDepartmentFilter("All")}
-                >
-                  All
-                </Button>
-                <Button
-                  variant={departmentFilter === "Seller Support" ? "default" : "outline"}
-                  size="sm"
-                  onClick={() => setDepartmentFilter("Seller Support")}
-                >
-                  Seller Support
-                </Button>
-                <Button
-                  variant={departmentFilter === "Customer Support" ? "default" : "outline"}
-                  size="sm"
-                  onClick={() => setDepartmentFilter("Customer Support")}
-                >
-                  Customer Support
-                </Button>
-              </div>
             </div>
             <div className="flex gap-2">
-              {selectedConfigs.size > 0 && (
-                <>
-                  <Badge variant="secondary" className="px-3 py-1">
-                    {selectedConfigs.size} selected
-                  </Badge>
-                  <Button
-                    onClick={() => handleBulkActivate(true)}
-                    variant="outline"
-                    size="sm"
-                  >
-                    Activate Selected
-                  </Button>
-                  <Button
-                    onClick={() => handleBulkActivate(false)}
-                    variant="outline"
-                    size="sm"
-                  >
-                    Deactivate Selected
-                  </Button>
-                  <Button
-                    onClick={handleBulkDelete}
-                    variant="outline"
-                    size="sm"
-                    className="text-red-600 hover:text-red-700"
-                  >
-                    <Trash2 className="h-4 w-4" />
-                    Delete Selected
-                  </Button>
-                </>
-              )}
               <Button onClick={downloadCsvTemplate} variant="outline" size="sm">
                 <FileText className="h-4 w-4" />
                 Download Template
@@ -980,6 +948,131 @@ Information,Tech,Product Listings,Product Information,Category Query,Product cat
       />
 
       <main className="mx-auto max-w-[1600px] px-6 py-8">
+        {/* Filters Section */}
+        <Card className="mb-6 p-6">
+          <h2 className="mb-4 text-lg font-semibold">Filters</h2>
+          <div className="space-y-4">
+            {/* Department Filter */}
+            <div>
+              <Label className="mb-2 block text-sm font-medium">Department</Label>
+              <div className="flex flex-wrap gap-2">
+                <Button
+                  variant={departmentFilter === "All" ? "default" : "outline"}
+                  size="sm"
+                  onClick={() => setDepartmentFilter("All")}
+                >
+                  All
+                </Button>
+                <Button
+                  variant={departmentFilter === "Seller Support" ? "default" : "outline"}
+                  size="sm"
+                  onClick={() => setDepartmentFilter("Seller Support")}
+                >
+                  Seller Support
+                </Button>
+                <Button
+                  variant={departmentFilter === "Customer Support" ? "default" : "outline"}
+                  size="sm"
+                  onClick={() => setDepartmentFilter("Customer Support")}
+                >
+                  Customer Support
+                </Button>
+              </div>
+            </div>
+
+            {/* Request Type Filter */}
+            <div>
+              <Label className="mb-2 block text-sm font-medium">Request Type</Label>
+              <div className="flex flex-wrap gap-2">
+                <Button
+                  variant={requestTypeFilter === "All" ? "default" : "outline"}
+                  size="sm"
+                  onClick={() => setRequestTypeFilter("All")}
+                >
+                  All
+                </Button>
+                <Button
+                  variant={requestTypeFilter === "Complaint" ? "default" : "outline"}
+                  size="sm"
+                  onClick={() => setRequestTypeFilter("Complaint")}
+                >
+                  Complaint
+                </Button>
+                <Button
+                  variant={requestTypeFilter === "Request" ? "default" : "outline"}
+                  size="sm"
+                  onClick={() => setRequestTypeFilter("Request")}
+                >
+                  Request
+                </Button>
+                <Button
+                  variant={requestTypeFilter === "Information" ? "default" : "outline"}
+                  size="sm"
+                  onClick={() => setRequestTypeFilter("Information")}
+                >
+                  Information
+                </Button>
+              </div>
+            </div>
+
+            {/* Status Filter */}
+            <div>
+              <Label className="mb-2 block text-sm font-medium">Status</Label>
+              <div className="flex flex-wrap gap-2">
+                <Button
+                  variant={statusFilter === "All" ? "default" : "outline"}
+                  size="sm"
+                  onClick={() => setStatusFilter("All")}
+                >
+                  All
+                </Button>
+                <Button
+                  variant={statusFilter === "Active" ? "default" : "outline"}
+                  size="sm"
+                  onClick={() => setStatusFilter("Active")}
+                >
+                  Active
+                </Button>
+                <Button
+                  variant={statusFilter === "Inactive" ? "default" : "outline"}
+                  size="sm"
+                  onClick={() => setStatusFilter("Inactive")}
+                >
+                  Inactive
+                </Button>
+              </div>
+            </div>
+
+            {/* SLA Filter */}
+            <div>
+              <Label className="mb-2 block text-sm font-medium">SLA Configuration</Label>
+              <div className="flex flex-wrap gap-2">
+                <Button
+                  variant={slaFilter === "All" ? "default" : "outline"}
+                  size="sm"
+                  onClick={() => setSlaFilter("All")}
+                >
+                  All
+                </Button>
+                <Button
+                  variant={slaFilter === "With Response SLA" ? "default" : "outline"}
+                  size="sm"
+                  onClick={() => setSlaFilter("With Response SLA")}
+                >
+                  With Response SLA
+                </Button>
+                <Button
+                  variant={slaFilter === "Resolution Only" ? "default" : "outline"}
+                  size="sm"
+                  onClick={() => setSlaFilter("Resolution Only")}
+                >
+                  Resolution Only
+                </Button>
+              </div>
+            </div>
+          </div>
+        </Card>
+
         {/* Analytics Summary Cards */}
         <div className="mb-6 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
           <Card className="p-6">
@@ -1136,8 +1229,40 @@ Information,Tech,Product Listings,Product Information,Category Query,Product cat
               </Card>
             </div>
 
-            <div className="mb-4 border-t pt-6">
-              <h2 className="text-xl font-semibold">Categories</h2>
+            <div className="border-t pt-6">
+              <div className="mb-4 flex items-center justify-between">
+                <h2 className="text-xl font-semibold">Categories</h2>
+                {selectedConfigs.size > 0 && (
+                  <div className="flex gap-2">
+                    <Badge variant="secondary" className="px-3 py-1">
+                      {selectedConfigs.size} selected
+                    </Badge>
+                    <Button
+                      onClick={() => handleBulkActivate(true)}
+                      variant="outline"
+                      size="sm"
+                    >
+                      Activate Selected
+                    </Button>
+                    <Button
+                      onClick={() => handleBulkActivate(false)}
+                      variant="outline"
+                      size="sm"
+                    >
+                      Deactivate Selected
+                    </Button>
+                    <Button
+                      onClick={handleBulkDelete}
+                      variant="outline"
+                      size="sm"
+                      className="text-red-600 hover:text-red-700"
+                    >
+                      <Trash2 className="h-4 w-4" />
+                      Delete Selected
+                    </Button>
+                  </div>
+                )}
+              </div>
             </div>
           </>
         )}
