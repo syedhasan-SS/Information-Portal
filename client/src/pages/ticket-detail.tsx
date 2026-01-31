@@ -103,6 +103,26 @@ async function addComment(ticketId: string, content: string): Promise<Comment> {
 
 const STATUSES = ["New", "Open", "Pending", "Solved", "Closed"] as const;
 
+/**
+ * Gets category display path with snapshot fallback
+ * Priority: snapshot > live category > unknown
+ */
+function getCategoryDisplay(ticket: Ticket, categoryMap: Record<string, Category>): string {
+  // V1: Use snapshot (preferred for backward compatibility)
+  if (ticket.categorySnapshot?.path) {
+    return ticket.categorySnapshot.path;
+  }
+
+  // V0: Fallback to live reference for old tickets
+  const category = categoryMap[ticket.categoryId];
+  if (category) {
+    return `${category.l1} > ${category.l2} > ${category.l3}${category.l4 ? ` > ${category.l4}` : ''}`;
+  }
+
+  // Last resort: category was deleted and no snapshot exists
+  return 'Unknown Category (Deleted)';
+}
+
 export default function TicketDetailPage() {
   const [, setLocation] = useLocation();
   const { id } = useParams<{ id: string }>();
@@ -421,7 +441,7 @@ export default function TicketDetailPage() {
 
                 <div>
                   <label className="text-xs font-medium text-muted-foreground">Category</label>
-                  <p className="mt-1 text-sm">{categoryMap[ticket.categoryId]?.l3 || "-"}</p>
+                  <p className="mt-1 text-sm">{getCategoryDisplay(ticket, categoryMap)}</p>
                 </div>
 
                 <div>
