@@ -13,6 +13,8 @@ import {
   slaConfigurations,
   priorityConfigurations,
   tags,
+  categorySettings,
+  ticketFieldConfigurations,
   type Vendor,
   type Category,
   type Ticket,
@@ -25,6 +27,8 @@ import {
   type SlaConfiguration,
   type PriorityConfiguration,
   type Tag,
+  type CategorySettings,
+  type TicketFieldConfiguration,
   type InsertVendor,
   type InsertCategory,
   type InsertTicket,
@@ -37,6 +41,8 @@ import {
   type InsertSlaConfiguration,
   type InsertPriorityConfiguration,
   type InsertTag,
+  type InsertCategorySettings,
+  type InsertTicketFieldConfiguration,
 } from "@shared/schema";
 
 export interface IStorage {
@@ -359,6 +365,68 @@ export class DatabaseStorage implements IStorage {
 
   async deleteTag(id: string): Promise<void> {
     await db.delete(tags).where(eq(tags.id, id));
+  }
+
+  // Category Settings
+  async getCategorySettings(): Promise<CategorySettings[]> {
+    return await db.select().from(categorySettings).orderBy(categorySettings.departmentType);
+  }
+
+  async getCategorySettingsByDepartment(departmentType: "Seller Support" | "Customer Support" | "All"): Promise<CategorySettings | undefined> {
+    const results = await db.select().from(categorySettings).where(eq(categorySettings.departmentType, departmentType)).limit(1);
+    return results[0];
+  }
+
+  async createCategorySettings(settings: InsertCategorySettings): Promise<CategorySettings> {
+    const results = await db.insert(categorySettings).values(settings).returning();
+    return results[0];
+  }
+
+  async updateCategorySettings(id: string, updates: Partial<InsertCategorySettings>): Promise<CategorySettings | undefined> {
+    const results = await db
+      .update(categorySettings)
+      .set({ ...updates, updatedAt: new Date() })
+      .where(eq(categorySettings.id, id))
+      .returning();
+    return results[0];
+  }
+
+  async deleteCategorySettings(id: string): Promise<void> {
+    await db.delete(categorySettings).where(eq(categorySettings.id, id));
+  }
+
+  // Ticket Field Configurations
+  async getTicketFieldConfigurations(): Promise<TicketFieldConfiguration[]> {
+    return await db.select().from(ticketFieldConfigurations).orderBy(ticketFieldConfigurations.displayOrder, ticketFieldConfigurations.fieldName);
+  }
+
+  async getTicketFieldConfigurationsByDepartment(departmentType: "Seller Support" | "Customer Support" | "All"): Promise<TicketFieldConfiguration[]> {
+    return await db.select().from(ticketFieldConfigurations)
+      .where(eq(ticketFieldConfigurations.departmentType, departmentType))
+      .orderBy(ticketFieldConfigurations.displayOrder, ticketFieldConfigurations.fieldName);
+  }
+
+  async getTicketFieldConfigurationById(id: string): Promise<TicketFieldConfiguration | undefined> {
+    const results = await db.select().from(ticketFieldConfigurations).where(eq(ticketFieldConfigurations.id, id)).limit(1);
+    return results[0];
+  }
+
+  async createTicketFieldConfiguration(config: InsertTicketFieldConfiguration): Promise<TicketFieldConfiguration> {
+    const results = await db.insert(ticketFieldConfigurations).values(config).returning();
+    return results[0];
+  }
+
+  async updateTicketFieldConfiguration(id: string, updates: Partial<InsertTicketFieldConfiguration>): Promise<TicketFieldConfiguration | undefined> {
+    const results = await db
+      .update(ticketFieldConfigurations)
+      .set({ ...updates, updatedAt: new Date() })
+      .where(eq(ticketFieldConfigurations.id, id))
+      .returning();
+    return results[0];
+  }
+
+  async deleteTicketFieldConfiguration(id: string): Promise<void> {
+    await db.delete(ticketFieldConfigurations).where(eq(ticketFieldConfigurations.id, id));
   }
 
   // Notifications

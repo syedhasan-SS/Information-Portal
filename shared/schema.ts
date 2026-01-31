@@ -185,6 +185,7 @@ export const categoryHierarchy = pgTable("category_hierarchy", {
   level: integer("level").notNull().$type<1 | 2 | 3 | 4>(), // L1, L2, L3, L4
   parentId: varchar("parent_id").references((): any => categoryHierarchy.id, { onDelete: "cascade" }),
   description: text("description"),
+  departmentType: text("department_type").$type<"Seller Support" | "Customer Support" | "All">().default("All"),
   isActive: boolean("is_active").notNull().default(true),
   createdAt: timestamp("created_at").notNull().defaultNow(),
   updatedAt: timestamp("updated_at").notNull().defaultNow(),
@@ -238,6 +239,7 @@ export const tags = pgTable("tags", {
   name: text("name").notNull().unique(),
   color: text("color"),
   description: text("description"),
+  departmentType: text("department_type").$type<"Seller Support" | "Customer Support" | "All">().default("All"),
   isAutoApplied: boolean("is_auto_applied").notNull().default(false),
   autoApplyCondition: jsonb("auto_apply_condition").$type<{
     type: "sla_breach" | "priority" | "category" | "custom";
@@ -284,12 +286,55 @@ export const insertTagSchema = createInsertSchema(tags).omit({
   updatedAt: true,
 });
 
+// Category Settings Table
+export const categorySettings = pgTable("category_settings", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  departmentType: text("department_type").$type<"Seller Support" | "Customer Support" | "All">().default("All"),
+  l4Mandatory: boolean("l4_mandatory").notNull().default(false),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+  updatedAt: timestamp("updated_at").notNull().defaultNow(),
+});
+
+// Ticket Field Configurations Table
+export const ticketFieldConfigurations = pgTable("ticket_field_configurations", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  fieldName: text("field_name").notNull(), // e.g., "fleekOrderIds", "tags", "attachments"
+  fieldLabel: text("field_label").notNull(), // e.g., "Order IDs", "Tags"
+  fieldType: text("field_type").notNull().$type<"text" | "textarea" | "select" | "multiselect" | "file" | "array">(),
+  departmentType: text("department_type").$type<"Seller Support" | "Customer Support" | "All">().default("All"),
+  isEnabled: boolean("is_enabled").notNull().default(true),
+  isRequired: boolean("is_required").notNull().default(false),
+  displayOrder: integer("display_order").notNull().default(0),
+  metadata: jsonb("metadata").$type<{
+    placeholder?: string;
+    helpText?: string;
+    options?: Array<{ label: string; value: string }>;
+    [key: string]: any;
+  }>(),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+  updatedAt: timestamp("updated_at").notNull().defaultNow(),
+});
+
+export const insertCategorySettingsSchema = createInsertSchema(categorySettings).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+});
+
+export const insertTicketFieldConfigurationSchema = createInsertSchema(ticketFieldConfigurations).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+});
+
 export type InsertIssueType = z.infer<typeof insertIssueTypeSchema>;
 export type InsertCategoryHierarchy = z.infer<typeof insertCategoryHierarchySchema>;
 export type InsertCategoryMapping = z.infer<typeof insertCategoryMappingSchema>;
 export type InsertSlaConfiguration = z.infer<typeof insertSlaConfigurationSchema>;
 export type InsertPriorityConfiguration = z.infer<typeof insertPriorityConfigurationSchema>;
 export type InsertTag = z.infer<typeof insertTagSchema>;
+export type InsertCategorySettings = z.infer<typeof insertCategorySettingsSchema>;
+export type InsertTicketFieldConfiguration = z.infer<typeof insertTicketFieldConfigurationSchema>;
 
 export type IssueType = typeof issueTypes.$inferSelect;
 export type CategoryHierarchy = typeof categoryHierarchy.$inferSelect;
@@ -297,6 +342,8 @@ export type CategoryMapping = typeof categoryMappings.$inferSelect;
 export type SlaConfiguration = typeof slaConfigurations.$inferSelect;
 export type PriorityConfiguration = typeof priorityConfigurations.$inferSelect;
 export type Tag = typeof tags.$inferSelect;
+export type CategorySettings = typeof categorySettings.$inferSelect;
+export type TicketFieldConfiguration = typeof ticketFieldConfigurations.$inferSelect;
 
 export type Vendor = typeof vendors.$inferSelect;
 export type Category = typeof categories.$inferSelect;

@@ -92,6 +92,9 @@ export default function TicketConfigPage() {
   // Multi-selection state
   const [selectedConfigs, setSelectedConfigs] = useState<Set<string>>(new Set());
 
+  // Department filter state
+  const [departmentFilter, setDepartmentFilter] = useState<"All" | "Seller Support" | "Customer Support">("All");
+
   // Fetch configurations
   const { data: configs, isLoading } = useQuery({
     queryKey: ["ticket-configs"],
@@ -616,10 +619,33 @@ Information,Tech,Product Listings,Product Information,Category Query,Product cat
                 </div>
                 <div>
                   <h1 className="font-serif text-xl font-semibold tracking-tight text-foreground">
-                    Ticket Configuration
+                    Ticket Manager
                   </h1>
-                  <p className="text-xs text-muted-foreground">Manage ticket categories and SLA settings</p>
+                  <p className="text-xs text-muted-foreground">Manage categories, tags, and field configurations</p>
                 </div>
+              </div>
+              <div className="flex gap-2 ml-8">
+                <Button
+                  variant={departmentFilter === "All" ? "default" : "outline"}
+                  size="sm"
+                  onClick={() => setDepartmentFilter("All")}
+                >
+                  All
+                </Button>
+                <Button
+                  variant={departmentFilter === "Seller Support" ? "default" : "outline"}
+                  size="sm"
+                  onClick={() => setDepartmentFilter("Seller Support")}
+                >
+                  Seller Support
+                </Button>
+                <Button
+                  variant={departmentFilter === "Customer Support" ? "default" : "outline"}
+                  size="sm"
+                  onClick={() => setDepartmentFilter("Customer Support")}
+                >
+                  Customer Support
+                </Button>
               </div>
             </div>
             <div className="flex gap-2">
@@ -890,7 +916,7 @@ Information,Tech,Product Listings,Product Information,Category Query,Product cat
             </div>
 
             <div className="mb-4 border-t pt-6">
-              <h2 className="text-xl font-semibold">All Configurations</h2>
+              <h2 className="text-xl font-semibold">Categories</h2>
             </div>
           </>
         )}

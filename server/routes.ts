@@ -866,6 +866,115 @@ export async function registerRoutes(
     }
   });
 
+  // Category Settings (L4 Mandatory Toggle, etc.)
+  app.get("/api/config/category-settings", async (_req, res) => {
+    try {
+      const settings = await storage.getCategorySettings();
+      res.json(settings);
+    } catch (error: any) {
+      res.status(500).json({ error: error.message });
+    }
+  });
+
+  app.get("/api/config/category-settings/:departmentType", async (req, res) => {
+    try {
+      const departmentType = req.params.departmentType as "Seller Support" | "Customer Support" | "All";
+      const settings = await storage.getCategorySettingsByDepartment(departmentType);
+      res.json(settings);
+    } catch (error: any) {
+      res.status(500).json({ error: error.message });
+    }
+  });
+
+  app.post("/api/config/category-settings", async (req, res) => {
+    try {
+      const settings = await storage.createCategorySettings(req.body);
+      res.status(201).json(settings);
+    } catch (error: any) {
+      res.status(500).json({ error: error.message });
+    }
+  });
+
+  app.put("/api/config/category-settings/:id", async (req, res) => {
+    try {
+      const settings = await storage.updateCategorySettings(req.params.id, req.body);
+      if (!settings) {
+        return res.status(404).json({ error: "Category settings not found" });
+      }
+      res.json(settings);
+    } catch (error: any) {
+      res.status(500).json({ error: error.message });
+    }
+  });
+
+  app.delete("/api/config/category-settings/:id", async (req, res) => {
+    try {
+      await storage.deleteCategorySettings(req.params.id);
+      res.status(204).send();
+    } catch (error: any) {
+      res.status(500).json({ error: error.message });
+    }
+  });
+
+  // Ticket Field Configurations
+  app.get("/api/config/field-configurations", async (req, res) => {
+    try {
+      const departmentType = req.query.departmentType as "Seller Support" | "Customer Support" | "All" | undefined;
+
+      if (departmentType) {
+        const configs = await storage.getTicketFieldConfigurationsByDepartment(departmentType);
+        res.json(configs);
+      } else {
+        const configs = await storage.getTicketFieldConfigurations();
+        res.json(configs);
+      }
+    } catch (error: any) {
+      res.status(500).json({ error: error.message });
+    }
+  });
+
+  app.get("/api/config/field-configurations/:id", async (req, res) => {
+    try {
+      const config = await storage.getTicketFieldConfigurationById(req.params.id);
+      if (!config) {
+        return res.status(404).json({ error: "Field configuration not found" });
+      }
+      res.json(config);
+    } catch (error: any) {
+      res.status(500).json({ error: error.message });
+    }
+  });
+
+  app.post("/api/config/field-configurations", async (req, res) => {
+    try {
+      const config = await storage.createTicketFieldConfiguration(req.body);
+      res.status(201).json(config);
+    } catch (error: any) {
+      res.status(500).json({ error: error.message });
+    }
+  });
+
+  app.put("/api/config/field-configurations/:id", async (req, res) => {
+    try {
+      const config = await storage.updateTicketFieldConfiguration(req.params.id, req.body);
+      if (!config) {
+        return res.status(404).json({ error: "Field configuration not found" });
+      }
+      res.json(config);
+    } catch (error: any) {
+      res.status(500).json({ error: error.message });
+    }
+  });
+
+  app.delete("/api/config/field-configurations/:id", async (req, res) => {
+    try {
+      await storage.deleteTicketFieldConfiguration(req.params.id);
+      res.status(204).send();
+    } catch (error: any) {
+      res.status(500).json({ error: error.message });
+    }
+  });
+
   // Unified Ticket Configurations (combines issue types with L1-L4 hierarchy)
   app.get("/api/config/ticket-configs", async (_req, res) => {
     try {
