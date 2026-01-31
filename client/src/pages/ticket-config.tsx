@@ -105,6 +105,13 @@ export default function TicketConfigPage() {
     departmentType: "All" as "Seller Support" | "Customer Support" | "All",
   });
 
+  // Category settings state
+  const [l4MandatorySettings, setL4MandatorySettings] = useState<Record<string, boolean>>({
+    "All": false,
+    "Seller Support": false,
+    "Customer Support": false,
+  });
+
   // Fetch configurations
   const { data: configs, isLoading } = useQuery({
     queryKey: ["ticket-configs"],
@@ -136,6 +143,27 @@ export default function TicketConfigPage() {
     if (departmentFilter === "All") return true;
     return tag.departmentType === departmentFilter || tag.departmentType === "All";
   }) || [];
+
+  // Fetch category settings
+  const { data: categorySettings } = useQuery({
+    queryKey: ["category-settings"],
+    queryFn: async () => {
+      const res = await fetch("/api/config/category-settings");
+      if (!res.ok) throw new Error("Failed to fetch category settings");
+      const data = await res.json();
+      // Update local state with fetched settings
+      const settings: Record<string, boolean> = {
+        "All": false,
+        "Seller Support": false,
+        "Customer Support": false,
+      };
+      data.forEach((setting: any) => {
+        settings[setting.departmentType] = setting.l4Mandatory;
+      });
+      setL4MandatorySettings(settings);
+      return data;
+    },
+  });
 
   // Create configuration mutation
   const createConfigMutation = useMutation({
@@ -288,6 +316,42 @@ export default function TicketConfigPage() {
     },
     onError: () => {
       toast({ title: "Error", description: "Failed to delete tag", variant: "destructive" });
+    },
+  });
+
+  // Update L4 mandatory setting
+  const updateL4MandatoryMutation = useMutation({
+    mutationFn: async ({ departmentType, l4Mandatory }: { departmentType: string; l4Mandatory: boolean }) => {
+      // Find existing setting for this department
+      const existingSettings: any[] = categorySettings || [];
+      const existingSetting = existingSettings.find((s: any) => s.departmentType === departmentType);
+
+      if (existingSetting) {
+        // Update existing setting
+        const res = await fetch(`/api/config/category-settings/${existingSetting.id}`, {
+          method: "PUT",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ l4Mandatory }),
+        });
+        if (!res.ok) throw new Error("Failed to update setting");
+        return res.json();
+      } else {
+        // Create new setting
+        const res = await fetch("/api/config/category-settings", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ departmentType, l4Mandatory }),
+        });
+        if (!res.ok) throw new Error("Failed to create setting");
+        return res.json();
+      }
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["category-settings"] });
+      toast({ title: "Success", description: "Setting updated successfully" });
+    },
+    onError: () => {
+      toast({ title: "Error", description: "Failed to update setting", variant: "destructive" });
     },
   });
 
@@ -852,6 +916,57 @@ Information,Tech,Product Listings,Product Information,Category Query,Product cat
       />
 
       <main className="mx-auto max-w-[1600px] px-6 py-8">
+        {/* Settings Section */}
+        <Card className="mb-6">
+          <div className="border-b p-6">
+            <h2 className="text-xl font-semibold">Settings</h2>
+            <p className="text-sm text-muted-foreground">Configure ticket manager settings by department</p>
+          </div>
+          <div className="p-6 space-y-4">
+            <div className="flex items-center justify-between p-4 bg-muted/50 rounded-lg">
+              <div>
+                <p className="font-medium">L4 Mandatory for All Departments</p>
+                <p className="text-sm text-muted-foreground">Require L4 category selection for all ticket types</p>
+              </div>
+              <Switch
+                checked={l4MandatorySettings["All"]}
+                onCheckedChange={(checked) => {
+                  setL4MandatorySettings({ ...l4MandatorySettings, "All": checked });
+                  updateL4MandatoryMutation.mutate({ departmentType: "All", l4Mandatory: checked });
+                }}
+              />
+            </div>
+
+            <div className="flex items-center justify-between p-4 bg-muted/50 rounded-lg">
+              <div>
+                <p className="font-medium">L4 Mandatory for Seller Support</p>
+                <p className="text-sm text-muted-foreground">Require L4 category selection for seller support tickets</p>
+              </div>
+              <Switch
+                checked={l4MandatorySettings["Seller Support"]}
+                onCheckedChange={(checked) => {
+                  setL4MandatorySettings({ ...l4MandatorySettings, "Seller Support": checked });
+                  updateL4MandatoryMutation.mutate({ departmentType: "Seller Support", l4Mandatory: checked });
+                }}
+              />
+            </div>
+
+            <div className="flex items-center justify-between p-4 bg-muted/50 rounded-lg">
+              <div>
+                <p className="font-medium">L4 Mandatory for Customer Support</p>
+                <p className="text-sm text-muted-foreground">Require L4 category selection for customer support tickets</p>
+              </div>
+              <Switch
+                checked={l4MandatorySettings["Customer Support"]}
+                onCheckedChange={(checked) => {
+                  setL4MandatorySettings({ ...l4MandatorySettings, "Customer Support": checked });
+                  updateL4MandatoryMutation.mutate({ departmentType: "Customer Support", l4Mandatory: checked });
+                }}
+              />
+            </div>
+          </div>
+        </Card>
+
         {/* Analytics Summary Cards */}
         {filteredConfigs && filteredConfigs.length > 0 && (
           <div className="mb-6 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
