@@ -1,4 +1,4 @@
-import { useState, useRef } from "react";
+import React, { useState, useRef } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -105,6 +105,21 @@ export default function TicketConfigPage() {
     departmentType: "All" as "Seller Support" | "Customer Support" | "All",
   });
 
+  // Custom Field state
+  const [showFieldDialog, setShowFieldDialog] = useState(false);
+  const [editingField, setEditingField] = useState<any | null>(null);
+  const [fieldFormData, setFieldFormData] = useState({
+    fieldName: "",
+    fieldLabel: "",
+    fieldType: "text" as "text" | "textarea" | "select" | "multiselect" | "file" | "array",
+    departmentType: "All" as "Seller Support" | "Customer Support" | "All",
+    isEnabled: true,
+    isRequired: false,
+    displayOrder: 0,
+    placeholder: "",
+    helpText: "",
+  });
+
   // Fetch configurations
   const { data: configs, isLoading } = useQuery({
     queryKey: ["ticket-configs"],
@@ -116,10 +131,15 @@ export default function TicketConfigPage() {
   });
 
   // Filter configurations based on department
-  const filteredConfigs = configs?.filter(config => {
-    if (departmentFilter === "All") return true;
-    return config.departmentType === departmentFilter || config.departmentType === "All";
-  }) || [];
+  const filteredConfigs = React.useMemo(() => {
+    if (!configs) return [];
+    if (departmentFilter === "All") return configs;
+
+    return configs.filter(config => {
+      const configDept = config.departmentType || "All";
+      return configDept === departmentFilter || configDept === "All";
+    });
+  }, [configs, departmentFilter]);
 
   // Fetch tags
   const { data: tags, isLoading: isLoadingTags } = useQuery({
@@ -131,11 +151,37 @@ export default function TicketConfigPage() {
     },
   });
 
+  // Fetch custom fields
+  const { data: customFields, isLoading: isLoadingFields } = useQuery({
+    queryKey: ["custom-fields"],
+    queryFn: async () => {
+      const res = await fetch("/api/config/field-configurations");
+      if (!res.ok) throw new Error("Failed to fetch custom fields");
+      return res.json();
+    },
+  });
+
   // Filter tags based on department
-  const filteredTags = tags?.filter((tag: any) => {
-    if (departmentFilter === "All") return true;
-    return tag.departmentType === departmentFilter || tag.departmentType === "All";
-  }) || [];
+  const filteredTags = React.useMemo(() => {
+    if (!tags) return [];
+    if (departmentFilter === "All") return tags;
+
+    return tags.filter((tag: any) => {
+      const tagDept = tag.departmentType || "All";
+      return tagDept === departmentFilter || tagDept === "All";
+    });
+  }, [tags, departmentFilter]);
+
+  // Filter custom fields based on department
+  const filteredFields = React.useMemo(() => {
+    if (!customFields) return [];
+    if (departmentFilter === "All") return customFields;
+
+    return customFields.filter((field: any) => {
+      const fieldDept = field.departmentType || "All";
+      return fieldDept === departmentFilter || fieldDept === "All";
+    });
+  }, [customFields, departmentFilter]);
 
   // Create configuration mutation
   const createConfigMutation = useMutation({
@@ -288,6 +334,88 @@ export default function TicketConfigPage() {
     },
     onError: () => {
       toast({ title: "Error", description: "Failed to delete tag", variant: "destructive" });
+    },
+  });
+
+  // Custom Field mutations
+  const createFieldMutation = useMutation({
+    mutationFn: async (data: any) => {
+      const res = await fetch("/api/config/field-configurations", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(data),
+      });
+      if (!res.ok) throw new Error("Failed to create custom field");
+      return res.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["custom-fields"] });
+      setShowFieldDialog(false);
+      setEditingField(null);
+      setFieldFormData({
+        fieldName: "",
+        fieldLabel: "",
+        fieldType: "text",
+        departmentType: "All",
+        isEnabled: true,
+        isRequired: false,
+        displayOrder: 0,
+        placeholder: "",
+        helpText: "",
+      });
+      toast({ title: "Success", description: "Custom field created successfully" });
+    },
+    onError: () => {
+      toast({ title: "Error", description: "Failed to create custom field", variant: "destructive" });
+    },
+  });
+
+  const updateFieldMutation = useMutation({
+    mutationFn: async ({ id, data }: { id: string; data: any }) => {
+      const res = await fetch(`/api/config/field-configurations/${id}`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(data),
+      });
+      if (!res.ok) throw new Error("Failed to update custom field");
+      return res.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["custom-fields"] });
+      setShowFieldDialog(false);
+      setEditingField(null);
+      setFieldFormData({
+        fieldName: "",
+        fieldLabel: "",
+        fieldType: "text",
+        departmentType: "All",
+        isEnabled: true,
+        isRequired: false,
+        displayOrder: 0,
+        placeholder: "",
+        helpText: "",
+      });
+      toast({ title: "Success", description: "Custom field updated successfully" });
+    },
+    onError: () => {
+      toast({ title: "Error", description: "Failed to update custom field", variant: "destructive" });
+    },
+  });
+
+  const deleteFieldMutation = useMutation({
+    mutationFn: async (id: string) => {
+      const res = await fetch(`/api/config/field-configurations/${id}`, {
+        method: "DELETE",
+      });
+      if (!res.ok) throw new Error("Failed to delete custom field");
+      return res.status === 204 ? null : res.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["custom-fields"] });
+      toast({ title: "Success", description: "Custom field deleted successfully" });
+    },
+    onError: () => {
+      toast({ title: "Error", description: "Failed to delete custom field", variant: "destructive" });
     },
   });
 
@@ -1194,6 +1322,122 @@ Information,Tech,Product Listings,Product Information,Category Query,Product cat
             </div>
           )}
         </Card>
+
+        {/* Custom Field Manager Section */}
+        <Card className="mt-6">
+          <div className="flex items-center justify-between border-b p-6">
+            <div>
+              <h2 className="text-xl font-semibold">Custom Field Manager</h2>
+              <p className="text-sm text-muted-foreground">Configure custom fields for ticket creation</p>
+            </div>
+            <Button
+              onClick={() => setShowFieldDialog(true)}
+              size="sm"
+            >
+              <Plus className="mr-2 h-4 w-4" />
+              Add Custom Field
+            </Button>
+          </div>
+
+          {isLoadingFields ? (
+            <div className="flex justify-center p-12">
+              <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
+            </div>
+          ) : (
+            <div className="p-6">
+              {filteredFields && filteredFields.length > 0 ? (
+                <div className="overflow-x-auto">
+                  <Table>
+                    <TableHeader>
+                      <TableRow>
+                        <TableHead className="w-12">Order</TableHead>
+                        <TableHead>Field Name</TableHead>
+                        <TableHead>Label</TableHead>
+                        <TableHead>Type</TableHead>
+                        <TableHead>Department</TableHead>
+                        <TableHead>Required</TableHead>
+                        <TableHead>Status</TableHead>
+                        <TableHead className="w-20">Actions</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {filteredFields
+                        .sort((a, b) => a.displayOrder - b.displayOrder)
+                        .map((field) => (
+                          <TableRow key={field.id}>
+                            <TableCell className="text-center">{field.displayOrder}</TableCell>
+                            <TableCell className="font-mono text-sm">{field.fieldName}</TableCell>
+                            <TableCell className="font-medium">{field.fieldLabel}</TableCell>
+                            <TableCell>
+                              <Badge variant="outline">{field.fieldType}</Badge>
+                            </TableCell>
+                            <TableCell>
+                              <Badge variant="secondary">{field.departmentType}</Badge>
+                            </TableCell>
+                            <TableCell>
+                              {field.isRequired ? (
+                                <Badge className="bg-red-500 hover:bg-red-600">Required</Badge>
+                              ) : (
+                                <Badge variant="outline">Optional</Badge>
+                              )}
+                            </TableCell>
+                            <TableCell>
+                              <Badge
+                                variant={field.isEnabled ? "default" : "secondary"}
+                                className={field.isEnabled ? "bg-green-500 hover:bg-green-600" : ""}
+                              >
+                                {field.isEnabled ? "Enabled" : "Disabled"}
+                              </Badge>
+                            </TableCell>
+                            <TableCell>
+                              <div className="flex gap-2">
+                                <Button
+                                  variant="ghost"
+                                  size="sm"
+                                  onClick={() => {
+                                    setEditingField(field);
+                                    setFieldFormData({
+                                      fieldName: field.fieldName,
+                                      fieldLabel: field.fieldLabel,
+                                      fieldType: field.fieldType,
+                                      departmentType: field.departmentType || "All",
+                                      isEnabled: field.isEnabled,
+                                      isRequired: field.isRequired,
+                                      displayOrder: field.displayOrder,
+                                      placeholder: field.metadata?.placeholder || "",
+                                      helpText: field.metadata?.helpText || "",
+                                    });
+                                    setShowFieldDialog(true);
+                                  }}
+                                >
+                                  <Edit className="h-4 w-4" />
+                                </Button>
+                                <Button
+                                  variant="ghost"
+                                  size="sm"
+                                  onClick={() => {
+                                    if (confirm(`Are you sure you want to delete the field "${field.fieldLabel}"?`)) {
+                                      deleteFieldMutation.mutate(field.id);
+                                    }
+                                  }}
+                                >
+                                  <Trash2 className="h-4 w-4" />
+                                </Button>
+                              </div>
+                            </TableCell>
+                          </TableRow>
+                        ))}
+                    </TableBody>
+                  </Table>
+                </div>
+              ) : (
+                <div className="text-center text-muted-foreground p-8">
+                  No custom fields found. Click "Add Custom Field" to create one.
+                </div>
+              )}
+            </div>
+          )}
+        </Card>
       </main>
 
       {/* Configuration Wizard */}
@@ -1234,7 +1478,7 @@ Information,Tech,Product Listings,Product Information,Category Query,Product cat
               </div>
 
               <div className="space-y-2">
-                <Label htmlFor="departmentType">Department Type *</Label>
+                <Label htmlFor="departmentType">Department Type</Label>
                 <Select
                   value={wizardData.departmentType}
                   onValueChange={(value) => setWizardData({ ...wizardData, departmentType: value as any })}
@@ -1593,6 +1837,218 @@ Information,Tech,Product Listings,Product Information,Category Query,Product cat
                 </>
               ) : (
                 editingTag ? "Update Tag" : "Create Tag"
+              )}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Custom Field Dialog */}
+      <Dialog open={showFieldDialog} onOpenChange={(open) => {
+        if (!open) {
+          setShowFieldDialog(false);
+          setEditingField(null);
+          setFieldFormData({
+            fieldName: "",
+            fieldLabel: "",
+            fieldType: "text",
+            departmentType: "All",
+            isEnabled: true,
+            isRequired: false,
+            displayOrder: 0,
+            placeholder: "",
+            helpText: "",
+          });
+        }
+      }}>
+        <DialogContent className="max-w-2xl">
+          <DialogHeader>
+            <DialogTitle>{editingField ? "Edit" : "Add"} Custom Field</DialogTitle>
+            <DialogDescription>
+              {editingField ? "Update the custom field details below" : "Create a new custom field for ticket creation"}
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="grid gap-4 py-4">
+            <div className="grid gap-4 sm:grid-cols-2">
+              <div className="space-y-2">
+                <Label htmlFor="fieldName">Field Name *</Label>
+                <Input
+                  id="fieldName"
+                  value={fieldFormData.fieldName}
+                  onChange={(e) => setFieldFormData({ ...fieldFormData, fieldName: e.target.value })}
+                  placeholder="e.g., fleekOrderIds, customerId"
+                  disabled={!!editingField}
+                />
+                <p className="text-xs text-muted-foreground">Unique field identifier (camelCase)</p>
+              </div>
+
+              <div className="space-y-2">
+                <Label htmlFor="fieldLabel">Field Label *</Label>
+                <Input
+                  id="fieldLabel"
+                  value={fieldFormData.fieldLabel}
+                  onChange={(e) => setFieldFormData({ ...fieldFormData, fieldLabel: e.target.value })}
+                  placeholder="e.g., Order IDs, Customer ID"
+                />
+              </div>
+            </div>
+
+            <div className="grid gap-4 sm:grid-cols-2">
+              <div className="space-y-2">
+                <Label htmlFor="fieldType">Field Type *</Label>
+                <Select
+                  value={fieldFormData.fieldType}
+                  onValueChange={(value) => setFieldFormData({ ...fieldFormData, fieldType: value as any })}
+                >
+                  <SelectTrigger id="fieldType">
+                    <SelectValue placeholder="Select field type" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="text">Text</SelectItem>
+                    <SelectItem value="textarea">Text Area</SelectItem>
+                    <SelectItem value="select">Select (Dropdown)</SelectItem>
+                    <SelectItem value="multiselect">Multi-Select</SelectItem>
+                    <SelectItem value="file">File Upload</SelectItem>
+                    <SelectItem value="array">Array (Multiple Values)</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+
+              <div className="space-y-2">
+                <Label htmlFor="fieldDepartmentType">Department Type *</Label>
+                <Select
+                  value={fieldFormData.departmentType}
+                  onValueChange={(value) => setFieldFormData({ ...fieldFormData, departmentType: value as any })}
+                >
+                  <SelectTrigger id="fieldDepartmentType">
+                    <SelectValue placeholder="Select department type" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="All">All</SelectItem>
+                    <SelectItem value="Seller Support">Seller Support</SelectItem>
+                    <SelectItem value="Customer Support">Customer Support</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
+
+            <div className="grid gap-4 sm:grid-cols-2">
+              <div className="space-y-2">
+                <Label htmlFor="displayOrder">Display Order *</Label>
+                <Input
+                  id="displayOrder"
+                  type="number"
+                  value={fieldFormData.displayOrder}
+                  onChange={(e) => setFieldFormData({ ...fieldFormData, displayOrder: parseInt(e.target.value) || 0 })}
+                  placeholder="0"
+                />
+                <p className="text-xs text-muted-foreground">Order in which field appears</p>
+              </div>
+
+              <div className="space-y-4 pt-6">
+                <div className="flex items-center space-x-2">
+                  <Switch
+                    id="isEnabled"
+                    checked={fieldFormData.isEnabled}
+                    onCheckedChange={(checked) => setFieldFormData({ ...fieldFormData, isEnabled: checked })}
+                  />
+                  <Label htmlFor="isEnabled" className="cursor-pointer">
+                    Field Enabled
+                  </Label>
+                </div>
+
+                <div className="flex items-center space-x-2">
+                  <Switch
+                    id="isRequired"
+                    checked={fieldFormData.isRequired}
+                    onCheckedChange={(checked) => setFieldFormData({ ...fieldFormData, isRequired: checked })}
+                  />
+                  <Label htmlFor="isRequired" className="cursor-pointer">
+                    Required Field
+                  </Label>
+                </div>
+              </div>
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="placeholder">Placeholder Text</Label>
+              <Input
+                id="placeholder"
+                value={fieldFormData.placeholder}
+                onChange={(e) => setFieldFormData({ ...fieldFormData, placeholder: e.target.value })}
+                placeholder="Enter placeholder text"
+              />
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="helpText">Help Text</Label>
+              <Input
+                id="helpText"
+                value={fieldFormData.helpText}
+                onChange={(e) => setFieldFormData({ ...fieldFormData, helpText: e.target.value })}
+                placeholder="Enter help text for users"
+              />
+            </div>
+          </div>
+
+          <DialogFooter>
+            <Button
+              variant="outline"
+              onClick={() => {
+                setShowFieldDialog(false);
+                setEditingField(null);
+                setFieldFormData({
+                  fieldName: "",
+                  fieldLabel: "",
+                  fieldType: "text",
+                  departmentType: "All",
+                  isEnabled: true,
+                  isRequired: false,
+                  displayOrder: 0,
+                  placeholder: "",
+                  helpText: "",
+                });
+              }}
+            >
+              Cancel
+            </Button>
+            <Button
+              onClick={() => {
+                if (!fieldFormData.fieldName.trim() || !fieldFormData.fieldLabel.trim()) {
+                  toast({ title: "Error", description: "Field name and label are required", variant: "destructive" });
+                  return;
+                }
+
+                const data = {
+                  fieldName: fieldFormData.fieldName,
+                  fieldLabel: fieldFormData.fieldLabel,
+                  fieldType: fieldFormData.fieldType,
+                  departmentType: fieldFormData.departmentType,
+                  isEnabled: fieldFormData.isEnabled,
+                  isRequired: fieldFormData.isRequired,
+                  displayOrder: fieldFormData.displayOrder,
+                  metadata: {
+                    placeholder: fieldFormData.placeholder || undefined,
+                    helpText: fieldFormData.helpText || undefined,
+                  },
+                };
+
+                if (editingField) {
+                  updateFieldMutation.mutate({ id: editingField.id, data });
+                } else {
+                  createFieldMutation.mutate(data);
+                }
+              }}
+              disabled={createFieldMutation.isPending || updateFieldMutation.isPending}
+            >
+              {(createFieldMutation.isPending || updateFieldMutation.isPending) ? (
+                <>
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                  {editingField ? "Updating..." : "Creating..."}
+                </>
+              ) : (
+                editingField ? "Update Field" : "Create Field"
               )}
             </Button>
           </DialogFooter>
