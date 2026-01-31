@@ -1023,6 +1023,7 @@ export async function registerRoutes(
             l3: l3.name,
             l4: l4.name,
             description: l4.description || "",
+            departmentType: l4.departmentType || "All",
             isActive: l4.isActive,
             slaResponseHours: sla?.responseTimeHours || null,
             slaResolutionHours: sla?.resolutionTimeHours || 24,
@@ -1106,6 +1107,7 @@ export async function registerRoutes(
         name: config.l4,
         parentId: l3Category.id,
         description: config.description || null,
+        departmentType: config.departmentType || "All",
         isActive: config.isActive !== undefined ? config.isActive : true,
       });
 
@@ -1140,6 +1142,7 @@ export async function registerRoutes(
         l3: config.l3,
         l4: config.l4,
         description: config.description || "",
+        departmentType: l4Category.departmentType || "All",
         isActive: l4Category.isActive,
         slaResponseHours: slaConfig.responseTimeHours,
         slaResolutionHours: slaConfig.resolutionTimeHours,
@@ -1236,6 +1239,7 @@ export async function registerRoutes(
           name: config.l4,
           parentId: l3Category.id,
           description: config.description || null,
+          departmentType: config.departmentType || "All",
           isActive: config.isActive !== undefined ? config.isActive : true,
         });
 
@@ -1270,6 +1274,7 @@ export async function registerRoutes(
           l3: config.l3,
           l4: config.l4,
           description: config.description || "",
+          departmentType: l4Category.departmentType || "All",
           isActive: l4Category.isActive,
           slaResponseHours: slaConfig.responseTimeHours,
           slaResolutionHours: slaConfig.resolutionTimeHours,
@@ -1297,6 +1302,7 @@ export async function registerRoutes(
       // Update L4 category
       const l4Category = await storage.updateCategoryHierarchy(id, {
         description: updates.description,
+        departmentType: updates.departmentType,
         isActive: updates.isActive,
       });
 
@@ -1335,6 +1341,70 @@ export async function registerRoutes(
       res.json({ message: "Configuration deleted successfully" });
     } catch (error: any) {
       console.error("Error deleting ticket config:", error);
+      res.status(500).json({ error: error.message });
+    }
+  });
+
+  // Tags Management
+  app.get("/api/config/tags", async (_req, res) => {
+    try {
+      const tags = await storage.getTags();
+      res.json(tags);
+    } catch (error: any) {
+      console.error("Error fetching tags:", error);
+      res.status(500).json({ error: error.message });
+    }
+  });
+
+  app.post("/api/config/tags", async (req, res) => {
+    try {
+      const { name, departmentType } = req.body;
+
+      if (!name || !name.trim()) {
+        return res.status(400).json({ error: "Tag name is required" });
+      }
+
+      const tag = await storage.createTag({
+        name: name.trim(),
+        departmentType: departmentType || "All",
+      });
+
+      res.status(201).json(tag);
+    } catch (error: any) {
+      console.error("Error creating tag:", error);
+      res.status(500).json({ error: error.message });
+    }
+  });
+
+  app.put("/api/config/tags/:id", async (req, res) => {
+    try {
+      const { id } = req.params;
+      const { name, departmentType } = req.body;
+
+      const updates: any = {};
+      if (name !== undefined) updates.name = name.trim();
+      if (departmentType !== undefined) updates.departmentType = departmentType;
+
+      const tag = await storage.updateTag(id, updates);
+
+      if (!tag) {
+        return res.status(404).json({ error: "Tag not found" });
+      }
+
+      res.json(tag);
+    } catch (error: any) {
+      console.error("Error updating tag:", error);
+      res.status(500).json({ error: error.message });
+    }
+  });
+
+  app.delete("/api/config/tags/:id", async (req, res) => {
+    try {
+      const { id } = req.params;
+      await storage.deleteTag(id);
+      res.json({ message: "Tag deleted successfully" });
+    } catch (error: any) {
+      console.error("Error deleting tag:", error);
       res.status(500).json({ error: error.message });
     }
   });

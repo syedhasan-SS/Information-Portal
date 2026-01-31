@@ -56,6 +56,7 @@ type CategoryConfig = {
   l3: string; // Category
   l4: string; // Sub-Category/Problem Area
   description: string;
+  departmentType: "Seller Support" | "Customer Support" | "All";
   isActive: boolean;
   slaResponseHours: number | null;
   slaResolutionHours: number;
@@ -79,6 +80,7 @@ export default function TicketConfigPage() {
     l3: "",
     l4: "",
     description: "",
+    departmentType: "All" as "Seller Support" | "Customer Support" | "All",
     isActive: true,
     slaResponseHours: "",
     slaResolutionHours: "",
@@ -95,6 +97,14 @@ export default function TicketConfigPage() {
   // Department filter state
   const [departmentFilter, setDepartmentFilter] = useState<"All" | "Seller Support" | "Customer Support">("All");
 
+  // Tags state
+  const [showTagDialog, setShowTagDialog] = useState(false);
+  const [editingTag, setEditingTag] = useState<any | null>(null);
+  const [tagFormData, setTagFormData] = useState({
+    name: "",
+    departmentType: "All" as "Seller Support" | "Customer Support" | "All",
+  });
+
   // Fetch configurations
   const { data: configs, isLoading } = useQuery({
     queryKey: ["ticket-configs"],
@@ -104,6 +114,28 @@ export default function TicketConfigPage() {
       return res.json() as Promise<CategoryConfig[]>;
     },
   });
+
+  // Filter configurations based on department
+  const filteredConfigs = configs?.filter(config => {
+    if (departmentFilter === "All") return true;
+    return config.departmentType === departmentFilter || config.departmentType === "All";
+  }) || [];
+
+  // Fetch tags
+  const { data: tags, isLoading: isLoadingTags } = useQuery({
+    queryKey: ["tags"],
+    queryFn: async () => {
+      const res = await fetch("/api/config/tags");
+      if (!res.ok) throw new Error("Failed to fetch tags");
+      return res.json();
+    },
+  });
+
+  // Filter tags based on department
+  const filteredTags = tags?.filter((tag: any) => {
+    if (departmentFilter === "All") return true;
+    return tag.departmentType === departmentFilter || tag.departmentType === "All";
+  }) || [];
 
   // Create configuration mutation
   const createConfigMutation = useMutation({
@@ -197,6 +229,68 @@ export default function TicketConfigPage() {
     },
   });
 
+  // Tag mutations
+  const createTagMutation = useMutation({
+    mutationFn: async (data: any) => {
+      const res = await fetch("/api/config/tags", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(data),
+      });
+      if (!res.ok) throw new Error("Failed to create tag");
+      return res.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["tags"] });
+      setShowTagDialog(false);
+      setEditingTag(null);
+      setTagFormData({ name: "", departmentType: "All" });
+      toast({ title: "Success", description: "Tag created successfully" });
+    },
+    onError: () => {
+      toast({ title: "Error", description: "Failed to create tag", variant: "destructive" });
+    },
+  });
+
+  const updateTagMutation = useMutation({
+    mutationFn: async ({ id, data }: { id: string; data: any }) => {
+      const res = await fetch(`/api/config/tags/${id}`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(data),
+      });
+      if (!res.ok) throw new Error("Failed to update tag");
+      return res.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["tags"] });
+      setShowTagDialog(false);
+      setEditingTag(null);
+      setTagFormData({ name: "", departmentType: "All" });
+      toast({ title: "Success", description: "Tag updated successfully" });
+    },
+    onError: () => {
+      toast({ title: "Error", description: "Failed to update tag", variant: "destructive" });
+    },
+  });
+
+  const deleteTagMutation = useMutation({
+    mutationFn: async (id: string) => {
+      const res = await fetch(`/api/config/tags/${id}`, {
+        method: "DELETE",
+      });
+      if (!res.ok) throw new Error("Failed to delete tag");
+      return res.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["tags"] });
+      toast({ title: "Success", description: "Tag deleted successfully" });
+    },
+    onError: () => {
+      toast({ title: "Error", description: "Failed to delete tag", variant: "destructive" });
+    },
+  });
+
   const resetWizard = () => {
     setCurrentStep(1);
     setEditingConfig(null);
@@ -207,6 +301,7 @@ export default function TicketConfigPage() {
       l3: "",
       l4: "",
       description: "",
+      departmentType: "All",
       isActive: true,
       slaResponseHours: "",
       slaResolutionHours: "",
@@ -215,11 +310,11 @@ export default function TicketConfigPage() {
 
   // Multi-selection handlers
   const toggleSelectAll = () => {
-    if (!configs) return;
-    if (selectedConfigs.size === configs.length) {
+    if (!filteredConfigs) return;
+    if (selectedConfigs.size === filteredConfigs.length) {
       setSelectedConfigs(new Set());
     } else {
-      setSelectedConfigs(new Set(configs.map(c => c.id)));
+      setSelectedConfigs(new Set(filteredConfigs.map(c => c.id)));
     }
   };
 
@@ -685,7 +780,7 @@ Information,Tech,Product Listings,Product Information,Category Query,Product cat
               </Button>
               <Button
                 onClick={() => {
-                  if (!configs || configs.length === 0) {
+                  if (!filteredConfigs || filteredConfigs.length === 0) {
                     toast({
                       title: "No Data",
                       description: "No configurations to export",
@@ -696,7 +791,7 @@ Information,Tech,Product Listings,Product Information,Category Query,Product cat
 
                   // Create CSV content
                   const headers = ['Issue Type', 'L1', 'L2', 'L3', 'L4', 'Description', 'Active', 'SLA Response Hours', 'SLA Resolution Hours'];
-                  const rows = configs.map(config => [
+                  const rows = filteredConfigs.map(config => [
                     config.issueType,
                     config.l1,
                     config.l2,
@@ -725,7 +820,7 @@ Information,Tech,Product Listings,Product Information,Category Query,Product cat
 
                   toast({
                     title: "Export Successful",
-                    description: `Exported ${configs.length} configurations`
+                    description: `Exported ${filteredConfigs.length} configurations`
                   });
                 }}
                 variant="outline"
@@ -758,12 +853,12 @@ Information,Tech,Product Listings,Product Information,Category Query,Product cat
 
       <main className="mx-auto max-w-[1600px] px-6 py-8">
         {/* Analytics Summary Cards */}
-        {configs && configs.length > 0 && (
+        {filteredConfigs && filteredConfigs.length > 0 && (
           <div className="mb-6 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
             <Card className="p-6">
               <div>
                 <p className="text-sm text-muted-foreground">Total Configurations</p>
-                <p className="mt-2 text-3xl font-bold">{configs.length}</p>
+                <p className="mt-2 text-3xl font-bold">{filteredConfigs.length}</p>
               </div>
             </Card>
 
@@ -771,7 +866,7 @@ Information,Tech,Product Listings,Product Information,Category Query,Product cat
               <div>
                 <p className="text-sm text-muted-foreground">Active Configs</p>
                 <p className="mt-2 text-3xl font-bold text-green-600">
-                  {configs.filter(c => c.isActive).length}
+                  {filteredConfigs.filter(c => c.isActive).length}
                 </p>
               </div>
             </Card>
@@ -780,7 +875,7 @@ Information,Tech,Product Listings,Product Information,Category Query,Product cat
               <div>
                 <p className="text-sm text-muted-foreground">Inactive Configs</p>
                 <p className="mt-2 text-3xl font-bold text-gray-600">
-                  {configs.filter(c => !c.isActive).length}
+                  {filteredConfigs.filter(c => !c.isActive).length}
                 </p>
               </div>
             </Card>
@@ -789,7 +884,7 @@ Information,Tech,Product Listings,Product Information,Category Query,Product cat
               <div>
                 <p className="text-sm text-muted-foreground">Issue Types</p>
                 <p className="mt-2 text-3xl font-bold">
-                  {new Set(configs.map(c => c.issueType)).size}
+                  {new Set(filteredConfigs.map(c => c.issueType)).size}
                 </p>
               </div>
             </Card>
@@ -797,7 +892,7 @@ Information,Tech,Product Listings,Product Information,Category Query,Product cat
         )}
 
         {/* Distribution Charts */}
-        {configs && configs.length > 0 && (
+        {filteredConfigs && filteredConfigs.length > 0 && (
           <>
             <div className="mb-4 flex items-center">
               <h2 className="text-xl font-semibold">Category Distributions</h2>
@@ -809,7 +904,7 @@ Information,Tech,Product Listings,Product Information,Category Query,Product cat
                 <h3 className="mb-4 text-lg font-semibold">Issue Type Distribution</h3>
                 <div className="space-y-3">
                   {Object.entries(
-                    configs.reduce((acc, c) => {
+                    filteredConfigs.reduce((acc, c) => {
                       acc[c.issueType] = (acc[c.issueType] || 0) + 1;
                       return acc;
                     }, {} as Record<string, number>)
@@ -818,7 +913,7 @@ Information,Tech,Product Listings,Product Information,Category Query,Product cat
                       <div className="flex items-center gap-2">
                         <Badge variant="outline">{type}</Badge>
                         <span className="text-sm text-muted-foreground">
-                          {((count / configs.length) * 100).toFixed(1)}%
+                          {((count / filteredConfigs.length) * 100).toFixed(1)}%
                         </span>
                       </div>
                       <span className="font-semibold">{count}</span>
@@ -832,7 +927,7 @@ Information,Tech,Product Listings,Product Information,Category Query,Product cat
                 <h3 className="mb-4 text-lg font-semibold">L1 (Department) Distribution</h3>
                 <div className="space-y-3 max-h-48 overflow-y-auto">
                   {Object.entries(
-                    configs.reduce((acc, c) => {
+                    filteredConfigs.reduce((acc, c) => {
                       acc[c.l1] = (acc[c.l1] || 0) + 1;
                       return acc;
                     }, {} as Record<string, number>)
@@ -846,7 +941,7 @@ Information,Tech,Product Listings,Product Information,Category Query,Product cat
                           <div className="h-2 w-24 bg-gray-200 rounded-full overflow-hidden">
                             <div
                               className="h-full bg-purple-500"
-                              style={{ width: `${(count / configs.length) * 100}%` }}
+                              style={{ width: `${(count / filteredConfigs.length) * 100}%` }}
                             />
                           </div>
                           <span className="font-semibold text-sm w-8 text-right">{count}</span>
@@ -861,7 +956,7 @@ Information,Tech,Product Listings,Product Information,Category Query,Product cat
                 <h3 className="mb-4 text-lg font-semibold">L2 (Sub Department) Distribution</h3>
                 <div className="space-y-3 max-h-48 overflow-y-auto">
                   {Object.entries(
-                    configs.reduce((acc, c) => {
+                    filteredConfigs.reduce((acc, c) => {
                       acc[c.l2] = (acc[c.l2] || 0) + 1;
                       return acc;
                     }, {} as Record<string, number>)
@@ -875,7 +970,7 @@ Information,Tech,Product Listings,Product Information,Category Query,Product cat
                           <div className="h-2 w-24 bg-gray-200 rounded-full overflow-hidden">
                             <div
                               className="h-full bg-pink-500"
-                              style={{ width: `${(count / configs.length) * 100}%` }}
+                              style={{ width: `${(count / filteredConfigs.length) * 100}%` }}
                             />
                           </div>
                           <span className="font-semibold text-sm w-8 text-right">{count}</span>
@@ -890,7 +985,7 @@ Information,Tech,Product Listings,Product Information,Category Query,Product cat
                 <h3 className="mb-4 text-lg font-semibold">L3 (Category) Distribution</h3>
                 <div className="space-y-3 max-h-48 overflow-y-auto">
                   {Object.entries(
-                    configs.reduce((acc, c) => {
+                    filteredConfigs.reduce((acc, c) => {
                       acc[c.l3] = (acc[c.l3] || 0) + 1;
                       return acc;
                     }, {} as Record<string, number>)
@@ -904,7 +999,7 @@ Information,Tech,Product Listings,Product Information,Category Query,Product cat
                           <div className="h-2 w-24 bg-gray-200 rounded-full overflow-hidden">
                             <div
                               className="h-full bg-amber-500"
-                              style={{ width: `${(count / configs.length) * 100}%` }}
+                              style={{ width: `${(count / filteredConfigs.length) * 100}%` }}
                             />
                           </div>
                           <span className="font-semibold text-sm w-8 text-right">{count}</span>
@@ -933,7 +1028,7 @@ Information,Tech,Product Listings,Product Information,Category Query,Product cat
                   <TableRow>
                     <TableHead className="w-12">
                       <Checkbox
-                        checked={configs && configs.length > 0 && selectedConfigs.size === configs.length}
+                        checked={filteredConfigs && filteredConfigs.length > 0 && selectedConfigs.size === filteredConfigs.length}
                         onCheckedChange={toggleSelectAll}
                       />
                     </TableHead>
@@ -949,8 +1044,8 @@ Information,Tech,Product Listings,Product Information,Category Query,Product cat
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {configs && configs.length > 0 ? (
-                    configs.map((config, index) => (
+                  {filteredConfigs && filteredConfigs.length > 0 ? (
+                    filteredConfigs.map((config, index) => (
                       <TableRow key={config.id}>
                         <TableCell>
                           <Checkbox
@@ -992,6 +1087,7 @@ Information,Tech,Product Listings,Product Information,Category Query,Product cat
                                   l3: config.l3,
                                   l4: config.l4,
                                   description: config.description || "",
+                                  departmentType: config.departmentType,
                                   isActive: config.isActive,
                                   slaResponseHours: config.slaResponseHours?.toString() || "",
                                   slaResolutionHours: config.slaResolutionHours?.toString() || "",
@@ -1026,6 +1122,75 @@ Information,Tech,Product Listings,Product Information,Category Query,Product cat
                   )}
                 </TableBody>
               </Table>
+            </div>
+          )}
+        </Card>
+
+        {/* Tags Management Section */}
+        <Card className="mt-6">
+          <div className="flex items-center justify-between border-b p-6">
+            <div>
+              <h2 className="text-xl font-semibold">Tags</h2>
+              <p className="text-sm text-muted-foreground">Manage custom tags for ticket categorization</p>
+            </div>
+            <Button
+              onClick={() => setShowTagDialog(true)}
+              size="sm"
+            >
+              <Plus className="mr-2 h-4 w-4" />
+              Add Tag
+            </Button>
+          </div>
+
+          {isLoadingTags ? (
+            <div className="flex justify-center p-12">
+              <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
+            </div>
+          ) : (
+            <div className="p-6">
+              <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+                {filteredTags && filteredTags.length > 0 ? (
+                  filteredTags.map((tag) => (
+                    <Card key={tag.id} className="p-3 flex items-center justify-between">
+                      <div className="flex items-center gap-2">
+                        <Badge variant="outline">{tag.name}</Badge>
+                        <span className="text-xs text-muted-foreground">{tag.departmentType}</span>
+                      </div>
+                      <div className="flex gap-1">
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => {
+                            setEditingTag(tag);
+                            setTagFormData({
+                              name: tag.name,
+                              departmentType: tag.departmentType || "All",
+                            });
+                            setShowTagDialog(true);
+                          }}
+                        >
+                          <Edit className="h-3 w-3" />
+                        </Button>
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => {
+                            if (confirm(`Are you sure you want to delete the tag "${tag.name}"?`)) {
+                              deleteTagMutation.mutate(tag.id);
+                            }
+                          }}
+                        >
+                          <Trash2 className="h-3 w-3" />
+                        </Button>
+                      </div>
+                    </Card>
+                  ))
+                ) : (
+                  <div className="col-span-full text-center text-muted-foreground p-8">
+                    No tags found. Click "Add Tag" to create one.
+                  </div>
+                )}
+              </div>
             </div>
           )}
         </Card>
@@ -1069,6 +1234,26 @@ Information,Tech,Product Listings,Product Information,Category Query,Product cat
               </div>
 
               <div className="space-y-2">
+                <Label htmlFor="departmentType">Department Type *</Label>
+                <Select
+                  value={wizardData.departmentType}
+                  onValueChange={(value) => setWizardData({ ...wizardData, departmentType: value as any })}
+                >
+                  <SelectTrigger id="departmentType">
+                    <SelectValue placeholder="Select department type" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="All">All</SelectItem>
+                    <SelectItem value="Seller Support">Seller Support</SelectItem>
+                    <SelectItem value="Customer Support">Customer Support</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
+
+            {/* Category Hierarchy */}
+            <div className="grid gap-4 sm:grid-cols-2">
+              <div className="space-y-2">
                 <Label htmlFor="l1">L1 - Department *</Label>
                 <Input
                   id="l1"
@@ -1078,10 +1263,7 @@ Information,Tech,Product Listings,Product Information,Category Query,Product cat
                   disabled={!!editingConfig}
                 />
               </div>
-            </div>
 
-            {/* Category Hierarchy */}
-            <div className="grid gap-4 sm:grid-cols-2">
               <div className="space-y-2">
                 <Label htmlFor="l2">L2 - Sub Department *</Label>
                 <Input
@@ -1092,7 +1274,9 @@ Information,Tech,Product Listings,Product Information,Category Query,Product cat
                   disabled={!!editingConfig}
                 />
               </div>
+            </div>
 
+            <div className="grid gap-4 sm:grid-cols-2">
               <div className="space-y-2">
                 <Label htmlFor="l3">L3 - Category *</Label>
                 <Input
@@ -1103,17 +1287,17 @@ Information,Tech,Product Listings,Product Information,Category Query,Product cat
                   disabled={!!editingConfig}
                 />
               </div>
-            </div>
 
-            <div className="space-y-2">
-              <Label htmlFor="l4">L4 - Sub Category / Problem Area *</Label>
-              <Input
-                id="l4"
-                value={wizardData.l4}
-                onChange={(e) => setWizardData({ ...wizardData, l4: e.target.value })}
-                placeholder="e.g., Payment Delay"
-                disabled={!!editingConfig}
-              />
+              <div className="space-y-2">
+                <Label htmlFor="l4">L4 - Sub Category / Problem Area *</Label>
+                <Input
+                  id="l4"
+                  value={wizardData.l4}
+                  onChange={(e) => setWizardData({ ...wizardData, l4: e.target.value })}
+                  placeholder="e.g., Payment Delay"
+                  disabled={!!editingConfig}
+                />
+              </div>
             </div>
 
             {/* Description */}
@@ -1325,6 +1509,90 @@ Information,Tech,Product Listings,Product Information,Category Query,Product cat
                   <Upload className="h-4 w-4" />
                   Import {csvData.length} Configuration(s)
                 </>
+              )}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Tag Dialog */}
+      <Dialog open={showTagDialog} onOpenChange={(open) => {
+        if (!open) {
+          setShowTagDialog(false);
+          setEditingTag(null);
+          setTagFormData({ name: "", departmentType: "All" });
+        }
+      }}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>{editingTag ? "Edit" : "Add"} Tag</DialogTitle>
+            <DialogDescription>
+              {editingTag ? "Update the tag details below" : "Create a new tag for ticket categorization"}
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="grid gap-4 py-4">
+            <div className="space-y-2">
+              <Label htmlFor="tagName">Tag Name *</Label>
+              <Input
+                id="tagName"
+                value={tagFormData.name}
+                onChange={(e) => setTagFormData({ ...tagFormData, name: e.target.value })}
+                placeholder="e.g., Urgent, Follow-up, VIP"
+              />
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="tagDepartmentType">Department Type *</Label>
+              <Select
+                value={tagFormData.departmentType}
+                onValueChange={(value) => setTagFormData({ ...tagFormData, departmentType: value as any })}
+              >
+                <SelectTrigger id="tagDepartmentType">
+                  <SelectValue placeholder="Select department type" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="All">All</SelectItem>
+                  <SelectItem value="Seller Support">Seller Support</SelectItem>
+                  <SelectItem value="Customer Support">Customer Support</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+          </div>
+
+          <DialogFooter>
+            <Button
+              variant="outline"
+              onClick={() => {
+                setShowTagDialog(false);
+                setEditingTag(null);
+                setTagFormData({ name: "", departmentType: "All" });
+              }}
+            >
+              Cancel
+            </Button>
+            <Button
+              onClick={() => {
+                if (!tagFormData.name.trim()) {
+                  toast({ title: "Error", description: "Tag name is required", variant: "destructive" });
+                  return;
+                }
+
+                if (editingTag) {
+                  updateTagMutation.mutate({ id: editingTag.id, data: tagFormData });
+                } else {
+                  createTagMutation.mutate(tagFormData);
+                }
+              }}
+              disabled={createTagMutation.isPending || updateTagMutation.isPending}
+            >
+              {(createTagMutation.isPending || updateTagMutation.isPending) ? (
+                <>
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                  {editingTag ? "Updating..." : "Creating..."}
+                </>
+              ) : (
+                editingTag ? "Update Tag" : "Create Tag"
               )}
             </Button>
           </DialogFooter>
