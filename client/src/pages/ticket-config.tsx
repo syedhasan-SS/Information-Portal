@@ -660,7 +660,7 @@ Information,Tech,Product Listings,Product Information,Category Query,Product cat
       case 2: return !!wizardData.l2;
       case 3: return !!wizardData.l3;
       case 4: return !!wizardData.l4;
-      case 5: return !!wizardData.description;
+      case 5: return true;
       case 6: return true;
       case 7: return !!wizardData.slaResolutionHours;
       default: return false;
@@ -759,7 +759,7 @@ Information,Tech,Product Listings,Product Information,Category Query,Product cat
       case 5:
         return (
           <div className="space-y-2">
-            <Label>Description *</Label>
+            <Label>Description</Label>
             <Input
               placeholder="Brief description of this configuration"
               value={wizardData.description}
@@ -981,43 +981,41 @@ Information,Tech,Product Listings,Product Information,Category Query,Product cat
 
       <main className="mx-auto max-w-[1600px] px-6 py-8">
         {/* Analytics Summary Cards */}
-        {filteredConfigs && filteredConfigs.length > 0 && (
-          <div className="mb-6 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-            <Card className="p-6">
-              <div>
-                <p className="text-sm text-muted-foreground">Total Configurations</p>
-                <p className="mt-2 text-3xl font-bold">{filteredConfigs.length}</p>
-              </div>
-            </Card>
+        <div className="mb-6 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+          <Card className="p-6">
+            <div>
+              <p className="text-sm text-muted-foreground">Total Configurations</p>
+              <p className="mt-2 text-3xl font-bold">{filteredConfigs?.length || 0}</p>
+            </div>
+          </Card>
 
-            <Card className="p-6">
-              <div>
-                <p className="text-sm text-muted-foreground">Active Configs</p>
-                <p className="mt-2 text-3xl font-bold text-green-600">
-                  {filteredConfigs.filter(c => c.isActive).length}
-                </p>
-              </div>
-            </Card>
+          <Card className="p-6">
+            <div>
+              <p className="text-sm text-muted-foreground">Active Configs</p>
+              <p className="mt-2 text-3xl font-bold text-green-600">
+                {filteredConfigs?.filter(c => c.isActive).length || 0}
+              </p>
+            </div>
+          </Card>
 
-            <Card className="p-6">
-              <div>
-                <p className="text-sm text-muted-foreground">Inactive Configs</p>
-                <p className="mt-2 text-3xl font-bold text-gray-600">
-                  {filteredConfigs.filter(c => !c.isActive).length}
-                </p>
-              </div>
-            </Card>
+          <Card className="p-6">
+            <div>
+              <p className="text-sm text-muted-foreground">Inactive Configs</p>
+              <p className="mt-2 text-3xl font-bold text-gray-600">
+                {filteredConfigs?.filter(c => !c.isActive).length || 0}
+              </p>
+            </div>
+          </Card>
 
-            <Card className="p-6">
-              <div>
-                <p className="text-sm text-muted-foreground">Issue Types</p>
-                <p className="mt-2 text-3xl font-bold">
-                  {new Set(filteredConfigs.map(c => c.issueType)).size}
-                </p>
-              </div>
-            </Card>
-          </div>
-        )}
+          <Card className="p-6">
+            <div>
+              <p className="text-sm text-muted-foreground">Issue Types</p>
+              <p className="mt-2 text-3xl font-bold">
+                {filteredConfigs && filteredConfigs.length > 0 ? new Set(filteredConfigs.map(c => c.issueType)).size : 0}
+              </p>
+            </div>
+          </Card>
+        </div>
 
         {/* Distribution Charts */}
         {filteredConfigs && filteredConfigs.length > 0 && (
@@ -1244,7 +1242,7 @@ Information,Tech,Product Listings,Product Information,Category Query,Product cat
                   ) : (
                     <TableRow>
                       <TableCell colSpan={10} className="text-center text-muted-foreground">
-                        No configurations found. Click "Add Configuration" to create one.
+                        No Category Created Yet
                       </TableCell>
                     </TableRow>
                   )}

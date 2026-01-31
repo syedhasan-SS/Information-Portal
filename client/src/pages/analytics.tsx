@@ -10,6 +10,12 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from "@/components/ui/popover";
+import { Calendar as CalendarComponent } from "@/components/ui/calendar";
 import { useLocation } from "wouter";
 import {
   ArrowLeft,
@@ -20,7 +26,10 @@ import {
   AlertCircle,
   Loader2,
   Calendar,
+  CalendarRange,
+  X,
 } from "lucide-react";
+import { format } from "date-fns";
 import {
   LineChart,
   Line,
@@ -38,7 +47,7 @@ import {
 } from "recharts";
 import type { Ticket } from "@shared/schema";
 
-const TIME_GROUPINGS = ["Daily", "Weekly", "Monthly"] as const;
+const TIME_GROUPINGS = ["Daily", "Weekly", "Monthly", "Quarterly", "Half Year"] as const;
 const ISSUE_TYPES = ["All", "Complaint", "Request"] as const;
 
 interface AnalyticsData {
@@ -122,6 +131,14 @@ function processAnalyticsData(
       const weekStart = new Date(date);
       weekStart.setDate(date.getDate() - date.getDay());
       key = weekStart.toISOString().split("T")[0];
+    } else if (timeGrouping === "Monthly") {
+      key = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}`;
+    } else if (timeGrouping === "Quarterly") {
+      const quarter = Math.floor(date.getMonth() / 3) + 1;
+      key = `${date.getFullYear()}-Q${quarter}`;
+    } else if (timeGrouping === "Half Year") {
+      const half = date.getMonth() < 6 ? 1 : 2;
+      key = `${date.getFullYear()}-H${half}`;
     } else {
       key = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}`;
     }
@@ -212,6 +229,61 @@ export default function AnalyticsPage() {
   const [timeGrouping, setTimeGrouping] = useState<string>("Daily");
   const [issueType, setIssueType] = useState<string>("All");
   const [dateRange, setDateRange] = useState<{ start?: Date; end?: Date }>({});
+  const [datePreset, setDatePreset] = useState<string>("all");
+  const [customDateStart, setCustomDateStart] = useState<Date | undefined>();
+  const [customDateEnd, setCustomDateEnd] = useState<Date | undefined>();
+
+  // Helper function to set date range based on preset
+  const applyDatePreset = (preset: string) => {
+    setDatePreset(preset);
+    const now = new Date();
+    const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+
+    switch (preset) {
+      case "all":
+        setDateRange({});
+        break;
+      case "today":
+        setDateRange({ start: today, end: new Date(today.getTime() + 24 * 60 * 60 * 1000 - 1) });
+        break;
+      case "yesterday":
+        const yesterday = new Date(today);
+        yesterday.setDate(yesterday.getDate() - 1);
+        setDateRange({ start: yesterday, end: new Date(yesterday.getTime() + 24 * 60 * 60 * 1000 - 1) });
+        break;
+      case "last7":
+        const last7 = new Date(today);
+        last7.setDate(last7.getDate() - 7);
+        setDateRange({ start: last7, end: now });
+        break;
+      case "last15":
+        const last15 = new Date(today);
+        last15.setDate(last15.getDate() - 15);
+        setDateRange({ start: last15, end: now });
+        break;
+      case "last30":
+        const last30 = new Date(today);
+        last30.setDate(last30.getDate() - 30);
+        setDateRange({ start: last30, end: now });
+        break;
+      case "previousWeek":
+        // Previous week: Sunday to Saturday
+        const currentDay = now.getDay();
+        const lastSunday = new Date(today);
+        lastSunday.setDate(lastSunday.getDate() - currentDay - 7);
+        const lastSaturday = new Date(lastSunday);
+        lastSaturday.setDate(lastSaturday.getDate() + 6);
+        setDateRange({ start: lastSunday, end: new Date(lastSaturday.getTime() + 24 * 60 * 60 * 1000 - 1) });
+        break;
+      case "custom":
+        if (customDateStart && customDateEnd) {
+          setDateRange({ start: customDateStart, end: customDateEnd });
+        }
+        break;
+      default:
+        setDateRange({});
+    }
+  };
 
   const { data: tickets, isLoading } = useQuery({
     queryKey: ["tickets"],
@@ -303,6 +375,132 @@ export default function AnalyticsPage() {
                   ))}
                 </SelectContent>
               </Select>
+            </div>
+
+            <div className="space-y-2">
+              <Label>Date Range</Label>
+              <div className="flex gap-2">
+                {dateRange.start && dateRange.end ? (
+                  <div className="flex flex-1 items-center gap-2 rounded-md border border-input bg-background px-3 py-2 text-sm">
+                    <CalendarRange className="h-4 w-4 text-muted-foreground" />
+                    <span>
+                      {format(dateRange.start, "MMM d, yyyy")} - {format(dateRange.end, "MMM d, yyyy")}
+                    </span>
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      className="ml-auto h-4 w-4 p-0"
+                      onClick={() => {
+                        setDateRange({});
+                        setDatePreset("all");
+                      }}
+                    >
+                      <X className="h-3 w-3" />
+                    </Button>
+                  </div>
+                ) : (
+                  <span className="flex flex-1 items-center rounded-md border border-input bg-background px-3 py-2 text-sm text-muted-foreground">
+                    All Time
+                  </span>
+                )}
+              </div>
+            </div>
+          </div>
+
+          {/* Date Preset Buttons */}
+          <div className="mt-4 space-y-2">
+            <Label className="text-xs text-muted-foreground">Quick Filters</Label>
+            <div className="flex flex-wrap gap-2">
+              <Button
+                variant={datePreset === "all" ? "default" : "outline"}
+                size="sm"
+                onClick={() => applyDatePreset("all")}
+              >
+                All Time
+              </Button>
+              <Button
+                variant={datePreset === "today" ? "default" : "outline"}
+                size="sm"
+                onClick={() => applyDatePreset("today")}
+              >
+                Today
+              </Button>
+              <Button
+                variant={datePreset === "yesterday" ? "default" : "outline"}
+                size="sm"
+                onClick={() => applyDatePreset("yesterday")}
+              >
+                Yesterday
+              </Button>
+              <Button
+                variant={datePreset === "last7" ? "default" : "outline"}
+                size="sm"
+                onClick={() => applyDatePreset("last7")}
+              >
+                Last 7 Days
+              </Button>
+              <Button
+                variant={datePreset === "last15" ? "default" : "outline"}
+                size="sm"
+                onClick={() => applyDatePreset("last15")}
+              >
+                Last 15 Days
+              </Button>
+              <Button
+                variant={datePreset === "last30" ? "default" : "outline"}
+                size="sm"
+                onClick={() => applyDatePreset("last30")}
+              >
+                Last 30 Days
+              </Button>
+              <Button
+                variant={datePreset === "previousWeek" ? "default" : "outline"}
+                size="sm"
+                onClick={() => applyDatePreset("previousWeek")}
+              >
+                Previous Week
+              </Button>
+              <Popover>
+                <PopoverTrigger asChild>
+                  <Button variant={datePreset === "custom" ? "default" : "outline"} size="sm">
+                    <Calendar className="mr-2 h-4 w-4" />
+                    Custom Range
+                  </Button>
+                </PopoverTrigger>
+                <PopoverContent className="w-auto p-4" align="start">
+                  <div className="space-y-4">
+                    <div className="space-y-2">
+                      <Label>Start Date</Label>
+                      <CalendarComponent
+                        mode="single"
+                        selected={customDateStart}
+                        onSelect={setCustomDateStart}
+                        disabled={(date) => date > new Date()}
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <Label>End Date</Label>
+                      <CalendarComponent
+                        mode="single"
+                        selected={customDateEnd}
+                        onSelect={setCustomDateEnd}
+                        disabled={(date) => date > new Date() || (customDateStart && date < customDateStart)}
+                      />
+                    </div>
+                    <Button
+                      className="w-full"
+                      onClick={() => {
+                        if (customDateStart && customDateEnd) {
+                          applyDatePreset("custom");
+                        }
+                      }}
+                      disabled={!customDateStart || !customDateEnd}
+                    >
+                      Apply Custom Range
+                    </Button>
+                  </div>
+                </PopoverContent>
+              </Popover>
             </div>
           </div>
         </Card>

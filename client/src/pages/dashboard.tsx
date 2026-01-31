@@ -219,33 +219,17 @@ export default function DashboardPage() {
                 )}
               </Button>
 
-              {/* TEST LINK - Remove after testing */}
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={() => {
-                  console.log("TEST: Navigating to notifications");
-                  setLocation("/notifications");
-                }}
-              >
-                TEST Notifications
-              </Button>
-
               {/* User Profile Dropdown */}
               {user && (
                 <DropdownMenu>
                   <DropdownMenuTrigger asChild>
-                    <Button variant="ghost" size="sm" className="gap-2">
-                      <Avatar className="h-8 w-8">
+                    <Button variant="ghost" size="icon" className="relative">
+                      <Avatar className="h-9 w-9">
                         <AvatarImage src={user.profilePicture || undefined} alt={user.name} />
-                        <AvatarFallback className="text-xs">
-                          {user.name.split(' ').map(n => n[0]).join('')}
+                        <AvatarFallback className="text-sm font-medium">
+                          {user.name.split(' ').map(n => n[0]).join('').toUpperCase()}
                         </AvatarFallback>
                       </Avatar>
-                      <div className="hidden flex-col items-start lg:flex">
-                        <span className="text-sm font-medium">{user.name}</span>
-                        <span className="text-xs text-muted-foreground">{user.role}</span>
-                      </div>
                     </Button>
                   </DropdownMenuTrigger>
                   <DropdownMenuContent align="end" className="w-56">
