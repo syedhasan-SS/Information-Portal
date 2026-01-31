@@ -79,7 +79,56 @@ export const tickets = pgTable("tickets", {
   
   zendeskLinked: boolean("zendesk_linked").notNull().default(false),
   zendeskTicketId: text("zendesk_ticket_id"),
-  
+
+  // CONFIGURATION SNAPSHOTS - Immutable state captured at creation
+  categorySnapshot: jsonb("category_snapshot").$type<{
+    categoryId: string;
+    issueType: string;
+    l1: string;
+    l2: string;
+    l3: string;
+    l4: string | null;
+    path: string;
+    departmentType?: string;
+    issuePriorityPoints: number;
+  }>(),
+
+  slaSnapshot: jsonb("sla_snapshot").$type<{
+    configurationId?: string;
+    responseTimeHours: number | null;
+    resolutionTimeHours: number;
+    useBusinessHours: boolean;
+    responseTarget: string | null;  // ISO timestamp
+    resolveTarget: string;          // ISO timestamp
+  }>(),
+
+  prioritySnapshot: jsonb("priority_snapshot").$type<{
+    configurationId?: string;
+    score: number;
+    tier: "Critical" | "High" | "Medium" | "Low";
+    badge: "P0" | "P1" | "P2" | "P3";
+    breakdown: {
+      vendorTicketVolume: number;
+      vendorGmvTier: string;
+      issuePriorityPoints: number;
+      gmvPoints: number;
+      ticketHistoryPoints: number;
+      issuePoints: number;
+    };
+  }>(),
+
+  tagsSnapshot: jsonb("tags_snapshot").$type<Array<{
+    id: string;
+    name: string;
+    color?: string;
+    departmentType?: string;
+    appliedAt: string;
+  }>>(),
+
+  // VERSION TRACKING
+  snapshotVersion: integer("snapshot_version").notNull().default(1),
+  snapshotCapturedAt: timestamp("snapshot_captured_at"),
+
   createdAt: timestamp("created_at").notNull().defaultNow(),
   updatedAt: timestamp("updated_at").notNull().defaultNow(),
 });
@@ -187,6 +236,12 @@ export const categoryHierarchy = pgTable("category_hierarchy", {
   description: text("description"),
   departmentType: text("department_type").$type<"Seller Support" | "Customer Support" | "All">().default("All"),
   isActive: boolean("is_active").notNull().default(true),
+  // Audit fields
+  createdById: varchar("created_by_id").references(() => users.id, { onDelete: "set null" }),
+  updatedById: varchar("updated_by_id").references(() => users.id, { onDelete: "set null" }),
+  deletedAt: timestamp("deleted_at"),
+  deletedById: varchar("deleted_by_id").references(() => users.id, { onDelete: "set null" }),
+  version: integer("version").notNull().default(1),
   createdAt: timestamp("created_at").notNull().defaultNow(),
   updatedAt: timestamp("updated_at").notNull().defaultNow(),
 });
@@ -246,6 +301,12 @@ export const tags = pgTable("tags", {
     value?: any;
   }>(),
   isActive: boolean("is_active").notNull().default(true),
+  // Audit fields
+  createdById: varchar("created_by_id").references(() => users.id, { onDelete: "set null" }),
+  updatedById: varchar("updated_by_id").references(() => users.id, { onDelete: "set null" }),
+  deletedAt: timestamp("deleted_at"),
+  deletedById: varchar("deleted_by_id").references(() => users.id, { onDelete: "set null" }),
+  version: integer("version").notNull().default(1),
   createdAt: timestamp("created_at").notNull().defaultNow(),
   updatedAt: timestamp("updated_at").notNull().defaultNow(),
 });
@@ -291,6 +352,12 @@ export const categorySettings = pgTable("category_settings", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
   departmentType: text("department_type").$type<"Seller Support" | "Customer Support" | "All">().default("All"),
   l4Mandatory: boolean("l4_mandatory").notNull().default(false),
+  // Audit fields
+  createdById: varchar("created_by_id").references(() => users.id, { onDelete: "set null" }),
+  updatedById: varchar("updated_by_id").references(() => users.id, { onDelete: "set null" }),
+  deletedAt: timestamp("deleted_at"),
+  deletedById: varchar("deleted_by_id").references(() => users.id, { onDelete: "set null" }),
+  version: integer("version").notNull().default(1),
   createdAt: timestamp("created_at").notNull().defaultNow(),
   updatedAt: timestamp("updated_at").notNull().defaultNow(),
 });
@@ -311,9 +378,55 @@ export const ticketFieldConfigurations = pgTable("ticket_field_configurations", 
     options?: Array<{ label: string; value: string }>;
     [key: string]: any;
   }>(),
+  // Audit fields
+  createdById: varchar("created_by_id").references(() => users.id, { onDelete: "set null" }),
+  updatedById: varchar("updated_by_id").references(() => users.id, { onDelete: "set null" }),
+  deletedAt: timestamp("deleted_at"),
+  deletedById: varchar("deleted_by_id").references(() => users.id, { onDelete: "set null" }),
+  version: integer("version").notNull().default(1),
   createdAt: timestamp("created_at").notNull().defaultNow(),
   updatedAt: timestamp("updated_at").notNull().defaultNow(),
 });
+
+// Configuration Audit Log Table
+export const configurationAuditLog = pgTable("configuration_audit_log", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+
+  // What was changed
+  entityType: text("entity_type").notNull().$type<
+    "issueType" | "categoryHierarchy" | "categoryMapping" |
+    "slaConfiguration" | "priorityConfiguration" | "tag" |
+    "categorySettings" | "ticketFieldConfiguration"
+  >(),
+  entityId: varchar("entity_id").notNull(),
+
+  // Action metadata
+  action: text("action").notNull().$type<"create" | "update" | "delete" | "restore">(),
+  version: integer("version").notNull(),
+
+  // Who made the change
+  userId: varchar("user_id").references(() => users.id, { onDelete: "set null" }),
+  userEmail: text("user_email").notNull(),
+  userName: text("user_name").notNull(),
+
+  // Change details
+  previousData: jsonb("previous_data"),
+  newData: jsonb("new_data"),
+  changedFields: text("changed_fields").array(),
+
+  // Additional context
+  changeReason: text("change_reason"),
+  ipAddress: text("ip_address"),
+  userAgent: text("user_agent"),
+
+  timestamp: timestamp("timestamp").notNull().defaultNow(),
+}, (table) => ({
+  entityTypeIdx: index("config_audit_entity_type_idx").on(table.entityType),
+  entityIdIdx: index("config_audit_entity_id_idx").on(table.entityId),
+  userIdIdx: index("config_audit_user_id_idx").on(table.userId),
+  timestampIdx: index("config_audit_timestamp_idx").on(table.timestamp),
+  compositeIdx: index("config_audit_entity_composite_idx").on(table.entityType, table.entityId),
+}));
 
 export const insertCategorySettingsSchema = createInsertSchema(categorySettings).omit({
   id: true,
@@ -344,6 +457,7 @@ export type PriorityConfiguration = typeof priorityConfigurations.$inferSelect;
 export type Tag = typeof tags.$inferSelect;
 export type CategorySettings = typeof categorySettings.$inferSelect;
 export type TicketFieldConfiguration = typeof ticketFieldConfigurations.$inferSelect;
+export type ConfigurationAuditLog = typeof configurationAuditLog.$inferSelect;
 
 export type Vendor = typeof vendors.$inferSelect;
 export type Category = typeof categories.$inferSelect;
