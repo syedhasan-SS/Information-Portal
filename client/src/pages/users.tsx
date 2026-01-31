@@ -88,6 +88,8 @@ async function createUser(data: {
   role: string;
   roles?: string[];
   department?: string;
+  subDepartment?: string;
+  managerId?: string;
 }): Promise<User> {
   const res = await fetch("/api/users", {
     method: "POST",
@@ -107,6 +109,8 @@ async function updateUser(id: number, data: {
   role?: string;
   roles?: string[];
   department?: string;
+  subDepartment?: string;
+  managerId?: string;
 }): Promise<User> {
   const res = await fetch(`/api/users/${id}`, {
     method: "PUT",
@@ -163,6 +167,8 @@ export default function UsersPage() {
     password: "",
     role: "",
     department: "",
+    subDepartment: "",
+    managerId: "",
   });
   const [selectedRoles, setSelectedRoles] = useState<string[]>([]);
   const [error, setError] = useState("");
@@ -174,6 +180,8 @@ export default function UsersPage() {
     email: "",
     role: "",
     department: "",
+    subDepartment: "",
+    managerId: "",
   });
   const [editSelectedRoles, setEditSelectedRoles] = useState<string[]>([]);
   const [changingPasswordUser, setChangingPasswordUser] = useState<User | null>(null);
@@ -193,7 +201,7 @@ export default function UsersPage() {
     mutationFn: createUser,
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["users"] });
-      setFormData({ name: "", email: "", password: "", role: "", department: "" });
+      setFormData({ name: "", email: "", password: "", role: "", department: "", subDepartment: "", managerId: "" });
       setSelectedRoles([]);
       setShowForm(false);
       setSuccess("User created successfully!");
@@ -293,6 +301,8 @@ export default function UsersPage() {
       email: user.email,
       role: user.role,
       department: user.department || "",
+      subDepartment: user.subDepartment || "",
+      managerId: user.managerId || "",
     });
     setEditSelectedRoles(user.roles || []);
   };
@@ -386,6 +396,17 @@ export default function UsersPage() {
         prev.includes(role) ? prev.filter((r) => r !== role) : [...prev, role]
       );
     }
+  };
+
+  const getManagerName = (managerId: string | undefined | null) => {
+    if (!managerId || !users) return null;
+    const manager = users.find(u => u.id === managerId);
+    return manager ? manager.name : null;
+  };
+
+  const getDirectReports = (userId: string) => {
+    if (!users) return [];
+    return users.filter(u => u.managerId === userId);
   };
 
   const roleColors: Record<string, string> = {
@@ -603,7 +624,7 @@ export default function UsersPage() {
                   </p>
                 </div>
 
-                <div className="space-y-2 sm:col-span-2">
+                <div className="space-y-2">
                   <Label htmlFor="department">Department (optional)</Label>
                   <Select
                     value={formData.department}
@@ -620,6 +641,39 @@ export default function UsersPage() {
                       ))}
                     </SelectContent>
                   </Select>
+                </div>
+
+                <div className="space-y-2">
+                  <Label htmlFor="subDepartment">Sub-Department (optional)</Label>
+                  <Input
+                    id="subDepartment"
+                    placeholder="e.g., Shipping, QC, Logistics"
+                    value={formData.subDepartment}
+                    onChange={(e) => setFormData({ ...formData, subDepartment: e.target.value })}
+                    data-testid="input-sub-department"
+                  />
+                  <p className="text-xs text-muted-foreground">Sub-team or specialized unit within the department</p>
+                </div>
+
+                <div className="space-y-2 sm:col-span-2">
+                  <Label htmlFor="managerId">Reports To (optional)</Label>
+                  <Select
+                    value={formData.managerId}
+                    onValueChange={(value) => setFormData({ ...formData, managerId: value })}
+                  >
+                    <SelectTrigger data-testid="select-manager">
+                      <SelectValue placeholder="Select manager" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="">None</SelectItem>
+                      {users?.filter(u => u.isActive).map((user) => (
+                        <SelectItem key={user.id} value={user.id}>
+                          {user.name} - {user.role}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                  <p className="text-xs text-muted-foreground">Select the direct manager for this user</p>
                 </div>
               </div>
 
@@ -744,9 +798,27 @@ export default function UsersPage() {
                           )
                         ))}
                         {user.department && (
-                          <Badge variant="secondary">{user.department}</Badge>
+                          <Badge variant="secondary">
+                            {user.department}{user.subDepartment ? ` - ${user.subDepartment}` : ''}
+                          </Badge>
                         )}
                       </div>
+                      {(user.managerId || getDirectReports(user.id).length > 0) && (
+                        <div className="mt-2 space-y-1 text-xs text-muted-foreground">
+                          {user.managerId && (
+                            <div className="flex items-center gap-1">
+                              <span className="font-medium">Reports to:</span>
+                              <span>{getManagerName(user.managerId)}</span>
+                            </div>
+                          )}
+                          {getDirectReports(user.id).length > 0 && (
+                            <div className="flex items-center gap-1">
+                              <span className="font-medium">Direct reports:</span>
+                              <span>{getDirectReports(user.id).length}</span>
+                            </div>
+                          )}
+                        </div>
+                      )}
                       <div className="flex items-center justify-between text-xs text-muted-foreground">
                         <span>{user.isActive ? "Active" : "Inactive"}</span>
                         <span>Created {new Date(user.createdAt).toLocaleDateString()}</span>
@@ -871,6 +943,38 @@ export default function UsersPage() {
                   ))}
                 </SelectContent>
               </Select>
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="edit-subDepartment">Sub-Department (optional)</Label>
+              <Input
+                id="edit-subDepartment"
+                placeholder="e.g., Shipping, QC, Logistics"
+                value={editFormData.subDepartment}
+                onChange={(e) => setEditFormData({ ...editFormData, subDepartment: e.target.value })}
+              />
+              <p className="text-xs text-muted-foreground">Sub-team or specialized unit</p>
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="edit-managerId">Reports To (optional)</Label>
+              <Select
+                value={editFormData.managerId}
+                onValueChange={(value) => setEditFormData({ ...editFormData, managerId: value })}
+              >
+                <SelectTrigger>
+                  <SelectValue placeholder="Select manager" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="">None</SelectItem>
+                  {users?.filter(u => u.isActive && u.id !== editingUser?.id).map((user) => (
+                    <SelectItem key={user.id} value={user.id}>
+                      {user.name} - {user.role}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              <p className="text-xs text-muted-foreground">Select the direct manager</p>
             </div>
 
             <DialogFooter>

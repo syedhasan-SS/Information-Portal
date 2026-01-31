@@ -1,5 +1,5 @@
 import { sql } from "drizzle-orm";
-import { pgTable, text, varchar, integer, timestamp, jsonb, boolean, index } from "drizzle-orm/pg-core";
+import { pgTable, text, varchar, integer, timestamp, jsonb, boolean, index, type AnyPgColumn } from "drizzle-orm/pg-core";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod";
 
@@ -150,6 +150,8 @@ export const users = pgTable("users", {
   role: text("role").notNull().$type<"Owner" | "Admin" | "Seller Support Agent" | "Department Head" | "Department Manager" | "Department Agent">(),
   roles: text("roles").array().$type<Array<"Owner" | "Admin" | "Seller Support Agent" | "Department Head" | "Department Manager" | "Department Agent">>(), // Multi-role support
   department: text("department").$type<"Finance" | "Operations" | "Marketplace" | "Tech" | "Experience" | "CX" | "Seller Support">(),
+  subDepartment: text("sub_department"), // Sub-department for organizational hierarchy
+  managerId: varchar("manager_id").references((): AnyPgColumn => users.id, { onDelete: "set null" }), // Reports to (direct manager)
   profilePicture: text("profile_picture"),
   customPermissions: text("custom_permissions").array(), // Agent-level custom permissions
   isActive: boolean("is_active").notNull().default(true),
