@@ -77,13 +77,26 @@ const DEFAULT_TICKET_FIELDS = [
     fieldName: "vendorHandle",
     fieldLabel: "Vendor Handle",
     fieldType: "text" as const,
-    departmentType: "All" as const,
+    departmentType: "Seller Support" as const,
     isEnabled: true,
     isRequired: true,
     displayOrder: 1,
     metadata: {
       placeholder: "Enter or search vendor handle",
       helpText: "The unique identifier for the vendor/seller",
+    },
+  },
+  {
+    fieldName: "customer",
+    fieldLabel: "Customer",
+    fieldType: "text" as const,
+    departmentType: "Customer Support" as const,
+    isEnabled: true,
+    isRequired: true,
+    displayOrder: 1,
+    metadata: {
+      placeholder: "Enter customer name or ID",
+      helpText: "The customer associated with this ticket",
     },
   },
   {
