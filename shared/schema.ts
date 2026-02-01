@@ -416,6 +416,32 @@ export const ticketFieldConfigurations = pgTable("ticket_field_configurations", 
   updatedAt: timestamp("updated_at").notNull().defaultNow(),
 });
 
+// Category Field Overrides Table - Links categories to field configurations with overrides
+export const categoryFieldOverrides = pgTable("category_field_overrides", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  // Link to category (can be any level, but typically L4 for most specific)
+  categoryId: varchar("category_id").notNull(), // Can reference categories.id or categoryHierarchy.id
+  // Link to base field configuration
+  fieldConfigurationId: varchar("field_configuration_id")
+    .notNull()
+    .references(() => ticketFieldConfigurations.id, { onDelete: "cascade" }),
+  // Override settings (null means inherit from base field config)
+  visibilityOverride: text("visibility_override").$type<"visible" | "hidden" | null>(),
+  requiredOverride: boolean("required_override"), // null = inherit, true = required, false = optional
+  displayOrderOverride: integer("display_order_override"),
+  // Optional: category-specific metadata overrides
+  metadataOverride: jsonb("metadata_override").$type<{
+    placeholder?: string;
+    helpText?: string;
+    defaultValue?: any;
+  }>(),
+  // Audit fields
+  createdById: varchar("created_by_id").references(() => users.id, { onDelete: "set null" }),
+  updatedById: varchar("updated_by_id").references(() => users.id, { onDelete: "set null" }),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+  updatedAt: timestamp("updated_at").notNull().defaultNow(),
+});
+
 // Configuration Audit Log Table
 export const configurationAuditLog = pgTable("configuration_audit_log", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
@@ -424,7 +450,7 @@ export const configurationAuditLog = pgTable("configuration_audit_log", {
   entityType: text("entity_type").notNull().$type<
     "issueType" | "categoryHierarchy" | "categoryMapping" |
     "slaConfiguration" | "priorityConfiguration" | "tag" |
-    "categorySettings" | "ticketFieldConfiguration"
+    "categorySettings" | "ticketFieldConfiguration" | "categoryFieldOverride"
   >(),
   entityId: varchar("entity_id").notNull(),
 
@@ -468,6 +494,12 @@ export const insertTicketFieldConfigurationSchema = createInsertSchema(ticketFie
   updatedAt: true,
 });
 
+export const insertCategoryFieldOverrideSchema = createInsertSchema(categoryFieldOverrides).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+});
+
 export type InsertIssueType = z.infer<typeof insertIssueTypeSchema>;
 export type InsertCategoryHierarchy = z.infer<typeof insertCategoryHierarchySchema>;
 export type InsertCategoryMapping = z.infer<typeof insertCategoryMappingSchema>;
@@ -476,6 +508,7 @@ export type InsertPriorityConfiguration = z.infer<typeof insertPriorityConfigura
 export type InsertTag = z.infer<typeof insertTagSchema>;
 export type InsertCategorySettings = z.infer<typeof insertCategorySettingsSchema>;
 export type InsertTicketFieldConfiguration = z.infer<typeof insertTicketFieldConfigurationSchema>;
+export type InsertCategoryFieldOverride = z.infer<typeof insertCategoryFieldOverrideSchema>;
 
 export type IssueType = typeof issueTypes.$inferSelect;
 export type CategoryHierarchy = typeof categoryHierarchy.$inferSelect;
@@ -485,6 +518,7 @@ export type PriorityConfiguration = typeof priorityConfigurations.$inferSelect;
 export type Tag = typeof tags.$inferSelect;
 export type CategorySettings = typeof categorySettings.$inferSelect;
 export type TicketFieldConfiguration = typeof ticketFieldConfigurations.$inferSelect;
+export type CategoryFieldOverride = typeof categoryFieldOverrides.$inferSelect;
 export type ConfigurationAuditLog = typeof configurationAuditLog.$inferSelect;
 
 export type Vendor = typeof vendors.$inferSelect;

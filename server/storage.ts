@@ -15,6 +15,7 @@ import {
   tags,
   categorySettings,
   ticketFieldConfigurations,
+  categoryFieldOverrides,
   departments,
   subDepartments,
   type Vendor,
@@ -31,6 +32,7 @@ import {
   type Tag,
   type CategorySettings,
   type TicketFieldConfiguration,
+  type CategoryFieldOverride,
   type Department,
   type SubDepartment,
   type InsertVendor,
@@ -47,6 +49,7 @@ import {
   type InsertTag,
   type InsertCategorySettings,
   type InsertTicketFieldConfiguration,
+  type InsertCategoryFieldOverride,
 } from "@shared/schema";
 
 export interface IStorage {
@@ -683,6 +686,120 @@ export class DatabaseStorage implements IStorage {
       .where(eq(ticketFieldConfigurations.id, id))
       .returning();
     return results[0];
+  }
+
+  // Category Field Overrides
+  async getCategoryFieldOverrides(categoryId: string): Promise<CategoryFieldOverride[]> {
+    return await db.select().from(categoryFieldOverrides)
+      .where(eq(categoryFieldOverrides.categoryId, categoryId))
+      .orderBy(categoryFieldOverrides.displayOrderOverride);
+  }
+
+  async getCategoryFieldOverridesByField(fieldConfigurationId: string): Promise<CategoryFieldOverride[]> {
+    return await db.select().from(categoryFieldOverrides)
+      .where(eq(categoryFieldOverrides.fieldConfigurationId, fieldConfigurationId));
+  }
+
+  async getCategoryFieldOverride(categoryId: string, fieldConfigurationId: string): Promise<CategoryFieldOverride | undefined> {
+    const results = await db.select().from(categoryFieldOverrides)
+      .where(and(
+        eq(categoryFieldOverrides.categoryId, categoryId),
+        eq(categoryFieldOverrides.fieldConfigurationId, fieldConfigurationId)
+      ))
+      .limit(1);
+    return results[0];
+  }
+
+  async createCategoryFieldOverride(override: InsertCategoryFieldOverride): Promise<CategoryFieldOverride> {
+    const results = await db.insert(categoryFieldOverrides).values(override).returning();
+    return results[0];
+  }
+
+  async updateCategoryFieldOverride(id: string, updates: Partial<InsertCategoryFieldOverride>): Promise<CategoryFieldOverride | undefined> {
+    const results = await db
+      .update(categoryFieldOverrides)
+      .set({ ...updates, updatedAt: new Date() })
+      .where(eq(categoryFieldOverrides.id, id))
+      .returning();
+    return results[0];
+  }
+
+  async deleteCategoryFieldOverride(id: string): Promise<void> {
+    await db.delete(categoryFieldOverrides).where(eq(categoryFieldOverrides.id, id));
+  }
+
+  async deleteCategoryFieldOverridesByCategoryId(categoryId: string): Promise<void> {
+    await db.delete(categoryFieldOverrides).where(eq(categoryFieldOverrides.categoryId, categoryId));
+  }
+
+  async upsertCategoryFieldOverrides(
+    categoryId: string,
+    overrides: Array<{
+      fieldConfigurationId: string;
+      visibilityOverride?: "visible" | "hidden" | null;
+      requiredOverride?: boolean | null;
+      displayOrderOverride?: number | null;
+      metadataOverride?: any;
+    }>,
+    userId?: string
+  ): Promise<CategoryFieldOverride[]> {
+    const results: CategoryFieldOverride[] = [];
+
+    for (const override of overrides) {
+      const existing = await this.getCategoryFieldOverride(categoryId, override.fieldConfigurationId);
+
+      if (existing) {
+        const updated = await this.updateCategoryFieldOverride(existing.id, {
+          ...override,
+          updatedById: userId,
+        });
+        if (updated) results.push(updated);
+      } else {
+        const created = await this.createCategoryFieldOverride({
+          categoryId,
+          ...override,
+          createdById: userId,
+        });
+        results.push(created);
+      }
+    }
+
+    return results;
+  }
+
+  // Get resolved field configuration for a category (with inheritance/overrides applied)
+  async getResolvedFieldsForCategory(
+    categoryId: string,
+    departmentType?: "Seller Support" | "Customer Support" | "All"
+  ): Promise<Array<TicketFieldConfiguration & {
+    override?: CategoryFieldOverride;
+    effectiveVisibility: "visible" | "hidden";
+    effectiveRequired: boolean;
+  }>> {
+    // Get base field configurations
+    const baseFields = departmentType
+      ? await this.getTicketFieldConfigurationsByDepartment(departmentType)
+      : await this.getTicketFieldConfigurations();
+
+    // Get overrides for this category
+    const overrides = await this.getCategoryFieldOverrides(categoryId);
+    const overrideMap = new Map(overrides.map(o => [o.fieldConfigurationId, o]));
+
+    // Merge and resolve
+    return baseFields
+      .filter(field => field.isEnabled)
+      .map(field => {
+        const override = overrideMap.get(field.id);
+        return {
+          ...field,
+          override,
+          effectiveVisibility: (override?.visibilityOverride ?? "visible") as "visible" | "hidden",
+          effectiveRequired: override?.requiredOverride ?? field.isRequired,
+          displayOrder: override?.displayOrderOverride ?? field.displayOrder,
+        };
+      })
+      .filter(field => field.effectiveVisibility !== "hidden")
+      .sort((a, b) => a.displayOrder - b.displayOrder);
   }
 
   // Notifications

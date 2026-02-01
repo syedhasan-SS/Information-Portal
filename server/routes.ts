@@ -1318,6 +1318,72 @@ export async function registerRoutes(
     }
   });
 
+  // Category Field Overrides - Configure form fields per category
+  app.get("/api/config/categories/:categoryId/field-overrides", async (req, res) => {
+    try {
+      const { categoryId } = req.params;
+      const overrides = await storage.getCategoryFieldOverrides(categoryId);
+      res.json(overrides);
+    } catch (error: any) {
+      res.status(500).json({ error: error.message });
+    }
+  });
+
+  app.get("/api/config/categories/:categoryId/resolved-fields", async (req, res) => {
+    try {
+      const { categoryId } = req.params;
+      const departmentType = req.query.departmentType as "Seller Support" | "Customer Support" | "All" | undefined;
+
+      const resolvedFields = await storage.getResolvedFieldsForCategory(
+        categoryId,
+        departmentType
+      );
+      res.json(resolvedFields);
+    } catch (error: any) {
+      res.status(500).json({ error: error.message });
+    }
+  });
+
+  app.put("/api/config/categories/:categoryId/field-overrides", async (req, res) => {
+    try {
+      const { categoryId } = req.params;
+      const { overrides, userId } = req.body;
+
+      if (!Array.isArray(overrides)) {
+        return res.status(400).json({ error: "overrides must be an array" });
+      }
+
+      const results = await storage.upsertCategoryFieldOverrides(
+        categoryId,
+        overrides,
+        userId
+      );
+
+      res.json(results);
+    } catch (error: any) {
+      res.status(500).json({ error: error.message });
+    }
+  });
+
+  app.delete("/api/config/field-overrides/:id", async (req, res) => {
+    try {
+      await storage.deleteCategoryFieldOverride(req.params.id);
+      res.status(204).send();
+    } catch (error: any) {
+      res.status(500).json({ error: error.message });
+    }
+  });
+
+  app.post("/api/config/categories/:categoryId/field-overrides/reset", async (req, res) => {
+    try {
+      const { categoryId } = req.params;
+      await storage.deleteCategoryFieldOverridesByCategoryId(categoryId);
+      res.json({ message: "Field overrides reset to defaults" });
+    } catch (error: any) {
+      res.status(500).json({ error: error.message });
+    }
+  });
+
   // Unified Ticket Configurations (combines issue types with L1-L4 hierarchy)
   app.get("/api/config/ticket-configs", async (_req, res) => {
     try {
