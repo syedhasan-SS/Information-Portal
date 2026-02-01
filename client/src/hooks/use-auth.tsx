@@ -102,6 +102,7 @@ export const ROLE_PERMISSIONS: Record<string, string[]> = {
   Agent: [
     "view:dashboard",
     "view:tickets",
+    "create:tickets", // Only allowed for Seller Support and Customer Support agents (enforced in hasPermission)
     "edit:tickets",
     "view:assigned_tickets",
     "view:department_tickets", // Agents can view all tickets within their department/sub-department
@@ -163,7 +164,17 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
     // Fall back to role-based permissions
     const permissions = ROLE_PERMISSIONS[currentUser.role] || [];
-    return permissions.includes(permission);
+    const hasRolePermission = permissions.includes(permission);
+
+    // Department-based restriction for Agents creating tickets
+    // Only Seller Support and Customer Support agents can create tickets
+    if (currentUser.role === "Agent" && permission === "create:tickets") {
+      const isSellerSupport = currentUser.subDepartment === "Seller Support";
+      const isCustomerSupport = currentUser.department === "CX" || currentUser.subDepartment === "Customer Support";
+      return hasRolePermission && (isSellerSupport || isCustomerSupport);
+    }
+
+    return hasRolePermission;
   };
 
   const hasRole = (roles: string[]): boolean => {
