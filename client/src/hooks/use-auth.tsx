@@ -7,6 +7,7 @@ type User = {
   name: string;
   role: "Owner" | "Admin" | "Head" | "Manager" | "Lead" | "Associate" | "Agent";
   department: string | null;
+  subDepartment: string | null; // Sub-department (e.g., "Seller Support" under CX)
   profilePicture: string | null;
   customPermissions: string[] | null; // Agent-level custom permissions
   isActive: boolean;

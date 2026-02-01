@@ -83,7 +83,7 @@ async function getVendors(): Promise<Vendor[]> {
   return res.json();
 }
 
-const DEPARTMENTS = ["Finance", "Operations", "Marketplace", "Tech", "Experience", "CX", "Seller Support"] as const;
+const DEPARTMENTS = ["Finance", "Operations", "Marketplace", "Tech", "Experience", "CX"] as const;
 const ISSUE_TYPES = ["Complaint", "Request", "Information"] as const;
 
 export default function MyTicketsPage() {
@@ -112,13 +112,15 @@ export default function MyTicketsPage() {
   const queryClient = useQueryClient();
   const { toast } = useToast();
 
-  // Determine user's department type from their department
+  // Determine user's department type from their department and sub-department
   // Role + Department determines access (e.g., Agent in Seller Support vs Agent in Finance)
+  // Seller Support is a sub-department of CX
   const userDepartmentType = useMemo(() => {
     if (!user) return "Seller Support"; // Default fallback
-    // Check if user's department is "Seller Support" or "Customer Support"
-    if (user.department === "Seller Support") return "Seller Support";
-    if (user.department === "Customer Support" || user.department === "CX") return "Customer Support";
+    // Check if user's sub-department is "Seller Support" (under CX)
+    if (user.subDepartment === "Seller Support") return "Seller Support";
+    // Check if user is in CX but not Seller Support (they handle Customer Support)
+    if (user.department === "CX" || user.department === "Customer Support") return "Customer Support";
     // Default to Seller Support for users without department
     return "Seller Support";
   }, [user]);

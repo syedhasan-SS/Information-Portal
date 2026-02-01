@@ -37,7 +37,7 @@ export const tickets = pgTable("tickets", {
   ticketNumber: text("ticket_number").notNull().unique(),
   vendorHandle: text("vendor_handle").references(() => vendors.handle), // Optional for Customer Support tickets
   customer: text("customer"), // For Customer Support tickets (customer name/ID)
-  department: text("department").notNull().$type<"Finance" | "Operations" | "Marketplace" | "Tech" | "Supply" | "Growth" | "Experience" | "CX" | "Seller Support">(),
+  department: text("department").notNull().$type<"Finance" | "Operations" | "Marketplace" | "Tech" | "Supply" | "Growth" | "Experience" | "CX">(),
   issueType: text("issue_type").notNull().$type<"Complaint" | "Request" | "Information">(),
   categoryId: varchar("category_id").notNull().references(() => categories.id),
   subject: text("subject").notNull(),
@@ -150,7 +150,7 @@ export const users = pgTable("users", {
   name: text("name").notNull(),
   role: text("role").notNull().$type<"Owner" | "Admin" | "Head" | "Manager" | "Lead" | "Associate" | "Agent">(),
   roles: text("roles").array().$type<Array<"Owner" | "Admin" | "Head" | "Manager" | "Lead" | "Associate" | "Agent">>(), // Multi-role support
-  department: text("department").$type<"Finance" | "Operations" | "Marketplace" | "Tech" | "Supply" | "Growth" | "Seller Support" | "CX">(),
+  department: text("department").$type<"Finance" | "Operations" | "Marketplace" | "Tech" | "Supply" | "Growth" | "CX">(),
   subDepartment: text("sub_department"), // Sub-department for organizational hierarchy
   managerId: varchar("manager_id").references((): AnyPgColumn => users.id, { onDelete: "set null" }), // Reports to (direct manager)
   profilePicture: text("profile_picture"),

@@ -71,8 +71,8 @@ export default function DashboardPage() {
       return true;
     }
 
-    // Seller Support / CX department users can see all tickets (they handle cross-department issues)
-    if (user.department === "Seller Support" || user.department === "CX") {
+    // Seller Support (sub-department of CX) or CX users can see all tickets (they handle cross-department issues)
+    if (user.subDepartment === "Seller Support" || user.department === "CX") {
       return true;
     }
 

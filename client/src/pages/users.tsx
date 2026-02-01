@@ -62,7 +62,7 @@ import type { User, Department, SubDepartment } from "@shared/schema";
 import { ROLE_PERMISSIONS } from "@/hooks/use-auth";
 
 const ROLES = ["Owner", "Admin", "Head", "Manager", "Lead", "Associate", "Agent"] as const;
-const DEPARTMENTS = ["Finance", "Operations", "Marketplace", "Tech", "Supply", "Growth", "Seller Support", "CX"] as const;
+const DEPARTMENTS = ["Finance", "Operations", "Marketplace", "Tech", "Supply", "Growth", "CX"] as const;
 
 // All available permissions
 const ALL_PERMISSIONS = [
