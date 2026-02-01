@@ -32,7 +32,6 @@ import {
   Eye,
   EyeOff,
   Network,
-  ChevronRight,
 } from "lucide-react";
 import {
   DropdownMenu,
@@ -106,7 +105,7 @@ async function createUser(data: {
   return res.json();
 }
 
-async function updateUser(id: number, data: {
+async function updateUser(id: string, data: {
   name?: string;
   email?: string;
   role?: string;
@@ -127,7 +126,7 @@ async function updateUser(id: number, data: {
   return res.json();
 }
 
-async function deleteUser(id: number): Promise<void> {
+async function deleteUser(id: string): Promise<void> {
   const res = await fetch(`/api/users/${id}`, {
     method: "DELETE",
   });
@@ -137,7 +136,7 @@ async function deleteUser(id: number): Promise<void> {
   }
 }
 
-async function changeUserPassword(id: number, newPassword: string): Promise<void> {
+async function changeUserPassword(id: string, newPassword: string): Promise<void> {
   const res = await fetch(`/api/users/${id}/password`, {
     method: "PATCH",
     headers: { "Content-Type": "application/json" },
@@ -171,27 +170,27 @@ export default function UsersPage() {
     role: "",
     department: "",
     subDepartment: "",
-    managerId: "",
+    managerId: "__none__",
   });
   const [selectedRoles, setSelectedRoles] = useState<string[]>([]);
   const [error, setError] = useState("");
   const [success, setSuccess] = useState("");
   const [editingUser, setEditingUser] = useState<User | null>(null);
-  const [deletingUserId, setDeletingUserId] = useState<number | null>(null);
+  const [deletingUserId, setDeletingUserId] = useState<string | null>(null);
   const [editFormData, setEditFormData] = useState({
     name: "",
     email: "",
     role: "",
     department: "",
     subDepartment: "",
-    managerId: "",
+    managerId: "__none__",
   });
   const [editSelectedRoles, setEditSelectedRoles] = useState<string[]>([]);
   const [changingPasswordUser, setChangingPasswordUser] = useState<User | null>(null);
   const [newPassword, setNewPassword] = useState("");
   const [managingPermissionsUser, setManagingPermissionsUser] = useState<User | null>(null);
   const [selectedPermissions, setSelectedPermissions] = useState<string[]>([]);
-  const [visiblePasswords, setVisiblePasswords] = useState<Set<number>>(new Set());
+  const [visiblePasswords, setVisiblePasswords] = useState<Set<string>>(new Set());
   const [activeTab, setActiveTab] = useState<"users" | "hierarchy">("users");
 
   const queryClient = useQueryClient();
@@ -205,7 +204,7 @@ export default function UsersPage() {
     mutationFn: createUser,
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["users"] });
-      setFormData({ name: "", email: "", password: "", role: "", department: "", subDepartment: "", managerId: "" });
+      setFormData({ name: "", email: "", password: "", role: "", department: "", subDepartment: "", managerId: "__none__" });
       setSelectedRoles([]);
       setShowForm(false);
       setSuccess("User created successfully!");
@@ -219,7 +218,7 @@ export default function UsersPage() {
   });
 
   const updateMutation = useMutation({
-    mutationFn: ({ id, data }: { id: number; data: any }) => updateUser(id, data),
+    mutationFn: ({ id, data }: { id: string; data: any }) => updateUser(id, data),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["users"] });
       setEditingUser(null);
@@ -250,7 +249,7 @@ export default function UsersPage() {
   });
 
   const changePasswordMutation = useMutation({
-    mutationFn: ({ id, password }: { id: number; password: string }) => changeUserPassword(id, password),
+    mutationFn: ({ id, password }: { id: string; password: string }) => changeUserPassword(id, password),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["users"] });
       setChangingPasswordUser(null);
@@ -293,6 +292,7 @@ export default function UsersPage() {
 
     mutation.mutate({
       ...formData,
+      managerId: formData.managerId === "__none__" ? undefined : formData.managerId,
       roles: selectedRoles.length > 0 ? selectedRoles : undefined,
       department: formData.department || undefined,
     });
@@ -306,7 +306,7 @@ export default function UsersPage() {
       role: user.role,
       department: user.department || "",
       subDepartment: user.subDepartment || "",
-      managerId: user.managerId || "",
+      managerId: user.managerId || "__none__",
     });
     setEditSelectedRoles(user.roles || []);
   };
@@ -325,6 +325,7 @@ export default function UsersPage() {
       id: editingUser.id,
       data: {
         ...editFormData,
+        managerId: editFormData.managerId === "__none__" ? undefined : editFormData.managerId,
         roles: editSelectedRoles.length > 0 ? editSelectedRoles : undefined,
         department: editFormData.department || undefined,
       },
@@ -378,7 +379,7 @@ export default function UsersPage() {
     );
   };
 
-  const togglePasswordVisibility = (userId: number) => {
+  const togglePasswordVisibility = (userId: string) => {
     setVisiblePasswords((prev) => {
       const newSet = new Set(prev);
       if (newSet.has(userId)) {
@@ -747,7 +748,7 @@ export default function UsersPage() {
                       <SelectValue placeholder="Select manager" />
                     </SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="">None</SelectItem>
+                      <SelectItem value="__none__">None</SelectItem>
                       {users?.filter(u => u.isActive).map((user) => (
                         <SelectItem key={user.id} value={user.id}>
                           {user.name} - {user.role}
@@ -1117,10 +1118,16 @@ export default function UsersPage() {
                   <SelectValue placeholder="Select manager" />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="">None</SelectItem>
-                  {users?.filter(u => u.isActive && u.id !== editingUser?.id).map((user) => (
+                  <SelectItem value="__none__">None</SelectItem>
+                  {users?.filter(u => {
+                    // Include active users (excluding the user being edited)
+                    if (u.isActive && u.id !== editingUser?.id) return true;
+                    // Also include the current manager even if inactive (so the Select value is valid)
+                    if (editFormData.managerId !== "__none__" && u.id === editFormData.managerId && u.id !== editingUser?.id) return true;
+                    return false;
+                  }).map((user) => (
                     <SelectItem key={user.id} value={user.id}>
-                      {user.name} - {user.role}
+                      {user.name} - {user.role}{!user.isActive ? " (Inactive)" : ""}
                     </SelectItem>
                   ))}
                 </SelectContent>
@@ -1270,7 +1277,7 @@ export default function UsersPage() {
                 if (!acc[perm.category]) acc[perm.category] = [];
                 acc[perm.category].push(perm);
                 return acc;
-              }, {} as Record<string, typeof ALL_PERMISSIONS>)
+              }, {} as Record<string, Array<typeof ALL_PERMISSIONS[number]>>)
             ).map(([category, perms]) => (
               <div key={category} className="space-y-3">
                 <h4 className="font-medium text-sm">{category}</h4>
