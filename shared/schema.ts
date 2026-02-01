@@ -174,11 +174,12 @@ export const departments = pgTable("departments", {
   updatedAt: timestamp("updated_at").notNull().defaultNow(),
 });
 
-// Sub-departments table
+// Sub-departments table (supports nesting via parentId for hierarchies like Supply > Marketplace > MOPS)
 export const subDepartments = pgTable("sub_departments", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
   name: text("name").notNull(),
   departmentId: varchar("department_id").notNull().references(() => departments.id, { onDelete: "cascade" }),
+  parentId: varchar("parent_id"), // Self-referential for nested sub-departments
   description: text("description"),
   isActive: boolean("is_active").notNull().default(true),
   displayOrder: integer("display_order").notNull().default(0),

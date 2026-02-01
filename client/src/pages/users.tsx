@@ -215,7 +215,7 @@ export default function UsersPage() {
   const [editingDept, setEditingDept] = useState<Department | null>(null);
   const [deletingDeptId, setDeletingDeptId] = useState<string | null>(null);
   const [showSubDeptForm, setShowSubDeptForm] = useState(false);
-  const [subDeptFormData, setSubDeptFormData] = useState({ name: "", departmentId: "", description: "" });
+  const [subDeptFormData, setSubDeptFormData] = useState({ name: "", departmentId: "", parentId: "", description: "" });
   const [editingSubDept, setEditingSubDept] = useState<SubDepartment | null>(null);
   const [deletingSubDeptId, setDeletingSubDeptId] = useState<string | null>(null);
   const [expandedDepts, setExpandedDepts] = useState<Set<string>>(new Set());
@@ -318,7 +318,7 @@ export default function UsersPage() {
 
   // Sub-department mutations
   const createSubDeptMutation = useMutation({
-    mutationFn: async (data: { name: string; departmentId: string; description?: string }) => {
+    mutationFn: async (data: { name: string; departmentId: string; parentId?: string; description?: string }) => {
       const res = await fetch("/api/sub-departments", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -332,7 +332,7 @@ export default function UsersPage() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["departments-with-subs"] });
-      setSubDeptFormData({ name: "", departmentId: "", description: "" });
+      setSubDeptFormData({ name: "", departmentId: "", parentId: "", description: "" });
       setShowSubDeptForm(false);
       setSuccess("Sub-department created successfully!");
       setTimeout(() => setSuccess(""), 3000);
@@ -927,15 +927,15 @@ export default function UsersPage() {
                   <Label htmlFor="department">Department (optional)</Label>
                   <Select
                     value={formData.department}
-                    onValueChange={(value) => setFormData({ ...formData, department: value })}
+                    onValueChange={(value) => setFormData({ ...formData, department: value, subDepartment: "" })}
                   >
                     <SelectTrigger data-testid="select-department">
                       <SelectValue placeholder="Select department" />
                     </SelectTrigger>
                     <SelectContent>
-                      {DEPARTMENTS.map((dept) => (
-                        <SelectItem key={dept} value={dept}>
-                          {dept}
+                      {departmentsData?.filter(d => d.isActive).map((dept) => (
+                        <SelectItem key={dept.id} value={dept.name}>
+                          {dept.name}
                         </SelectItem>
                       ))}
                     </SelectContent>
@@ -944,14 +944,32 @@ export default function UsersPage() {
 
                 <div className="space-y-2">
                   <Label htmlFor="subDepartment">Sub-Department (optional)</Label>
-                  <Input
-                    id="subDepartment"
-                    placeholder="e.g., Shipping, QC, Logistics"
-                    value={formData.subDepartment}
-                    onChange={(e) => setFormData({ ...formData, subDepartment: e.target.value })}
-                    data-testid="input-sub-department"
-                  />
-                  <p className="text-xs text-muted-foreground">Sub-team or specialized unit within the department</p>
+                  <Select
+                    value={formData.subDepartment || "__none__"}
+                    onValueChange={(value) => setFormData({ ...formData, subDepartment: value === "__none__" ? "" : value })}
+                    disabled={!formData.department}
+                  >
+                    <SelectTrigger data-testid="select-sub-department">
+                      <SelectValue placeholder={formData.department ? "Select sub-department" : "Select department first"} />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="__none__">None</SelectItem>
+                      {departmentsData
+                        ?.find(d => d.name === formData.department)
+                        ?.subDepartments
+                        ?.filter(s => s.isActive)
+                        .map((subDept) => (
+                          <SelectItem key={subDept.id} value={subDept.name}>
+                            {subDept.name}
+                          </SelectItem>
+                        ))}
+                    </SelectContent>
+                  </Select>
+                  <p className="text-xs text-muted-foreground">
+                    {formData.department
+                      ? `Available sub-departments under ${formData.department}`
+                      : "Select a department first to see available sub-departments"}
+                  </p>
                 </div>
 
                 <div className="space-y-2 sm:col-span-2">
@@ -1269,7 +1287,7 @@ export default function UsersPage() {
                               </DropdownMenuItem>
                               <DropdownMenuItem onClick={(e) => {
                                 e.stopPropagation();
-                                setSubDeptFormData({ ...subDeptFormData, departmentId: dept.id });
+                                setSubDeptFormData({ name: "", departmentId: dept.id, parentId: "", description: "" });
                                 setShowSubDeptForm(true);
                               }}>
                                 <Plus className="mr-2 h-4 w-4" />
@@ -1293,54 +1311,100 @@ export default function UsersPage() {
                         <div className="border-t bg-muted/30 p-4">
                           {dept.subDepartments.length > 0 ? (
                             <div className="space-y-2">
-                              {dept.subDepartments.map((subDept) => (
-                                <div
-                                  key={subDept.id}
-                                  className="flex items-center justify-between rounded-md border bg-background p-3"
-                                >
-                                  <div className="flex items-center gap-2">
-                                    <div className="h-2 w-2 rounded-full bg-muted-foreground/50" />
-                                    <div>
-                                      <p className="font-medium text-sm">{subDept.name}</p>
-                                      {subDept.description && (
-                                        <p className="text-xs text-muted-foreground">{subDept.description}</p>
-                                      )}
+                              {/* Render hierarchical sub-departments */}
+                              {(() => {
+                                // Helper to render sub-departments recursively
+                                const renderSubDepts = (parentId: string | null, level: number = 0): React.ReactNode => {
+                                  const children = dept.subDepartments.filter(
+                                    (s) => ((s as any).parentId || null) === parentId
+                                  );
+                                  if (children.length === 0) return null;
+
+                                  return children.map((subDept) => (
+                                    <div key={subDept.id} className="space-y-2">
+                                      <div
+                                        className="flex items-center justify-between rounded-md border bg-background p-3"
+                                        style={{ marginLeft: `${level * 24}px` }}
+                                      >
+                                        <div className="flex items-center gap-2">
+                                          <div className={cn(
+                                            "h-2 w-2 rounded-full",
+                                            level === 0 ? "bg-muted-foreground/50" : level === 1 ? "bg-blue-500/50" : "bg-green-500/50"
+                                          )} />
+                                          <div>
+                                            <div className="flex items-center gap-2">
+                                              <p className="font-medium text-sm">{subDept.name}</p>
+                                              {(subDept as any).parentId && (
+                                                <span className="text-xs text-muted-foreground">
+                                                  (under {dept.subDepartments.find(s => s.id === (subDept as any).parentId)?.name})
+                                                </span>
+                                              )}
+                                            </div>
+                                            {subDept.description && (
+                                              <p className="text-xs text-muted-foreground">{subDept.description}</p>
+                                            )}
+                                          </div>
+                                        </div>
+                                        <div className="flex items-center gap-2">
+                                          <Badge variant="outline" className="text-xs bg-blue-500/10 text-blue-600 border-blue-500/20">
+                                            <Users className="h-2.5 w-2.5 mr-1" />
+                                            {users?.filter(u => u.department === dept.name && u.subDepartment === subDept.name).length || 0}
+                                          </Badge>
+                                          <Badge variant={subDept.isActive ? "outline" : "secondary"} className="text-xs">
+                                            {subDept.isActive ? "Active" : "Inactive"}
+                                          </Badge>
+                                          <Button
+                                            variant="ghost"
+                                            size="sm"
+                                            className="h-7 w-7 p-0"
+                                            title="Add child sub-department"
+                                            onClick={() => {
+                                              setSubDeptFormData({
+                                                name: "",
+                                                departmentId: dept.id,
+                                                parentId: subDept.id,
+                                                description: "",
+                                              });
+                                              setShowSubDeptForm(true);
+                                            }}
+                                          >
+                                            <Plus className="h-3 w-3" />
+                                          </Button>
+                                          <Button
+                                            variant="ghost"
+                                            size="sm"
+                                            className="h-7 w-7 p-0"
+                                            onClick={() => {
+                                              setEditingSubDept(subDept);
+                                              setSubDeptFormData({
+                                                name: subDept.name,
+                                                departmentId: subDept.departmentId,
+                                                parentId: (subDept as any).parentId || "",
+                                                description: subDept.description || "",
+                                              });
+                                            }}
+                                          >
+                                            <Edit className="h-3 w-3" />
+                                          </Button>
+                                          <Button
+                                            variant="ghost"
+                                            size="sm"
+                                            className="h-7 w-7 p-0 text-destructive hover:text-destructive"
+                                            onClick={() => setDeletingSubDeptId(subDept.id)}
+                                          >
+                                            <Trash2 className="h-3 w-3" />
+                                          </Button>
+                                        </div>
+                                      </div>
+                                      {/* Render children */}
+                                      {renderSubDepts(subDept.id, level + 1)}
                                     </div>
-                                  </div>
-                                  <div className="flex items-center gap-2">
-                                    <Badge variant="outline" className="text-xs bg-blue-500/10 text-blue-600 border-blue-500/20">
-                                      <Users className="h-2.5 w-2.5 mr-1" />
-                                      {users?.filter(u => u.department === dept.name && u.subDepartment === subDept.name).length || 0}
-                                    </Badge>
-                                    <Badge variant={subDept.isActive ? "outline" : "secondary"} className="text-xs">
-                                      {subDept.isActive ? "Active" : "Inactive"}
-                                    </Badge>
-                                    <Button
-                                      variant="ghost"
-                                      size="sm"
-                                      className="h-7 w-7 p-0"
-                                      onClick={() => {
-                                        setEditingSubDept(subDept);
-                                        setSubDeptFormData({
-                                          name: subDept.name,
-                                          departmentId: subDept.departmentId,
-                                          description: subDept.description || "",
-                                        });
-                                      }}
-                                    >
-                                      <Edit className="h-3 w-3" />
-                                    </Button>
-                                    <Button
-                                      variant="ghost"
-                                      size="sm"
-                                      className="h-7 w-7 p-0 text-destructive hover:text-destructive"
-                                      onClick={() => setDeletingSubDeptId(subDept.id)}
-                                    >
-                                      <Trash2 className="h-3 w-3" />
-                                    </Button>
-                                  </div>
-                                </div>
-                              ))}
+                                  ));
+                                };
+
+                                // Start with top-level sub-departments (no parent)
+                                return renderSubDepts(null);
+                              })()}
                             </div>
                           ) : (
                             <p className="text-sm text-muted-foreground text-center py-4">
@@ -1530,15 +1594,15 @@ export default function UsersPage() {
               <Label htmlFor="edit-department">Department (optional)</Label>
               <Select
                 value={editFormData.department}
-                onValueChange={(value) => setEditFormData({ ...editFormData, department: value })}
+                onValueChange={(value) => setEditFormData({ ...editFormData, department: value, subDepartment: "" })}
               >
                 <SelectTrigger>
                   <SelectValue placeholder="Select department" />
                 </SelectTrigger>
                 <SelectContent>
-                  {DEPARTMENTS.map((dept) => (
-                    <SelectItem key={dept} value={dept}>
-                      {dept}
+                  {departmentsData?.filter(d => d.isActive).map((dept) => (
+                    <SelectItem key={dept.id} value={dept.name}>
+                      {dept.name}
                     </SelectItem>
                   ))}
                 </SelectContent>
@@ -1547,13 +1611,32 @@ export default function UsersPage() {
 
             <div className="space-y-2">
               <Label htmlFor="edit-subDepartment">Sub-Department (optional)</Label>
-              <Input
-                id="edit-subDepartment"
-                placeholder="e.g., Shipping, QC, Logistics"
-                value={editFormData.subDepartment}
-                onChange={(e) => setEditFormData({ ...editFormData, subDepartment: e.target.value })}
-              />
-              <p className="text-xs text-muted-foreground">Sub-team or specialized unit</p>
+              <Select
+                value={editFormData.subDepartment || "__none__"}
+                onValueChange={(value) => setEditFormData({ ...editFormData, subDepartment: value === "__none__" ? "" : value })}
+                disabled={!editFormData.department}
+              >
+                <SelectTrigger>
+                  <SelectValue placeholder={editFormData.department ? "Select sub-department" : "Select department first"} />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="__none__">None</SelectItem>
+                  {departmentsData
+                    ?.find(d => d.name === editFormData.department)
+                    ?.subDepartments
+                    ?.filter(s => s.isActive)
+                    .map((subDept) => (
+                      <SelectItem key={subDept.id} value={subDept.name}>
+                        {subDept.name}
+                      </SelectItem>
+                    ))}
+                </SelectContent>
+              </Select>
+              <p className="text-xs text-muted-foreground">
+                {editFormData.department
+                  ? `Available sub-departments under ${editFormData.department}`
+                  : "Select a department first"}
+              </p>
             </div>
 
             <div className="space-y-2">
@@ -1992,7 +2075,7 @@ export default function UsersPage() {
         if (!open) {
           setShowSubDeptForm(false);
           setEditingSubDept(null);
-          setSubDeptFormData({ name: "", departmentId: "", description: "" });
+          setSubDeptFormData({ name: "", departmentId: "", parentId: "", description: "" });
         }
       }}>
         <DialogContent>
@@ -2016,7 +2099,7 @@ export default function UsersPage() {
               <Label htmlFor="sub-dept-parent">Parent Department *</Label>
               <Select
                 value={subDeptFormData.departmentId}
-                onValueChange={(value) => setSubDeptFormData({ ...subDeptFormData, departmentId: value })}
+                onValueChange={(value) => setSubDeptFormData({ ...subDeptFormData, departmentId: value, parentId: "" })}
               >
                 <SelectTrigger>
                   <SelectValue placeholder="Select department" />
@@ -2029,6 +2112,33 @@ export default function UsersPage() {
                   ))}
                 </SelectContent>
               </Select>
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="sub-dept-parent-sub">Parent Sub-Department (Optional)</Label>
+              <Select
+                value={subDeptFormData.parentId || "__none__"}
+                onValueChange={(value) => setSubDeptFormData({ ...subDeptFormData, parentId: value === "__none__" ? "" : value })}
+                disabled={!subDeptFormData.departmentId}
+              >
+                <SelectTrigger>
+                  <SelectValue placeholder={subDeptFormData.departmentId ? "Select parent sub-department" : "Select department first"} />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="__none__">None (Top-level sub-department)</SelectItem>
+                  {departmentsData
+                    ?.find(d => d.id === subDeptFormData.departmentId)
+                    ?.subDepartments
+                    ?.filter(s => s.isActive && s.id !== editingSubDept?.id)
+                    .map((subDept) => (
+                      <SelectItem key={subDept.id} value={subDept.id}>
+                        {subDept.name}
+                      </SelectItem>
+                    ))}
+                </SelectContent>
+              </Select>
+              <p className="text-xs text-muted-foreground">
+                Create nested hierarchies like Supply &gt; Marketplace &gt; MOPS
+              </p>
             </div>
             <div className="space-y-2">
               <Label htmlFor="sub-dept-description">Description</Label>
@@ -2044,7 +2154,7 @@ export default function UsersPage() {
             <Button variant="outline" onClick={() => {
               setShowSubDeptForm(false);
               setEditingSubDept(null);
-              setSubDeptFormData({ name: "", departmentId: "", description: "" });
+              setSubDeptFormData({ name: "", departmentId: "", parentId: "", description: "" });
             }}>
               Cancel
             </Button>

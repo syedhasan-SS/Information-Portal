@@ -453,7 +453,7 @@ export async function registerRoutes(
 
   app.post("/api/sub-departments", async (req, res) => {
     try {
-      const { name, departmentId, description, isActive, displayOrder } = req.body;
+      const { name, departmentId, parentId, description, isActive, displayOrder } = req.body;
       if (!name || !departmentId) {
         return res.status(400).json({ error: "Name and departmentId are required" });
       }
@@ -464,7 +464,7 @@ export async function registerRoutes(
         return res.status(400).json({ error: "Department not found" });
       }
 
-      const subDepartment = await storage.createSubDepartment({ name, departmentId, description, isActive, displayOrder });
+      const subDepartment = await storage.createSubDepartment({ name, departmentId, parentId, description, isActive, displayOrder });
       res.status(201).json(subDepartment);
     } catch (error: any) {
       res.status(500).json({ error: error.message });
