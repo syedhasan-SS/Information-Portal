@@ -879,12 +879,12 @@ export class DatabaseStorage implements IStorage {
     return result[0];
   }
 
-  async createDepartment(data: { name: string; description?: string; color?: string; isActive?: boolean; displayOrder?: number }): Promise<Department> {
+  async createDepartment(data: { name: string; description?: string; color?: string; headId?: string; isActive?: boolean; displayOrder?: number }): Promise<Department> {
     const result = await db.insert(departments).values(data).returning();
     return result[0];
   }
 
-  async updateDepartment(id: string, data: Partial<{ name: string; description: string; color: string; isActive: boolean; displayOrder: number }>): Promise<Department | undefined> {
+  async updateDepartment(id: string, data: Partial<{ name: string; description: string; color: string; headId: string | null; isActive: boolean; displayOrder: number }>): Promise<Department | undefined> {
     const result = await db.update(departments)
       .set({ ...data, updatedAt: new Date() })
       .where(eq(departments.id, id))

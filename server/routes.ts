@@ -333,7 +333,7 @@ export async function registerRoutes(
 
   app.post("/api/departments", async (req, res) => {
     try {
-      const { name, description, color, isActive, displayOrder } = req.body;
+      const { name, description, color, headId, isActive, displayOrder, subDepartments: subDepts } = req.body;
       if (!name) {
         return res.status(400).json({ error: "Department name is required" });
       }
@@ -344,8 +344,25 @@ export async function registerRoutes(
         return res.status(400).json({ error: "A department with this name already exists" });
       }
 
-      const department = await storage.createDepartment({ name, description, color, isActive, displayOrder });
-      res.status(201).json(department);
+      const department = await storage.createDepartment({ name, description, color, headId, isActive, displayOrder });
+
+      // Create sub-departments if provided
+      if (subDepts && Array.isArray(subDepts) && subDepts.length > 0) {
+        for (const subDept of subDepts) {
+          if (subDept.name) {
+            await storage.createSubDepartment({
+              name: subDept.name,
+              departmentId: department.id,
+              description: subDept.description,
+            });
+          }
+        }
+      }
+
+      // Return department with sub-departments
+      const deptWithSubs = await storage.getDepartmentsWithSubDepartments();
+      const result = deptWithSubs.find(d => d.id === department.id);
+      res.status(201).json(result || department);
     } catch (error: any) {
       res.status(500).json({ error: error.message });
     }
@@ -380,9 +397,8 @@ export async function registerRoutes(
         { name: "Operations", description: "Order fulfillment and logistics", color: "#f59e0b", displayOrder: 2 },
         { name: "Marketplace", description: "Product listings and seller management", color: "#8b5cf6", displayOrder: 3 },
         { name: "Tech", description: "Technical support and platform issues", color: "#3b82f6", displayOrder: 4 },
-        { name: "Experience", description: "User experience and feedback", color: "#ec4899", displayOrder: 5 },
-        { name: "CX", description: "Customer experience and support", color: "#14b8a6", displayOrder: 6 },
-        { name: "Seller Support", description: "Seller onboarding and assistance", color: "#f97316", displayOrder: 7 },
+        { name: "Supply", description: "Supply chain and inventory management", color: "#ec4899", displayOrder: 5 },
+        { name: "Growth", description: "Business development and expansion", color: "#f97316", displayOrder: 6 },
       ];
 
       const created = [];
@@ -1188,9 +1204,8 @@ export async function registerRoutes(
               { label: "Operations", value: "Operations" },
               { label: "Marketplace", value: "Marketplace" },
               { label: "Tech", value: "Tech" },
-              { label: "Experience", value: "Experience" },
-              { label: "CX", value: "CX" },
-              { label: "Seller Support", value: "Seller Support" },
+              { label: "Supply", value: "Supply" },
+              { label: "Growth", value: "Growth" },
             ],
           },
         },

@@ -62,7 +62,7 @@ import type { User, Department, SubDepartment } from "@shared/schema";
 import { ROLE_PERMISSIONS } from "@/hooks/use-auth";
 
 const ROLES = ["Owner", "Admin", "Seller Support Agent", "Department Head", "Department Manager", "Department Agent"] as const;
-const DEPARTMENTS = ["Finance", "Operations", "Marketplace", "Tech", "Experience", "CX", "Seller Support"] as const;
+const DEPARTMENTS = ["Finance", "Operations", "Marketplace", "Tech", "Supply", "Growth"] as const;
 
 // All available permissions
 const ALL_PERMISSIONS = [
@@ -205,7 +205,13 @@ export default function UsersPage() {
 
   // Department management state
   const [showDeptForm, setShowDeptForm] = useState(false);
-  const [deptFormData, setDeptFormData] = useState({ name: "", description: "", color: "#6366f1" });
+  const [deptFormData, setDeptFormData] = useState<{
+    name: string;
+    description: string;
+    color: string;
+    headId: string;
+    subDepartments: Array<{ name: string; description: string }>;
+  }>({ name: "", description: "", color: "#6366f1", headId: "__none__", subDepartments: [] });
   const [editingDept, setEditingDept] = useState<Department | null>(null);
   const [deletingDeptId, setDeletingDeptId] = useState<string | null>(null);
   const [showSubDeptForm, setShowSubDeptForm] = useState(false);
@@ -247,7 +253,7 @@ export default function UsersPage() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["departments-with-subs"] });
-      setDeptFormData({ name: "", description: "", color: "#6366f1" });
+      setDeptFormData({ name: "", description: "", color: "#6366f1", headId: "__none__", subDepartments: [] });
       setShowDeptForm(false);
       setSuccess("Department created successfully!");
       setTimeout(() => setSuccess(""), 3000);
@@ -1220,11 +1226,21 @@ export default function UsersPage() {
                             {dept.description && (
                               <p className="text-xs text-muted-foreground">{dept.description}</p>
                             )}
+                            {(dept as any).headId && users?.find(u => u.id === (dept as any).headId) && (
+                              <p className="text-xs text-muted-foreground flex items-center gap-1 mt-0.5">
+                                <Shield className="h-3 w-3" />
+                                Head: {users.find(u => u.id === (dept as any).headId)?.name}
+                              </p>
+                            )}
                           </div>
                         </div>
                         <div className="flex items-center gap-3">
                           <Badge variant={dept.isActive ? "default" : "secondary"}>
                             {dept.isActive ? "Active" : "Inactive"}
+                          </Badge>
+                          <Badge variant="outline" className="bg-blue-500/10 text-blue-600 border-blue-500/20">
+                            <Users className="h-3 w-3 mr-1" />
+                            {users?.filter(u => u.department === dept.name).length || 0} user{(users?.filter(u => u.department === dept.name).length || 0) !== 1 ? "s" : ""}
                           </Badge>
                           <Badge variant="outline">
                             {dept.subDepartments.length} sub-dept{dept.subDepartments.length !== 1 ? "s" : ""}
@@ -1239,7 +1255,13 @@ export default function UsersPage() {
                               <DropdownMenuItem onClick={(e) => {
                                 e.stopPropagation();
                                 setEditingDept(dept);
-                                setDeptFormData({ name: dept.name, description: dept.description || "", color: dept.color || "#6366f1" });
+                                setDeptFormData({
+                                  name: dept.name,
+                                  description: dept.description || "",
+                                  color: dept.color || "#6366f1",
+                                  headId: (dept as any).headId || "__none__",
+                                  subDepartments: [],
+                                });
                               }}>
                                 <Edit className="mr-2 h-4 w-4" />
                                 Edit
@@ -1285,6 +1307,10 @@ export default function UsersPage() {
                                     </div>
                                   </div>
                                   <div className="flex items-center gap-2">
+                                    <Badge variant="outline" className="text-xs bg-blue-500/10 text-blue-600 border-blue-500/20">
+                                      <Users className="h-2.5 w-2.5 mr-1" />
+                                      {users?.filter(u => u.department === dept.name && u.subDepartment === subDept.name).length || 0}
+                                    </Badge>
                                     <Badge variant={subDept.isActive ? "outline" : "secondary"} className="text-xs">
                                       {subDept.isActive ? "Active" : "Inactive"}
                                     </Badge>
@@ -1770,10 +1796,10 @@ export default function UsersPage() {
         if (!open) {
           setShowDeptForm(false);
           setEditingDept(null);
-          setDeptFormData({ name: "", description: "", color: "#6366f1" });
+          setDeptFormData({ name: "", description: "", color: "#6366f1", headId: "__none__", subDepartments: [] });
         }
       }}>
-        <DialogContent>
+        <DialogContent className="max-w-lg max-h-[85vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle>{editingDept ? "Edit Department" : "Create Department"}</DialogTitle>
             <DialogDescription>
@@ -1800,6 +1826,26 @@ export default function UsersPage() {
               />
             </div>
             <div className="space-y-2">
+              <Label htmlFor="dept-head">Head of Department</Label>
+              <Select
+                value={deptFormData.headId}
+                onValueChange={(value) => setDeptFormData({ ...deptFormData, headId: value })}
+              >
+                <SelectTrigger>
+                  <SelectValue placeholder="Select department head" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="__none__">None</SelectItem>
+                  {users?.filter(u => u.isActive).map((user) => (
+                    <SelectItem key={user.id} value={user.id}>
+                      {user.name} - {user.role}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              <p className="text-xs text-muted-foreground">Assign a user as the head of this department</p>
+            </div>
+            <div className="space-y-2">
               <Label htmlFor="dept-color">Color</Label>
               <div className="flex items-center gap-2">
                 <Input
@@ -1817,21 +1863,93 @@ export default function UsersPage() {
                 />
               </div>
             </div>
+
+            {/* Sub-departments section - only show when creating */}
+            {!editingDept && (
+              <div className="space-y-3">
+                <div className="flex items-center justify-between">
+                  <Label>Sub-Departments</Label>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    onClick={() => setDeptFormData({
+                      ...deptFormData,
+                      subDepartments: [...deptFormData.subDepartments, { name: "", description: "" }]
+                    })}
+                  >
+                    <Plus className="h-3 w-3 mr-1" />
+                    Add
+                  </Button>
+                </div>
+                {deptFormData.subDepartments.length > 0 ? (
+                  <div className="space-y-2">
+                    {deptFormData.subDepartments.map((subDept, index) => (
+                      <div key={index} className="flex items-start gap-2 p-3 border rounded-lg bg-muted/30">
+                        <div className="flex-1 space-y-2">
+                          <Input
+                            placeholder="Sub-department name"
+                            value={subDept.name}
+                            onChange={(e) => {
+                              const updated = [...deptFormData.subDepartments];
+                              updated[index] = { ...updated[index], name: e.target.value };
+                              setDeptFormData({ ...deptFormData, subDepartments: updated });
+                            }}
+                          />
+                          <Input
+                            placeholder="Description (optional)"
+                            value={subDept.description}
+                            onChange={(e) => {
+                              const updated = [...deptFormData.subDepartments];
+                              updated[index] = { ...updated[index], description: e.target.value };
+                              setDeptFormData({ ...deptFormData, subDepartments: updated });
+                            }}
+                          />
+                        </div>
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="sm"
+                          className="h-8 w-8 p-0 text-destructive hover:text-destructive"
+                          onClick={() => {
+                            const updated = deptFormData.subDepartments.filter((_, i) => i !== index);
+                            setDeptFormData({ ...deptFormData, subDepartments: updated });
+                          }}
+                        >
+                          <Trash2 className="h-4 w-4" />
+                        </Button>
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  <p className="text-sm text-muted-foreground text-center py-3 border rounded-lg border-dashed">
+                    No sub-departments added. Click "Add" to create one.
+                  </p>
+                )}
+              </div>
+            )}
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => {
               setShowDeptForm(false);
               setEditingDept(null);
-              setDeptFormData({ name: "", description: "", color: "#6366f1" });
+              setDeptFormData({ name: "", description: "", color: "#6366f1", headId: "__none__", subDepartments: [] });
             }}>
               Cancel
             </Button>
             <Button
               onClick={() => {
+                const submitData = {
+                  name: deptFormData.name,
+                  description: deptFormData.description,
+                  color: deptFormData.color,
+                  headId: deptFormData.headId === "__none__" ? undefined : deptFormData.headId,
+                  subDepartments: deptFormData.subDepartments.filter(s => s.name.trim()),
+                };
                 if (editingDept) {
-                  updateDeptMutation.mutate({ id: editingDept.id, data: deptFormData });
+                  updateDeptMutation.mutate({ id: editingDept.id, data: submitData });
                 } else {
-                  createDeptMutation.mutate(deptFormData);
+                  createDeptMutation.mutate(submitData);
                 }
               }}
               disabled={!deptFormData.name || createDeptMutation.isPending || updateDeptMutation.isPending}

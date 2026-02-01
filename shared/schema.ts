@@ -36,7 +36,7 @@ export const tickets = pgTable("tickets", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
   ticketNumber: text("ticket_number").notNull().unique(),
   vendorHandle: text("vendor_handle").notNull().references(() => vendors.handle),
-  department: text("department").notNull().$type<"Finance" | "Operations" | "Marketplace" | "Tech" | "Experience" | "CX" | "Seller Support">(),
+  department: text("department").notNull().$type<"Finance" | "Operations" | "Marketplace" | "Tech" | "Supply" | "Growth">(),
   issueType: text("issue_type").notNull().$type<"Complaint" | "Request" | "Information">(),
   categoryId: varchar("category_id").notNull().references(() => categories.id),
   subject: text("subject").notNull(),
@@ -149,7 +149,7 @@ export const users = pgTable("users", {
   name: text("name").notNull(),
   role: text("role").notNull().$type<"Owner" | "Admin" | "Seller Support Agent" | "Department Head" | "Department Manager" | "Department Agent">(),
   roles: text("roles").array().$type<Array<"Owner" | "Admin" | "Seller Support Agent" | "Department Head" | "Department Manager" | "Department Agent">>(), // Multi-role support
-  department: text("department").$type<"Finance" | "Operations" | "Marketplace" | "Tech" | "Experience" | "CX" | "Seller Support">(),
+  department: text("department").$type<"Finance" | "Operations" | "Marketplace" | "Tech" | "Supply" | "Growth">(),
   subDepartment: text("sub_department"), // Sub-department for organizational hierarchy
   managerId: varchar("manager_id").references((): AnyPgColumn => users.id, { onDelete: "set null" }), // Reports to (direct manager)
   profilePicture: text("profile_picture"),
@@ -166,6 +166,7 @@ export const departments = pgTable("departments", {
   name: text("name").notNull().unique(),
   description: text("description"),
   color: text("color").default("#6366f1"), // For UI badge color
+  headId: varchar("head_id").references(() => users.id, { onDelete: "set null" }), // Department head
   isActive: boolean("is_active").notNull().default(true),
   displayOrder: integer("display_order").notNull().default(0),
   createdAt: timestamp("created_at").notNull().defaultNow(),
