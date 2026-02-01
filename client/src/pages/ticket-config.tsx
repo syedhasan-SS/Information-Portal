@@ -130,6 +130,7 @@ export default function TicketConfigPage() {
     displayOrder: 0,
     placeholder: "",
     helpText: "",
+    options: [] as Array<{ label: string; value: string }>,
   });
 
   // Fetch configurations
@@ -427,6 +428,7 @@ export default function TicketConfigPage() {
         displayOrder: 0,
         placeholder: "",
         helpText: "",
+        options: [],
       });
       toast({ title: "Success", description: "Custom field created successfully" });
     },
@@ -459,6 +461,7 @@ export default function TicketConfigPage() {
         displayOrder: 0,
         placeholder: "",
         helpText: "",
+        options: [],
       });
       toast({ title: "Success", description: "Custom field updated successfully" });
     },
@@ -1717,6 +1720,7 @@ Information,Tech,Product Listings,Product Information,Category Query,Product cat
                                       displayOrder: field.displayOrder,
                                       placeholder: field.metadata?.placeholder || "",
                                       helpText: field.metadata?.helpText || "",
+                                      options: field.metadata?.options || [],
                                     });
                                     setShowFieldDialog(true);
                                   }}
@@ -2239,6 +2243,7 @@ Information,Tech,Product Listings,Product Information,Category Query,Product cat
             displayOrder: 0,
             placeholder: "",
             helpText: "",
+            options: [],
           });
         }
       }}>
@@ -2372,6 +2377,80 @@ Information,Tech,Product Listings,Product Information,Category Query,Product cat
               />
             </div>
 
+            {/* Options section for select/multiselect fields */}
+            {(fieldFormData.fieldType === "select" || fieldFormData.fieldType === "multiselect") && (
+              <div className="space-y-3 border rounded-lg p-4 bg-muted/30">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <Label className="text-sm font-medium">Options</Label>
+                    <p className="text-xs text-muted-foreground">
+                      Add options for the {fieldFormData.fieldType === "multiselect" ? "multi-select" : "dropdown"} field
+                    </p>
+                  </div>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    onClick={() => setFieldFormData({
+                      ...fieldFormData,
+                      options: [...fieldFormData.options, { label: "", value: "" }]
+                    })}
+                  >
+                    <Plus className="h-3 w-3 mr-1" />
+                    Add Option
+                  </Button>
+                </div>
+                {fieldFormData.options.length > 0 ? (
+                  <div className="space-y-2">
+                    {fieldFormData.options.map((option, index) => (
+                      <div key={index} className="flex items-center gap-2">
+                        <Input
+                          placeholder="Label (displayed)"
+                          value={option.label}
+                          onChange={(e) => {
+                            const updated = [...fieldFormData.options];
+                            updated[index] = { ...updated[index], label: e.target.value };
+                            // Auto-fill value from label if value is empty
+                            if (!updated[index].value) {
+                              updated[index].value = e.target.value;
+                            }
+                            setFieldFormData({ ...fieldFormData, options: updated });
+                          }}
+                          className="flex-1"
+                        />
+                        <Input
+                          placeholder="Value (stored)"
+                          value={option.value}
+                          onChange={(e) => {
+                            const updated = [...fieldFormData.options];
+                            updated[index] = { ...updated[index], value: e.target.value };
+                            setFieldFormData({ ...fieldFormData, options: updated });
+                          }}
+                          className="flex-1"
+                        />
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="sm"
+                          className="h-8 w-8 p-0 text-destructive hover:text-destructive"
+                          onClick={() => {
+                            const updated = fieldFormData.options.filter((_, i) => i !== index);
+                            setFieldFormData({ ...fieldFormData, options: updated });
+                          }}
+                        >
+                          <Trash2 className="h-4 w-4" />
+                        </Button>
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  <p className="text-sm text-muted-foreground text-center py-3 border rounded border-dashed">
+                    No options added. Click "Add Option" to create one.
+                  </p>
+                )}
+              </div>
+            )}
+
             {/* Audit Trail Section - Only shown when editing */}
             {editingField && (
               <div className="mt-4 border-t pt-4">
@@ -2424,6 +2503,7 @@ Information,Tech,Product Listings,Product Information,Category Query,Product cat
                   displayOrder: 0,
                   placeholder: "",
                   helpText: "",
+                  options: [],
                 });
               }}
             >
@@ -2447,6 +2527,10 @@ Information,Tech,Product Listings,Product Information,Category Query,Product cat
                   metadata: {
                     placeholder: fieldFormData.placeholder || undefined,
                     helpText: fieldFormData.helpText || undefined,
+                    // Include options for select/multiselect fields
+                    ...((fieldFormData.fieldType === "select" || fieldFormData.fieldType === "multiselect") && fieldFormData.options.length > 0
+                      ? { options: fieldFormData.options.filter(o => o.label.trim() && o.value.trim()) }
+                      : {}),
                   },
                 };
 
