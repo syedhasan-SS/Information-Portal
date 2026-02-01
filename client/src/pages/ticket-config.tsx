@@ -2247,27 +2247,12 @@ Information,Tech,Product Listings,Product Information,Category Query,Product cat
               <h3 className="mb-3 text-sm font-semibold">Form Fields Configuration</h3>
               <p className="text-xs text-muted-foreground mb-4">
                 Configure which fields appear and their requirements for this category.
-                Core fields are always visible and required.
+                Toggle visibility and required status for each field.
               </p>
 
-              {/* Core Fields - Always Required */}
-              <div className="p-3 border rounded-lg bg-muted/30 mb-4">
-                <h4 className="font-medium mb-2 text-xs text-muted-foreground">Core Fields (Locked)</h4>
-                <div className="flex flex-wrap gap-2">
-                  {["Vendor", "Department", "Issue Type", "Category", "Subject", "Description"].map((label) => (
-                    <Badge key={label} variant="secondary" className="text-xs">
-                      {label} (Required)
-                    </Badge>
-                  ))}
-                </div>
-              </div>
-
-              {/* Optional Fields - Configurable */}
+              {/* All Fields - Configurable */}
               <div className="space-y-2">
-                <h4 className="font-medium text-xs text-muted-foreground">Optional Fields</h4>
-                {customFields?.filter((f: any) =>
-                  !["vendorHandle", "department", "issueType", "categoryId", "subject", "description"].includes(f.fieldName)
-                ).map((field: any) => {
+                {customFields?.map((field: any) => {
                   const override = wizardData.fieldOverrides.find(o => o.fieldConfigurationId === field.id);
                   const isHidden = override?.visibilityOverride === "hidden";
                   const isRequired = override?.requiredOverride ?? field.isRequired;
@@ -2282,6 +2267,9 @@ Information,Tech,Product Listings,Product Information,Category Query,Product cat
                       <div>
                         <span className="font-medium text-sm">{field.fieldLabel}</span>
                         <span className="text-xs text-muted-foreground ml-2">({field.fieldType})</span>
+                        {field.isRequired && !override?.requiredOverride && (
+                          <Badge variant="outline" className="ml-2 text-xs">Default: Required</Badge>
+                        )}
                       </div>
 
                       <div className="flex items-center gap-4">
@@ -2356,11 +2344,9 @@ Information,Tech,Product Listings,Product Information,Category Query,Product cat
                     </div>
                   );
                 })}
-                {(!customFields || customFields.filter((f: any) =>
-                  !["vendorHandle", "department", "issueType", "categoryId", "subject", "description"].includes(f.fieldName)
-                ).length === 0) && (
+                {(!customFields || customFields.length === 0) && (
                   <p className="text-sm text-muted-foreground text-center py-3 border rounded-lg border-dashed">
-                    No optional fields configured. Add custom fields in the Ticket Fields Manager section.
+                    No fields configured. Add fields in the Ticket Fields Manager section.
                   </p>
                 )}
               </div>

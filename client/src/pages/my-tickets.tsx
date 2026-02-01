@@ -515,8 +515,11 @@ export default function MyTicketsPage() {
             className="space-y-4"
           >
             <div className="grid gap-4 sm:grid-cols-2">
+              {isFieldVisible("vendorHandle") && (
               <div className="space-y-2">
-                <Label htmlFor="vendorHandle">Vendor</Label>
+                <Label htmlFor="vendorHandle">
+                  Vendor {isFieldRequired("vendorHandle") ? <span className="text-red-500">*</span> : ""}
+                </Label>
                 <Popover
                   open={vendorComboOpen}
                   onOpenChange={(open) => {
@@ -590,9 +593,13 @@ export default function MyTicketsPage() {
                   className="text-sm"
                 />
               </div>
+              )}
 
+              {isFieldVisible("department") && (
               <div className="space-y-2">
-                <Label htmlFor="department">Department</Label>
+                <Label htmlFor="department">
+                  Department {isFieldRequired("department") ? <span className="text-red-500">*</span> : ""}
+                </Label>
                 <Select
                   value={newTicket.department}
                   onValueChange={(val) => setNewTicket({ ...newTicket, department: val, categoryId: "" })}
@@ -607,9 +614,13 @@ export default function MyTicketsPage() {
                   </SelectContent>
                 </Select>
               </div>
+              )}
 
+              {isFieldVisible("issueType") && (
               <div className="space-y-2">
-                <Label htmlFor="issueType">Issue Type</Label>
+                <Label htmlFor="issueType">
+                  Issue Type {isFieldRequired("issueType") ? <span className="text-red-500">*</span> : ""}
+                </Label>
                 <Select
                   value={newTicket.issueType}
                   onValueChange={(val) => setNewTicket({ ...newTicket, issueType: val, categoryId: "" })}
@@ -624,9 +635,13 @@ export default function MyTicketsPage() {
                   </SelectContent>
                 </Select>
               </div>
+              )}
 
+              {isFieldVisible("categoryId") && (
               <div className="space-y-2">
-                <Label htmlFor="category">Category</Label>
+                <Label htmlFor="category">
+                  Category {isFieldRequired("categoryId") ? <span className="text-red-500">*</span> : ""}
+                </Label>
                 <Select
                   value={newTicket.categoryId}
                   onValueChange={(val) => setNewTicket({ ...newTicket, categoryId: val })}
@@ -643,10 +658,14 @@ export default function MyTicketsPage() {
                   </SelectContent>
                 </Select>
               </div>
+              )}
             </div>
 
+            {isFieldVisible("subject") && (
             <div className="space-y-2">
-              <Label htmlFor="subject">Subject</Label>
+              <Label htmlFor="subject">
+                Subject {isFieldRequired("subject") ? <span className="text-red-500">*</span> : ""}
+              </Label>
               <Input
                 id="subject"
                 value={newTicket.subject}
@@ -655,9 +674,13 @@ export default function MyTicketsPage() {
                 data-testid="input-subject"
               />
             </div>
+            )}
 
+            {isFieldVisible("description") && (
             <div className="space-y-2">
-              <Label htmlFor="description">Description</Label>
+              <Label htmlFor="description">
+                Description {isFieldRequired("description") ? <span className="text-red-500">*</span> : ""}
+              </Label>
               <Textarea
                 id="description"
                 value={newTicket.description}
@@ -667,6 +690,7 @@ export default function MyTicketsPage() {
                 data-testid="input-description"
               />
             </div>
+            )}
 
             {isFieldVisible("fleekOrderIds") && (
               <div className="space-y-2">
@@ -797,12 +821,12 @@ export default function MyTicketsPage() {
                 disabled={
                   createTicketMutation.isPending ||
                   isLoadingFields ||
-                  !newTicket.vendorHandle ||
-                  !newTicket.department ||
-                  !newTicket.issueType ||
-                  !newTicket.categoryId ||
-                  !newTicket.subject ||
-                  !newTicket.description ||
+                  (isFieldRequired("vendorHandle") && !newTicket.vendorHandle) ||
+                  (isFieldRequired("department") && !newTicket.department) ||
+                  (isFieldRequired("issueType") && !newTicket.issueType) ||
+                  (isFieldRequired("categoryId") && !newTicket.categoryId) ||
+                  (isFieldRequired("subject") && !newTicket.subject) ||
+                  (isFieldRequired("description") && !newTicket.description) ||
                   (isFieldRequired("fleekOrderIds") && selectedOrderIds.length === 0)
                 }
                 data-testid="button-submit-ticket"
