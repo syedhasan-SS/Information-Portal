@@ -43,6 +43,7 @@ import {
   Upload,
   FileText,
   AlertCircle,
+  RotateCcw,
 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { Alert, AlertDescription } from "@/components/ui/alert";
@@ -480,6 +481,26 @@ export default function TicketConfigPage() {
     },
     onError: () => {
       toast({ title: "Error", description: "Failed to delete custom field", variant: "destructive" });
+    },
+  });
+
+  const seedDefaultFieldsMutation = useMutation({
+    mutationFn: async () => {
+      const res = await fetch("/api/config/field-configurations/seed-defaults", {
+        method: "POST",
+      });
+      if (!res.ok) throw new Error("Failed to seed default fields");
+      return res.json();
+    },
+    onSuccess: (data) => {
+      queryClient.invalidateQueries({ queryKey: ["custom-fields"] });
+      toast({
+        title: "Success",
+        description: `Seeded ${data.fields?.length || 0} default fields (${data.skipped || 0} already existed)`
+      });
+    },
+    onError: () => {
+      toast({ title: "Error", description: "Failed to seed default fields", variant: "destructive" });
     },
   });
 
@@ -1548,13 +1569,28 @@ Information,Tech,Product Listings,Product Information,Category Query,Product cat
               <h2 className="text-xl font-semibold">Custom Field Manager</h2>
               <p className="text-sm text-muted-foreground">Configure custom fields for ticket creation</p>
             </div>
-            <Button
-              onClick={() => setShowFieldDialog(true)}
-              size="sm"
-            >
-              <Plus className="mr-2 h-4 w-4" />
-              Add Custom Field
-            </Button>
+            <div className="flex gap-2">
+              <Button
+                onClick={() => seedDefaultFieldsMutation.mutate()}
+                size="sm"
+                variant="outline"
+                disabled={seedDefaultFieldsMutation.isPending}
+              >
+                {seedDefaultFieldsMutation.isPending ? (
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                ) : (
+                  <RotateCcw className="mr-2 h-4 w-4" />
+                )}
+                Seed Default Fields
+              </Button>
+              <Button
+                onClick={() => setShowFieldDialog(true)}
+                size="sm"
+              >
+                <Plus className="mr-2 h-4 w-4" />
+                Add Custom Field
+              </Button>
+            </div>
           </div>
 
           {/* Custom Field Filters */}

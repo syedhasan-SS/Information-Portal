@@ -976,6 +976,154 @@ export async function registerRoutes(
     }
   });
 
+  // Seed default ticket field configurations
+  app.post("/api/config/field-configurations/seed-defaults", async (_req, res) => {
+    try {
+      const DEFAULT_TICKET_FIELDS = [
+        {
+          fieldName: "vendorHandle",
+          fieldLabel: "Vendor Handle",
+          fieldType: "text" as const,
+          departmentType: "All" as const,
+          isEnabled: true,
+          isRequired: true,
+          displayOrder: 1,
+          metadata: {
+            placeholder: "Enter or search vendor handle",
+            helpText: "The unique identifier for the vendor/seller",
+          },
+        },
+        {
+          fieldName: "department",
+          fieldLabel: "Department",
+          fieldType: "select" as const,
+          departmentType: "All" as const,
+          isEnabled: true,
+          isRequired: true,
+          displayOrder: 2,
+          metadata: {
+            placeholder: "Select department",
+            helpText: "The department responsible for handling this ticket",
+            options: [
+              { label: "Finance", value: "Finance" },
+              { label: "Operations", value: "Operations" },
+              { label: "Marketplace", value: "Marketplace" },
+              { label: "Tech", value: "Tech" },
+              { label: "Experience", value: "Experience" },
+              { label: "CX", value: "CX" },
+              { label: "Seller Support", value: "Seller Support" },
+            ],
+          },
+        },
+        {
+          fieldName: "issueType",
+          fieldLabel: "Issue Type",
+          fieldType: "select" as const,
+          departmentType: "All" as const,
+          isEnabled: true,
+          isRequired: true,
+          displayOrder: 3,
+          metadata: {
+            placeholder: "Select issue type",
+            helpText: "The type of issue being reported",
+            options: [
+              { label: "Complaint", value: "Complaint" },
+              { label: "Request", value: "Request" },
+              { label: "Information", value: "Information" },
+            ],
+          },
+        },
+        {
+          fieldName: "categoryId",
+          fieldLabel: "Category",
+          fieldType: "select" as const,
+          departmentType: "All" as const,
+          isEnabled: true,
+          isRequired: true,
+          displayOrder: 4,
+          metadata: {
+            placeholder: "Select category",
+            helpText: "The specific category for this ticket (filtered by department and issue type)",
+          },
+        },
+        {
+          fieldName: "subject",
+          fieldLabel: "Subject",
+          fieldType: "text" as const,
+          departmentType: "All" as const,
+          isEnabled: true,
+          isRequired: true,
+          displayOrder: 5,
+          metadata: {
+            placeholder: "Brief summary of the issue",
+            helpText: "A short title describing the ticket",
+          },
+        },
+        {
+          fieldName: "description",
+          fieldLabel: "Description",
+          fieldType: "textarea" as const,
+          departmentType: "All" as const,
+          isEnabled: true,
+          isRequired: true,
+          displayOrder: 6,
+          metadata: {
+            placeholder: "Provide detailed description of the issue...",
+            helpText: "Detailed explanation of the issue, including any relevant context",
+          },
+        },
+        {
+          fieldName: "fleekOrderIds",
+          fieldLabel: "Fleek Order IDs",
+          fieldType: "multiselect" as const,
+          departmentType: "All" as const,
+          isEnabled: true,
+          isRequired: false,
+          displayOrder: 7,
+          metadata: {
+            placeholder: "Select related order IDs",
+            helpText: "Link this ticket to specific Fleek orders (optional)",
+          },
+        },
+        {
+          fieldName: "attachments",
+          fieldLabel: "Attachments",
+          fieldType: "file" as const,
+          departmentType: "All" as const,
+          isEnabled: true,
+          isRequired: false,
+          displayOrder: 8,
+          metadata: {
+            placeholder: "Upload files",
+            helpText: "Attach relevant screenshots, documents, or other files",
+          },
+        },
+      ];
+
+      // Check existing fields to avoid duplicates
+      const existingFields = await storage.getTicketFieldConfigurations();
+      const existingFieldNames = new Set(existingFields.map(f => f.fieldName));
+
+      const fieldsToCreate = DEFAULT_TICKET_FIELDS.filter(
+        field => !existingFieldNames.has(field.fieldName)
+      );
+
+      const createdFields = [];
+      for (const field of fieldsToCreate) {
+        const created = await storage.createTicketFieldConfiguration(field);
+        createdFields.push(created);
+      }
+
+      res.status(201).json({
+        message: `Seeded ${createdFields.length} default field configurations`,
+        skipped: DEFAULT_TICKET_FIELDS.length - createdFields.length,
+        fields: createdFields,
+      });
+    } catch (error: any) {
+      res.status(500).json({ error: error.message });
+    }
+  });
+
   // Unified Ticket Configurations (combines issue types with L1-L4 hierarchy)
   app.get("/api/config/ticket-configs", async (_req, res) => {
     try {

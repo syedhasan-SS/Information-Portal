@@ -1,5 +1,5 @@
 import { db } from "./db";
-import { vendors, categories } from "@shared/schema";
+import { vendors, categories, ticketFieldConfigurations } from "@shared/schema";
 
 const MOCK_VENDORS = [
   { handle: "vendor_fleek_moda", name: "Fleek Moda", gmvTier: "XL" as const, kam: "Ayesha Khan", zone: "West", persona: "Strategic" },
@@ -71,6 +71,128 @@ const CATEGORY_PATHS = [
   "Information > Marketplace > Promotion & Discount > Campaign Discount Info",
 ];
 
+// Default ticket form fields to be managed via Custom Field Manager
+const DEFAULT_TICKET_FIELDS = [
+  {
+    fieldName: "vendorHandle",
+    fieldLabel: "Vendor Handle",
+    fieldType: "text" as const,
+    departmentType: "All" as const,
+    isEnabled: true,
+    isRequired: true,
+    displayOrder: 1,
+    metadata: {
+      placeholder: "Enter or search vendor handle",
+      helpText: "The unique identifier for the vendor/seller",
+    },
+  },
+  {
+    fieldName: "department",
+    fieldLabel: "Department",
+    fieldType: "select" as const,
+    departmentType: "All" as const,
+    isEnabled: true,
+    isRequired: true,
+    displayOrder: 2,
+    metadata: {
+      placeholder: "Select department",
+      helpText: "The department responsible for handling this ticket",
+      options: [
+        { label: "Finance", value: "Finance" },
+        { label: "Operations", value: "Operations" },
+        { label: "Marketplace", value: "Marketplace" },
+        { label: "Tech", value: "Tech" },
+        { label: "Experience", value: "Experience" },
+        { label: "CX", value: "CX" },
+        { label: "Seller Support", value: "Seller Support" },
+      ],
+    },
+  },
+  {
+    fieldName: "issueType",
+    fieldLabel: "Issue Type",
+    fieldType: "select" as const,
+    departmentType: "All" as const,
+    isEnabled: true,
+    isRequired: true,
+    displayOrder: 3,
+    metadata: {
+      placeholder: "Select issue type",
+      helpText: "The type of issue being reported",
+      options: [
+        { label: "Complaint", value: "Complaint" },
+        { label: "Request", value: "Request" },
+        { label: "Information", value: "Information" },
+      ],
+    },
+  },
+  {
+    fieldName: "categoryId",
+    fieldLabel: "Category",
+    fieldType: "select" as const,
+    departmentType: "All" as const,
+    isEnabled: true,
+    isRequired: true,
+    displayOrder: 4,
+    metadata: {
+      placeholder: "Select category",
+      helpText: "The specific category for this ticket (filtered by department and issue type)",
+    },
+  },
+  {
+    fieldName: "subject",
+    fieldLabel: "Subject",
+    fieldType: "text" as const,
+    departmentType: "All" as const,
+    isEnabled: true,
+    isRequired: true,
+    displayOrder: 5,
+    metadata: {
+      placeholder: "Brief summary of the issue",
+      helpText: "A short title describing the ticket",
+    },
+  },
+  {
+    fieldName: "description",
+    fieldLabel: "Description",
+    fieldType: "textarea" as const,
+    departmentType: "All" as const,
+    isEnabled: true,
+    isRequired: true,
+    displayOrder: 6,
+    metadata: {
+      placeholder: "Provide detailed description of the issue...",
+      helpText: "Detailed explanation of the issue, including any relevant context",
+    },
+  },
+  {
+    fieldName: "fleekOrderIds",
+    fieldLabel: "Fleek Order IDs",
+    fieldType: "multiselect" as const,
+    departmentType: "All" as const,
+    isEnabled: true,
+    isRequired: false,
+    displayOrder: 7,
+    metadata: {
+      placeholder: "Select related order IDs",
+      helpText: "Link this ticket to specific Fleek orders (optional)",
+    },
+  },
+  {
+    fieldName: "attachments",
+    fieldLabel: "Attachments",
+    fieldType: "file" as const,
+    departmentType: "All" as const,
+    isEnabled: true,
+    isRequired: false,
+    displayOrder: 8,
+    metadata: {
+      placeholder: "Upload files",
+      helpText: "Attach relevant screenshots, documents, or other files",
+    },
+  },
+];
+
 function parseCategory(path: string) {
   const parts = path.split(">").map((s) => s.trim());
   const issueType = parts[0] as "Complaint" | "Request" | "Information";
@@ -114,6 +236,13 @@ async function seed() {
       await db.insert(categories).values(category).onConflictDoNothing();
     }
     console.log(`✅ Seeded ${CATEGORY_PATHS.length} categories`);
+
+    // Seed ticket field configurations
+    console.log("📝 Seeding ticket field configurations...");
+    for (const field of DEFAULT_TICKET_FIELDS) {
+      await db.insert(ticketFieldConfigurations).values(field).onConflictDoNothing();
+    }
+    console.log(`✅ Seeded ${DEFAULT_TICKET_FIELDS.length} ticket field configurations`);
 
     console.log("✨ Database seeded successfully!");
   } catch (error) {
