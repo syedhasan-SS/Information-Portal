@@ -2241,6 +2241,130 @@ Information,Tech,Product Listings,Product Information,Category Query,Product cat
                 </div>
               </div>
             )}
+
+            {/* Form Fields Configuration */}
+            <div className="mt-6 border-t pt-4">
+              <h3 className="mb-3 text-sm font-semibold">Form Fields Configuration</h3>
+              <p className="text-xs text-muted-foreground mb-4">
+                Configure which fields appear and their requirements for this category.
+                Core fields are always visible and required.
+              </p>
+
+              {/* Core Fields - Always Required */}
+              <div className="p-3 border rounded-lg bg-muted/30 mb-4">
+                <h4 className="font-medium mb-2 text-xs text-muted-foreground">Core Fields (Locked)</h4>
+                <div className="flex flex-wrap gap-2">
+                  {["Vendor", "Department", "Issue Type", "Category", "Subject", "Description"].map((label) => (
+                    <Badge key={label} variant="secondary" className="text-xs">
+                      {label} (Required)
+                    </Badge>
+                  ))}
+                </div>
+              </div>
+
+              {/* Optional Fields - Configurable */}
+              <div className="space-y-2">
+                <h4 className="font-medium text-xs text-muted-foreground">Optional Fields</h4>
+                {customFields?.filter((f: any) =>
+                  !["vendorHandle", "department", "issueType", "categoryId", "subject", "description"].includes(f.fieldName)
+                ).map((field: any) => {
+                  const override = wizardData.fieldOverrides.find(o => o.fieldConfigurationId === field.id);
+                  const isHidden = override?.visibilityOverride === "hidden";
+                  const isRequired = override?.requiredOverride ?? field.isRequired;
+
+                  return (
+                    <div
+                      key={field.id}
+                      className={`flex items-center justify-between py-2 px-3 border rounded-lg ${
+                        isHidden ? "bg-muted/30 opacity-60" : ""
+                      }`}
+                    >
+                      <div>
+                        <span className="font-medium text-sm">{field.fieldLabel}</span>
+                        <span className="text-xs text-muted-foreground ml-2">({field.fieldType})</span>
+                      </div>
+
+                      <div className="flex items-center gap-4">
+                        {/* Visibility toggle */}
+                        <div className="flex items-center gap-2">
+                          <Label className="text-xs">Show</Label>
+                          <Switch
+                            checked={!isHidden}
+                            onCheckedChange={(checked) => {
+                              const existing = wizardData.fieldOverrides.find(o => o.fieldConfigurationId === field.id);
+                              if (existing) {
+                                setWizardData({
+                                  ...wizardData,
+                                  fieldOverrides: wizardData.fieldOverrides.map(o =>
+                                    o.fieldConfigurationId === field.id
+                                      ? { ...o, visibilityOverride: checked ? null : "hidden" }
+                                      : o
+                                  ),
+                                });
+                              } else {
+                                setWizardData({
+                                  ...wizardData,
+                                  fieldOverrides: [
+                                    ...wizardData.fieldOverrides,
+                                    {
+                                      fieldConfigurationId: field.id,
+                                      visibilityOverride: checked ? null : "hidden",
+                                      requiredOverride: null,
+                                    },
+                                  ],
+                                });
+                              }
+                            }}
+                          />
+                        </div>
+
+                        {/* Required toggle (only if visible) */}
+                        {!isHidden && (
+                          <div className="flex items-center gap-2">
+                            <Label className="text-xs">Required</Label>
+                            <Switch
+                              checked={isRequired}
+                              onCheckedChange={(checked) => {
+                                const existing = wizardData.fieldOverrides.find(o => o.fieldConfigurationId === field.id);
+                                if (existing) {
+                                  setWizardData({
+                                    ...wizardData,
+                                    fieldOverrides: wizardData.fieldOverrides.map(o =>
+                                      o.fieldConfigurationId === field.id
+                                        ? { ...o, requiredOverride: checked }
+                                        : o
+                                    ),
+                                  });
+                                } else {
+                                  setWizardData({
+                                    ...wizardData,
+                                    fieldOverrides: [
+                                      ...wizardData.fieldOverrides,
+                                      {
+                                        fieldConfigurationId: field.id,
+                                        visibilityOverride: null,
+                                        requiredOverride: checked,
+                                      },
+                                    ],
+                                  });
+                                }
+                              }}
+                            />
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  );
+                })}
+                {(!customFields || customFields.filter((f: any) =>
+                  !["vendorHandle", "department", "issueType", "categoryId", "subject", "description"].includes(f.fieldName)
+                ).length === 0) && (
+                  <p className="text-sm text-muted-foreground text-center py-3 border rounded-lg border-dashed">
+                    No optional fields configured. Add custom fields in the Ticket Fields Manager section.
+                  </p>
+                )}
+              </div>
+            </div>
           </div>
 
           <DialogFooter>
