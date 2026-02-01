@@ -193,9 +193,6 @@ export default function DashboardPage() {
                 {hasPermission("view:users") && (
                   <NavButton onClick={() => setLocation("/users")} icon={Users} label="Users" />
                 )}
-                {hasPermission("view:users") && (
-                  <NavButton onClick={() => setLocation("/org-hierarchy")} icon={Network} label="Org Hierarchy" />
-                )}
                 {hasPermission("view:analytics") && (
                   <NavButton onClick={() => setLocation("/analytics")} icon={BarChart3} label="Analytics" />
                 )}

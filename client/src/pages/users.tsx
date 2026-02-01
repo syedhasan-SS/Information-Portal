@@ -14,6 +14,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { cn } from "@/lib/utils";
 import { useLocation } from "wouter";
 import {
@@ -30,6 +31,8 @@ import {
   Shield,
   Eye,
   EyeOff,
+  Network,
+  ChevronRight,
 } from "lucide-react";
 import {
   DropdownMenu,
@@ -189,6 +192,7 @@ export default function UsersPage() {
   const [managingPermissionsUser, setManagingPermissionsUser] = useState<User | null>(null);
   const [selectedPermissions, setSelectedPermissions] = useState<string[]>([]);
   const [visiblePasswords, setVisiblePasswords] = useState<Set<number>>(new Set());
+  const [activeTab, setActiveTab] = useState<"users" | "hierarchy">("users");
 
   const queryClient = useQueryClient();
 
@@ -418,6 +422,71 @@ export default function UsersPage() {
     "Department Agent": "bg-slate-500/10 text-slate-600 border-slate-500/20",
   };
 
+  // Org Hierarchy UserNode component
+  const UserNode = ({ user: nodeUser, level = 0 }: { user: User; level?: number }) => {
+    const directReports = getDirectReports(nodeUser.id);
+    const hasReports = directReports.length > 0;
+
+    return (
+      <div className="relative">
+        <Card className={`p-4 mb-2 ${level > 0 ? 'ml-8' : ''} hover:bg-accent/5 transition-colors`}>
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-3">
+              <Avatar className="h-10 w-10">
+                {nodeUser.profilePicture && <AvatarImage src={nodeUser.profilePicture} alt={nodeUser.name} />}
+                <AvatarFallback className="bg-gradient-to-br from-blue-500 to-purple-600 text-white font-semibold">
+                  {nodeUser.name.split(' ').map(n => n[0]).join('').slice(0, 2).toUpperCase()}
+                </AvatarFallback>
+              </Avatar>
+              <div>
+                <div className="flex items-center gap-2">
+                  <h3 className="font-semibold">{nodeUser.name}</h3>
+                  {!nodeUser.isActive && (
+                    <Badge variant="secondary" className="text-xs">
+                      Inactive
+                    </Badge>
+                  )}
+                </div>
+                <div className="flex items-center gap-2 mt-1">
+                  <Badge variant="outline" className="text-xs">
+                    {nodeUser.role}
+                  </Badge>
+                  {nodeUser.department && (
+                    <span className="text-xs text-muted-foreground">
+                      {nodeUser.department}{nodeUser.subDepartment ? ` - ${nodeUser.subDepartment}` : ''}
+                    </span>
+                  )}
+                </div>
+              </div>
+            </div>
+            <div className="flex items-center gap-2">
+              {hasReports && (
+                <Badge variant="secondary" className="flex items-center gap-1">
+                  <Users className="h-3 w-3" />
+                  {directReports.length} {directReports.length === 1 ? 'report' : 'reports'}
+                </Badge>
+              )}
+            </div>
+          </div>
+        </Card>
+
+        {/* Render direct reports recursively */}
+        {hasReports && (
+          <div className="relative">
+            {level === 0 && (
+              <div className="absolute left-5 top-0 bottom-0 w-px bg-border" />
+            )}
+            <div className="space-y-2">
+              {directReports.map((report) => (
+                <UserNode key={report.id} user={report} level={level + 1} />
+              ))}
+            </div>
+          </div>
+        )}
+      </div>
+    );
+  };
+
   return (
     <div className="min-h-screen bg-background">
       {/* Header */}
@@ -461,8 +530,21 @@ export default function UsersPage() {
       </header>
 
       <main className="mx-auto max-w-[1600px] px-6 py-8">
-        {/* User Statistics */}
-        {users && (
+        <Tabs value={activeTab} onValueChange={(v) => setActiveTab(v as "users" | "hierarchy")} className="space-y-6">
+          <TabsList className="grid w-full grid-cols-2">
+            <TabsTrigger value="users">
+              <Users className="h-4 w-4 mr-2" />
+              Users
+            </TabsTrigger>
+            <TabsTrigger value="hierarchy">
+              <Network className="h-4 w-4 mr-2" />
+              Organization Hierarchy
+            </TabsTrigger>
+          </TabsList>
+
+          <TabsContent value="users" className="space-y-6">
+            {/* User Statistics */}
+            {users && (
           <div className="mb-8 grid gap-4 md:grid-cols-3">
             {/* Total Users */}
             <Card className="p-6">
@@ -845,6 +927,75 @@ export default function UsersPage() {
             </Card>
           )}
         </div>
+      </TabsContent>
+
+      <TabsContent value="hierarchy" className="space-y-6">
+        {/* Organization Hierarchy Summary Stats */}
+        <div className="grid gap-4 sm:grid-cols-4">
+          <Card className="p-4">
+            <p className="text-xs text-muted-foreground">Total Users</p>
+            <p className="mt-1 text-2xl font-bold">{users?.length || 0}</p>
+          </Card>
+          <Card className="p-4">
+            <p className="text-xs text-muted-foreground">Active Users</p>
+            <p className="mt-1 text-2xl font-bold text-green-600">
+              {users?.filter(u => u.isActive).length || 0}
+            </p>
+          </Card>
+          <Card className="p-4">
+            <p className="text-xs text-muted-foreground">Top Level</p>
+            <p className="mt-1 text-2xl font-bold text-blue-600">
+              {users?.filter(u => !u.managerId).length || 0}
+            </p>
+          </Card>
+          <Card className="p-4">
+            <p className="text-xs text-muted-foreground">Departments</p>
+            <p className="mt-1 text-2xl font-bold text-purple-600">
+              {users ? new Set(users.filter(u => u.department).map(u => u.department)).size : 0}
+            </p>
+          </Card>
+        </div>
+
+        {/* Organization Tree */}
+        <div className="space-y-6">
+          <div className="flex items-center justify-between">
+            <h2 className="text-xl font-semibold">Organization Structure</h2>
+          </div>
+
+          {isLoading ? (
+            <Card className="p-16">
+              <div className="flex items-center justify-center">
+                <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
+              </div>
+            </Card>
+          ) : users && users.filter(u => !u.managerId).length > 0 ? (
+            <div className="space-y-6">
+              {users.filter(u => !u.managerId).map((topUser) => (
+                <UserNode key={topUser.id} user={topUser} />
+              ))}
+            </div>
+          ) : (
+            <Card className="p-16">
+              <div className="text-center">
+                <Network className="mx-auto mb-4 h-12 w-12 text-muted-foreground/50" />
+                <h3 className="text-lg font-medium text-foreground">No organization hierarchy</h3>
+                <p className="mt-1 text-sm text-muted-foreground">
+                  Add users and assign managers to build your organization structure
+                </p>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="mt-4"
+                  onClick={() => setActiveTab("users")}
+                >
+                  Manage Users
+                </Button>
+              </div>
+            </Card>
+          )}
+        </div>
+      </TabsContent>
+    </Tabs>
       </main>
 
       {/* Edit User Dialog */}
