@@ -7,6 +7,7 @@ import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
+import { useAuth } from "@/hooks/use-auth";
 import {
   Select,
   SelectContent,
@@ -87,10 +88,12 @@ const ISSUE_TYPES = ["Complaint", "Request", "Information"] as const;
 
 export default function MyTicketsPage() {
   const [, setLocation] = useLocation();
+  const { user } = useAuth();
   const [activeTab, setActiveTab] = useState<"created" | "assigned">("created");
   const [showNewTicketDialog, setShowNewTicketDialog] = useState(false);
   const [newTicket, setNewTicket] = useState({
     vendorHandle: "",
+    customer: "",
     department: "",
     issueType: "",
     categoryId: "",
@@ -108,6 +111,18 @@ export default function MyTicketsPage() {
   const [isLoadingFields, setIsLoadingFields] = useState(false);
   const queryClient = useQueryClient();
   const { toast } = useToast();
+
+  // Determine user's department type from their department or role
+  const userDepartmentType = useMemo(() => {
+    if (!user) return "Seller Support"; // Default fallback
+    // Check if user's department is "Seller Support" or "Customer Support"
+    if (user.department === "Seller Support") return "Seller Support";
+    if (user.department === "Customer Support" || user.department === "CX") return "Customer Support";
+    // Check role as fallback
+    if (user.role === "Seller Support Agent") return "Seller Support";
+    // Default to Seller Support
+    return "Seller Support";
+  }, [user]);
 
   const { data: tickets, isLoading } = useQuery({
     queryKey: ["tickets"],
@@ -134,13 +149,20 @@ export default function MyTicketsPage() {
     },
   });
 
-  // Get sorted visible fields based on displayOrder
+  // Get sorted visible fields based on displayOrder and user's department type
+  // Fields with departmentType "All" are included for all users
+  // Fields matching user's department type are also included
   const sortedVisibleFields = useMemo(() => {
     if (!fieldConfigs) return [];
     return fieldConfigs
-      .filter((f: any) => f.isEnabled)
+      .filter((f: any) => {
+        if (!f.isEnabled) return false;
+        // Include fields where departmentType is "All" or matches user's department type
+        const fieldDeptType = f.departmentType || "All";
+        return fieldDeptType === "All" || fieldDeptType === userDepartmentType;
+      })
       .sort((a: any, b: any) => a.displayOrder - b.displayOrder);
-  }, [fieldConfigs]);
+  }, [fieldConfigs, userDepartmentType]);
 
   // Helper to get field config by name
   const getFieldConfig = (fieldName: string) => {
@@ -290,7 +312,8 @@ export default function MyTicketsPage() {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          vendorHandle: ticketData.vendorHandle,
+          vendorHandle: ticketData.vendorHandle || null,
+          customer: ticketData.customer || null,
           department: ticketData.department,
           issueType: ticketData.issueType,
           categoryId: ticketData.categoryId,
@@ -320,7 +343,7 @@ export default function MyTicketsPage() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["tickets"] });
       setShowNewTicketDialog(false);
-      setNewTicket({ vendorHandle: "", department: "", issueType: "", categoryId: "", subject: "", description: "", fleekOrderIds: "" });
+      setNewTicket({ vendorHandle: "", customer: "", department: "", issueType: "", categoryId: "", subject: "", description: "", fleekOrderIds: "" });
       setSelectedOrderIds([]);
       setAvailableOrderIds([]);
       setResolvedFields([]);
@@ -650,6 +673,24 @@ export default function MyTicketsPage() {
                 );
               }
 
+              // Customer field (for Customer Support)
+              if (fieldName === "customer") {
+                return (
+                  <div key={fieldName} className="space-y-2">
+                    <Label htmlFor="customer">
+                      {getFieldLabel(fieldName)} {isFieldRequired(fieldName) ? <span className="text-red-500">*</span> : ""}
+                    </Label>
+                    <Input
+                      id="customer"
+                      value={newTicket.customer}
+                      onChange={(e) => setNewTicket({ ...newTicket, customer: e.target.value })}
+                      placeholder={fieldConfig.metadata?.placeholder || "Enter customer name or ID"}
+                      data-testid="input-customer"
+                    />
+                  </div>
+                );
+              }
+
               // Department field
               if (fieldName === "department") {
                 return (
@@ -898,6 +939,7 @@ export default function MyTicketsPage() {
                   createTicketMutation.isPending ||
                   isLoadingFields ||
                   (isFieldRequired("vendorHandle") && !newTicket.vendorHandle) ||
+                  (isFieldRequired("customer") && !newTicket.customer) ||
                   (isFieldRequired("department") && !newTicket.department) ||
                   (isFieldRequired("issueType") && !newTicket.issueType) ||
                   (isFieldRequired("categoryId") && !newTicket.categoryId) ||

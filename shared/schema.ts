@@ -35,8 +35,9 @@ export const categories = pgTable("categories", {
 export const tickets = pgTable("tickets", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
   ticketNumber: text("ticket_number").notNull().unique(),
-  vendorHandle: text("vendor_handle").notNull().references(() => vendors.handle),
-  department: text("department").notNull().$type<"Finance" | "Operations" | "Marketplace" | "Tech" | "Supply" | "Growth">(),
+  vendorHandle: text("vendor_handle").references(() => vendors.handle), // Optional for Customer Support tickets
+  customer: text("customer"), // For Customer Support tickets (customer name/ID)
+  department: text("department").notNull().$type<"Finance" | "Operations" | "Marketplace" | "Tech" | "Supply" | "Growth" | "Experience" | "CX" | "Seller Support">(),
   issueType: text("issue_type").notNull().$type<"Complaint" | "Request" | "Information">(),
   categoryId: varchar("category_id").notNull().references(() => categories.id),
   subject: text("subject").notNull(),
