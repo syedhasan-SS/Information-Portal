@@ -30,6 +30,7 @@ import {
   AlertCircle,
   LogOut,
   Bell,
+  Network,
 } from "lucide-react";
 import type { Ticket as TicketType, User as UserType } from "@shared/schema";
 
@@ -191,6 +192,9 @@ export default function DashboardPage() {
                 )}
                 {hasPermission("view:users") && (
                   <NavButton onClick={() => setLocation("/users")} icon={Users} label="Users" />
+                )}
+                {hasPermission("view:users") && (
+                  <NavButton onClick={() => setLocation("/org-hierarchy")} icon={Network} label="Org Hierarchy" />
                 )}
                 {hasPermission("view:analytics") && (
                   <NavButton onClick={() => setLocation("/analytics")} icon={BarChart3} label="Analytics" />

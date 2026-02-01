@@ -19,6 +19,7 @@ import AnalyticsPage from "@/pages/analytics";
 import TicketConfigPage from "@/pages/ticket-config";
 import DepartmentTicketsPage from "@/pages/department-tickets";
 import NotificationsPage from "@/pages/notifications";
+import OrgHierarchyPage from "@/pages/org-hierarchy";
 
 function Router() {
   return (
@@ -32,6 +33,11 @@ function Router() {
       <Route path="/users">
         <ProtectedRoute requiredPermission="view:users">
           <UsersPage />
+        </ProtectedRoute>
+      </Route>
+      <Route path="/org-hierarchy">
+        <ProtectedRoute requiredPermission="view:users">
+          <OrgHierarchyPage />
         </ProtectedRoute>
       </Route>
       <Route path="/tickets">

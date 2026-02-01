@@ -1056,7 +1056,7 @@ Information,Tech,Product Listings,Product Information,Category Query,Product cat
           </div>
         </div>
 
-        {/* Distribution Charts */}
+        {/* Distribution Charts - Only show when data exists */}
         {filteredConfigs && filteredConfigs.length > 0 && (
           <>
             <div className="mb-4 flex items-center">
@@ -1174,135 +1174,136 @@ Information,Tech,Product Listings,Product Information,Category Query,Product cat
                 </div>
               </Card>
             </div>
-
-            <div className="border-t pt-6">
-              <div className="mb-4 flex items-center justify-between">
-                <h2 className="text-xl font-semibold">Categories</h2>
-                {selectedConfigs.size > 0 && (
-                  <div className="flex gap-2">
-                    <Badge variant="secondary" className="px-3 py-1">
-                      {selectedConfigs.size} selected
-                    </Badge>
-                    <Button
-                      onClick={() => handleBulkActivate(true)}
-                      variant="outline"
-                      size="sm"
-                    >
-                      Activate Selected
-                    </Button>
-                    <Button
-                      onClick={() => handleBulkActivate(false)}
-                      variant="outline"
-                      size="sm"
-                    >
-                      Deactivate Selected
-                    </Button>
-                    <Button
-                      onClick={handleBulkDelete}
-                      variant="outline"
-                      size="sm"
-                      className="text-red-600 hover:text-red-700"
-                    >
-                      <Trash2 className="h-4 w-4" />
-                      Delete Selected
-                    </Button>
-                  </div>
-                )}
-              </div>
-
-              {/* Category Filters */}
-              <Card className="mb-4 p-4">
-                <div className="flex flex-wrap items-center gap-4">
-                  <span className="text-sm font-medium text-muted-foreground">Request Type:</span>
-                  <div className="flex flex-wrap gap-2">
-                    <Button
-                      variant={requestTypeFilter === "All" ? "default" : "outline"}
-                      size="sm"
-                      onClick={() => setRequestTypeFilter("All")}
-                    >
-                      All
-                    </Button>
-                    <Button
-                      variant={requestTypeFilter === "Complaint" ? "default" : "outline"}
-                      size="sm"
-                      onClick={() => setRequestTypeFilter("Complaint")}
-                    >
-                      Complaint
-                    </Button>
-                    <Button
-                      variant={requestTypeFilter === "Request" ? "default" : "outline"}
-                      size="sm"
-                      onClick={() => setRequestTypeFilter("Request")}
-                    >
-                      Request
-                    </Button>
-                    <Button
-                      variant={requestTypeFilter === "Information" ? "default" : "outline"}
-                      size="sm"
-                      onClick={() => setRequestTypeFilter("Information")}
-                    >
-                      Information
-                    </Button>
-                  </div>
-
-                  <div className="h-6 w-px bg-border" />
-
-                  <span className="text-sm font-medium text-muted-foreground">Status:</span>
-                  <div className="flex flex-wrap gap-2">
-                    <Button
-                      variant={statusFilter === "All" ? "default" : "outline"}
-                      size="sm"
-                      onClick={() => setStatusFilter("All")}
-                    >
-                      All
-                    </Button>
-                    <Button
-                      variant={statusFilter === "Active" ? "default" : "outline"}
-                      size="sm"
-                      onClick={() => setStatusFilter("Active")}
-                    >
-                      Active
-                    </Button>
-                    <Button
-                      variant={statusFilter === "Inactive" ? "default" : "outline"}
-                      size="sm"
-                      onClick={() => setStatusFilter("Inactive")}
-                    >
-                      Inactive
-                    </Button>
-                  </div>
-
-                  <div className="h-6 w-px bg-border" />
-
-                  <span className="text-sm font-medium text-muted-foreground">SLA:</span>
-                  <div className="flex flex-wrap gap-2">
-                    <Button
-                      variant={slaFilter === "All" ? "default" : "outline"}
-                      size="sm"
-                      onClick={() => setSlaFilter("All")}
-                    >
-                      All
-                    </Button>
-                    <Button
-                      variant={slaFilter === "With Response SLA" ? "default" : "outline"}
-                      size="sm"
-                      onClick={() => setSlaFilter("With Response SLA")}
-                    >
-                      With Response SLA
-                    </Button>
-                    <Button
-                      variant={slaFilter === "Resolution Only" ? "default" : "outline"}
-                      size="sm"
-                      onClick={() => setSlaFilter("Resolution Only")}
-                    >
-                      Resolution Only
-                    </Button>
-                  </div>
-                </div>
-              </Card>
-            </div>
           </>
         )}
+
+        {/* Categories Section - Always visible */}
+        <div className={filteredConfigs && filteredConfigs.length > 0 ? "border-t pt-6" : ""}>
+          <div className="mb-4 flex items-center justify-between">
+            <h2 className="text-xl font-semibold">Categories</h2>
+            {selectedConfigs.size > 0 && (
+              <div className="flex gap-2">
+                <Badge variant="secondary" className="px-3 py-1">
+                  {selectedConfigs.size} selected
+                </Badge>
+                <Button
+                  onClick={() => handleBulkActivate(true)}
+                  variant="outline"
+                  size="sm"
+                >
+                  Activate Selected
+                </Button>
+                <Button
+                  onClick={() => handleBulkActivate(false)}
+                  variant="outline"
+                  size="sm"
+                >
+                  Deactivate Selected
+                </Button>
+                <Button
+                  onClick={handleBulkDelete}
+                  variant="outline"
+                  size="sm"
+                  className="text-red-600 hover:text-red-700"
+                >
+                  <Trash2 className="h-4 w-4" />
+                  Delete Selected
+                </Button>
+              </div>
+            )}
+          </div>
+
+          {/* Category Filters */}
+          <Card className="mb-4 p-4">
+            <div className="flex flex-wrap items-center gap-4">
+              <span className="text-sm font-medium text-muted-foreground">Request Type:</span>
+              <div className="flex flex-wrap gap-2">
+                <Button
+                  variant={requestTypeFilter === "All" ? "default" : "outline"}
+                  size="sm"
+                  onClick={() => setRequestTypeFilter("All")}
+                >
+                  All
+                </Button>
+                <Button
+                  variant={requestTypeFilter === "Complaint" ? "default" : "outline"}
+                  size="sm"
+                  onClick={() => setRequestTypeFilter("Complaint")}
+                >
+                  Complaint
+                </Button>
+                <Button
+                  variant={requestTypeFilter === "Request" ? "default" : "outline"}
+                  size="sm"
+                  onClick={() => setRequestTypeFilter("Request")}
+                >
+                  Request
+                </Button>
+                <Button
+                  variant={requestTypeFilter === "Information" ? "default" : "outline"}
+                  size="sm"
+                  onClick={() => setRequestTypeFilter("Information")}
+                >
+                  Information
+                </Button>
+              </div>
+
+              <div className="h-6 w-px bg-border" />
+
+              <span className="text-sm font-medium text-muted-foreground">Status:</span>
+              <div className="flex flex-wrap gap-2">
+                <Button
+                  variant={statusFilter === "All" ? "default" : "outline"}
+                  size="sm"
+                  onClick={() => setStatusFilter("All")}
+                >
+                  All
+                </Button>
+                <Button
+                  variant={statusFilter === "Active" ? "default" : "outline"}
+                  size="sm"
+                  onClick={() => setStatusFilter("Active")}
+                >
+                  Active
+                </Button>
+                <Button
+                  variant={statusFilter === "Inactive" ? "default" : "outline"}
+                  size="sm"
+                  onClick={() => setStatusFilter("Inactive")}
+                >
+                  Inactive
+                </Button>
+              </div>
+
+              <div className="h-6 w-px bg-border" />
+
+              <span className="text-sm font-medium text-muted-foreground">SLA:</span>
+              <div className="flex flex-wrap gap-2">
+                <Button
+                  variant={slaFilter === "All" ? "default" : "outline"}
+                  size="sm"
+                  onClick={() => setSlaFilter("All")}
+                >
+                  All
+                </Button>
+                <Button
+                  variant={slaFilter === "With Response SLA" ? "default" : "outline"}
+                  size="sm"
+                  onClick={() => setSlaFilter("With Response SLA")}
+                >
+                  With Response SLA
+                </Button>
+                <Button
+                  variant={slaFilter === "Resolution Only" ? "default" : "outline"}
+                  size="sm"
+                  onClick={() => setSlaFilter("Resolution Only")}
+                >
+                  Resolution Only
+                </Button>
+              </div>
+            </div>
+          </Card>
+        </div>
 
         <Card>
           {isLoading ? (
