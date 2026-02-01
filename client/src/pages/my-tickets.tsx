@@ -88,7 +88,7 @@ const ISSUE_TYPES = ["Complaint", "Request", "Information"] as const;
 
 export default function MyTicketsPage() {
   const [, setLocation] = useLocation();
-  const { user } = useAuth();
+  const { user, hasPermission } = useAuth();
   const [activeTab, setActiveTab] = useState<"created" | "assigned">("created");
   const [showNewTicketDialog, setShowNewTicketDialog] = useState(false);
   const [newTicket, setNewTicket] = useState({
@@ -426,15 +426,17 @@ export default function MyTicketsPage() {
               </div>
             </div>
 
-            <Button
-              size="sm"
-              className="bg-accent text-accent-foreground hover:bg-accent/90"
-              onClick={() => setShowNewTicketDialog(true)}
-              data-testid="button-create-ticket"
-            >
-              <Plus className="h-4 w-4" />
-              New Ticket
-            </Button>
+            {hasPermission("create:tickets") && (
+              <Button
+                size="sm"
+                className="bg-accent text-accent-foreground hover:bg-accent/90"
+                onClick={() => setShowNewTicketDialog(true)}
+                data-testid="button-create-ticket"
+              >
+                <Plus className="h-4 w-4" />
+                New Ticket
+              </Button>
+            )}
           </div>
         </div>
       </header>
