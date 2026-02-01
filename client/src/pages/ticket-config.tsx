@@ -85,6 +85,11 @@ export default function TicketConfigPage() {
     isActive: true,
     slaResponseHours: "",
     slaResolutionHours: "",
+    fieldOverrides: [] as Array<{
+      fieldConfigurationId: string;
+      visibilityOverride: "visible" | "hidden" | null;
+      requiredOverride: boolean | null;
+    }>,
   });
 
   // CSV upload state
@@ -523,6 +528,7 @@ export default function TicketConfigPage() {
       isActive: true,
       slaResponseHours: "",
       slaResolutionHours: "",
+      fieldOverrides: [],
     });
   };
 
@@ -784,7 +790,7 @@ Information,Tech,Product Listings,Product Information,Category Query,Product cat
   };
 
   const handleNext = () => {
-    setCurrentStep((prev) => Math.min(prev + 1, 7));
+    setCurrentStep((prev) => Math.min(prev + 1, 8));
   };
 
   const handleBack = () => {
@@ -824,6 +830,7 @@ Information,Tech,Product Listings,Product Information,Category Query,Product cat
       case 5: return true;
       case 6: return true;
       case 7: return !!wizardData.slaResolutionHours;
+      case 8: return true; // Form fields step is optional
       default: return false;
     }
   };
@@ -971,6 +978,150 @@ Information,Tech,Product Listings,Product Information,Category Query,Product cat
           </div>
         );
 
+      case 8:
+        return (
+          <div className="space-y-6">
+            <div>
+              <h3 className="text-lg font-medium mb-2">Configure Form Fields</h3>
+              <p className="text-sm text-muted-foreground mb-4">
+                Customize which fields appear and their requirements for this category.
+                Core fields (Vendor, Department, Issue Type, Category, Subject, Description) are always visible and required.
+              </p>
+            </div>
+
+            {/* Core Fields - Always Required */}
+            <div className="p-4 border rounded-lg bg-muted/30">
+              <h4 className="font-medium mb-3 text-sm">Core Fields (Locked)</h4>
+              <div className="space-y-2">
+                {["Vendor Handle", "Department", "Issue Type", "Category", "Subject", "Description"].map((label) => (
+                  <div key={label} className="flex items-center justify-between py-2 px-3 bg-background rounded">
+                    <div className="flex items-center gap-2">
+                      <span className="text-sm">{label}</span>
+                      <Badge variant="secondary" className="text-xs">Required</Badge>
+                    </div>
+                    <Badge variant="outline" className="text-xs">Locked</Badge>
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            {/* Optional Fields - Configurable */}
+            <div className="p-4 border rounded-lg">
+              <h4 className="font-medium mb-3 text-sm">Optional Fields</h4>
+              <div className="space-y-3">
+                {customFields?.filter((f: any) =>
+                  !["vendorHandle", "department", "issueType", "categoryId", "subject", "description"].includes(f.fieldName)
+                ).map((field: any) => {
+                  const override = wizardData.fieldOverrides.find(o => o.fieldConfigurationId === field.id);
+                  const isHidden = override?.visibilityOverride === "hidden";
+                  const isRequired = override?.requiredOverride ?? field.isRequired;
+
+                  return (
+                    <div
+                      key={field.id}
+                      className={`flex items-center justify-between py-3 px-4 border rounded-lg ${
+                        isHidden ? "bg-muted/30 opacity-60" : ""
+                      }`}
+                    >
+                      <div>
+                        <div className="flex items-center gap-2">
+                          <span className="font-medium text-sm">{field.fieldLabel}</span>
+                          {isRequired && !isHidden && (
+                            <Badge variant="destructive" className="text-xs">Required</Badge>
+                          )}
+                        </div>
+                        <span className="text-xs text-muted-foreground">{field.fieldName} ({field.fieldType})</span>
+                      </div>
+
+                      <div className="flex items-center gap-4">
+                        {/* Visibility toggle */}
+                        <div className="flex items-center gap-2">
+                          <Label className="text-xs">Visible</Label>
+                          <Switch
+                            checked={!isHidden}
+                            onCheckedChange={(checked) => {
+                              const existing = wizardData.fieldOverrides.find(o => o.fieldConfigurationId === field.id);
+                              if (existing) {
+                                setWizardData({
+                                  ...wizardData,
+                                  fieldOverrides: wizardData.fieldOverrides.map(o =>
+                                    o.fieldConfigurationId === field.id
+                                      ? { ...o, visibilityOverride: checked ? null : "hidden" }
+                                      : o
+                                  ),
+                                });
+                              } else {
+                                setWizardData({
+                                  ...wizardData,
+                                  fieldOverrides: [
+                                    ...wizardData.fieldOverrides,
+                                    {
+                                      fieldConfigurationId: field.id,
+                                      visibilityOverride: checked ? null : "hidden",
+                                      requiredOverride: null,
+                                    },
+                                  ],
+                                });
+                              }
+                            }}
+                          />
+                        </div>
+
+                        {/* Required toggle (only if visible) */}
+                        {!isHidden && (
+                          <div className="flex items-center gap-2">
+                            <Label className="text-xs">Required</Label>
+                            <Switch
+                              checked={isRequired}
+                              onCheckedChange={(checked) => {
+                                const existing = wizardData.fieldOverrides.find(o => o.fieldConfigurationId === field.id);
+                                if (existing) {
+                                  setWizardData({
+                                    ...wizardData,
+                                    fieldOverrides: wizardData.fieldOverrides.map(o =>
+                                      o.fieldConfigurationId === field.id
+                                        ? { ...o, requiredOverride: checked }
+                                        : o
+                                    ),
+                                  });
+                                } else {
+                                  setWizardData({
+                                    ...wizardData,
+                                    fieldOverrides: [
+                                      ...wizardData.fieldOverrides,
+                                      {
+                                        fieldConfigurationId: field.id,
+                                        visibilityOverride: null,
+                                        requiredOverride: checked,
+                                      },
+                                    ],
+                                  });
+                                }
+                              }}
+                            />
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  );
+                })}
+                {(!customFields || customFields.filter((f: any) =>
+                  !["vendorHandle", "department", "issueType", "categoryId", "subject", "description"].includes(f.fieldName)
+                ).length === 0) && (
+                  <p className="text-sm text-muted-foreground text-center py-4">
+                    No optional fields configured. Add custom fields in the Custom Field Manager above.
+                  </p>
+                )}
+              </div>
+            </div>
+
+            <p className="text-xs text-muted-foreground">
+              Fields with no override will use their default configuration.
+              Changes apply only to tickets created under this specific category.
+            </p>
+          </div>
+        );
+
       default:
         return null;
     }
@@ -984,6 +1135,7 @@ Information,Tech,Product Listings,Product Information,Category Query,Product cat
     "Description",
     "Active Status",
     "SLA Timeline",
+    "Form Fields",
   ];
 
   return (
@@ -1477,6 +1629,7 @@ Information,Tech,Product Listings,Product Information,Category Query,Product cat
                                   isActive: config.isActive,
                                   slaResponseHours: config.slaResponseHours?.toString() || "",
                                   slaResolutionHours: config.slaResolutionHours?.toString() || "",
+                                  fieldOverrides: [],
                                 });
                                 setCurrentStep(1);
                                 setShowWizard(true);

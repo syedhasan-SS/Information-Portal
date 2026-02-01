@@ -53,7 +53,16 @@ import {
   ChevronsUpDown,
   X,
 } from "lucide-react";
-import type { Ticket, Category, Vendor } from "@shared/schema";
+import type { Ticket, Category, Vendor, TicketFieldConfiguration } from "@shared/schema";
+
+interface ResolvedField extends TicketFieldConfiguration {
+  override?: {
+    visibilityOverride: "visible" | "hidden" | null;
+    requiredOverride: boolean | null;
+  };
+  effectiveVisibility: "visible" | "hidden";
+  effectiveRequired: boolean;
+}
 
 async function getTickets(): Promise<Ticket[]> {
   const res = await fetch("/api/tickets");
@@ -95,6 +104,8 @@ export default function MyTicketsPage() {
   const [availableOrderIds, setAvailableOrderIds] = useState<string[]>([]);
   const [vendorSearchValue, setVendorSearchValue] = useState("");
   const [orderIdSearchValue, setOrderIdSearchValue] = useState("");
+  const [resolvedFields, setResolvedFields] = useState<ResolvedField[]>([]);
+  const [isLoadingFields, setIsLoadingFields] = useState(false);
   const queryClient = useQueryClient();
   const { toast } = useToast();
 
@@ -156,6 +167,48 @@ export default function MyTicketsPage() {
       fleekOrderIds: selectedOrderIds.join(', ')
     }));
   }, [selectedOrderIds]);
+
+  // Fetch resolved fields when category is selected
+  useEffect(() => {
+    const fetchResolvedFields = async () => {
+      if (newTicket.categoryId) {
+        setIsLoadingFields(true);
+        try {
+          const res = await fetch(`/api/config/categories/${encodeURIComponent(newTicket.categoryId)}/resolved-fields`);
+          if (res.ok) {
+            const fields = await res.json();
+            setResolvedFields(fields);
+          } else {
+            setResolvedFields([]);
+          }
+        } catch (error) {
+          console.error('Failed to fetch resolved fields:', error);
+          setResolvedFields([]);
+        } finally {
+          setIsLoadingFields(false);
+        }
+      } else {
+        setResolvedFields([]);
+      }
+    };
+
+    fetchResolvedFields();
+  }, [newTicket.categoryId]);
+
+  // Helper function to check if a field should be visible
+  const isFieldVisible = (fieldName: string): boolean => {
+    if (resolvedFields.length === 0) return true; // Default to visible if no config
+    const field = resolvedFields.find(f => f.fieldName === fieldName);
+    if (!field) return true; // Field not in config, show it
+    return field.effectiveVisibility === "visible";
+  };
+
+  // Helper function to check if a field is required
+  const isFieldRequired = (fieldName: string): boolean => {
+    const field = resolvedFields.find(f => f.fieldName === fieldName);
+    if (!field) return false; // Field not in config, not required
+    return field.effectiveRequired;
+  };
 
   const createTicketMutation = useMutation({
     mutationFn: async (ticketData: typeof newTicket) => {
@@ -222,6 +275,7 @@ export default function MyTicketsPage() {
       setNewTicket({ vendorHandle: "", department: "", issueType: "", categoryId: "", subject: "", description: "", fleekOrderIds: "" });
       setSelectedOrderIds([]);
       setAvailableOrderIds([]);
+      setResolvedFields([]);
       toast({ title: "Success", description: "Ticket created successfully" });
     },
     onError: (error: Error) => {
@@ -443,7 +497,12 @@ export default function MyTicketsPage() {
         </Card>
       </main>
 
-      <Dialog open={showNewTicketDialog} onOpenChange={setShowNewTicketDialog}>
+      <Dialog open={showNewTicketDialog} onOpenChange={(open) => {
+        setShowNewTicketDialog(open);
+        if (!open) {
+          setResolvedFields([]);
+        }
+      }}>
         <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle>Create New Ticket</DialogTitle>
@@ -609,115 +668,119 @@ export default function MyTicketsPage() {
               />
             </div>
 
-            <div className="space-y-2">
-              <Label htmlFor="fleekOrderIds">Fleek Order IDs (optional)</Label>
-              <Popover
-                open={orderIdsComboOpen}
-                onOpenChange={(open) => {
-                  setOrderIdsComboOpen(open);
-                  if (!open) setOrderIdSearchValue("");
-                }}
-              >
-                <PopoverTrigger asChild>
-                  <Button
-                    variant="outline"
-                    role="combobox"
-                    aria-expanded={orderIdsComboOpen}
-                    className="w-full justify-between font-normal h-auto min-h-10"
-                    data-testid="select-order-ids"
-                    disabled={!newTicket.vendorHandle}
-                  >
-                    <div className="flex flex-wrap gap-1 flex-1">
-                      {selectedOrderIds.length > 0 ? (
-                        selectedOrderIds.map((orderId) => (
-                          <Badge key={orderId} variant="secondary" className="gap-1">
-                            {orderId}
-                            <X
-                              className="h-3 w-3 cursor-pointer"
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                setSelectedOrderIds(prev => prev.filter(id => id !== orderId));
-                              }}
-                            />
-                          </Badge>
-                        ))
-                      ) : (
-                        <span className="text-muted-foreground">
-                          {newTicket.vendorHandle ? "Select or type order IDs..." : "Select vendor first"}
-                        </span>
-                      )}
-                    </div>
-                    <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
-                  </Button>
-                </PopoverTrigger>
-                <PopoverContent className="w-full p-0" align="start">
-                  <Command shouldFilter={false}>
-                    <CommandInput
-                      placeholder="Search or type order ID..."
-                      value={orderIdSearchValue}
-                      onValueChange={setOrderIdSearchValue}
-                    />
-                    <CommandList>
-                      <CommandEmpty>
-                        <div className="p-2">
-                          <p className="text-sm text-muted-foreground mb-2">
-                            {availableOrderIds.length === 0 && newTicket.vendorHandle
-                              ? "No order IDs found for this vendor in BigQuery"
-                              : "Type to manually enter order ID"}
-                          </p>
-                          <Button
-                            size="sm"
-                            variant="ghost"
-                            className="w-full"
-                            onClick={() => {
-                              const value = orderIdSearchValue.trim();
-                              if (value && !selectedOrderIds.includes(value)) {
-                                setSelectedOrderIds(prev => [...prev, value]);
-                                setOrderIdSearchValue("");
-                              }
-                            }}
-                          >
-                            <Plus className="h-4 w-4 mr-2" />
-                            Add manually
-                          </Button>
-                        </div>
-                      </CommandEmpty>
-                      <CommandGroup>
-                        {availableOrderIds
-                          .filter((orderId) => {
-                            if (!orderIdSearchValue) return true;
-                            return orderId.toLowerCase().includes(orderIdSearchValue.toLowerCase());
-                          })
-                          .map((orderId) => (
-                            <CommandItem
-                              key={orderId}
-                              value={orderId}
-                              onSelect={(value) => {
-                                setSelectedOrderIds(prev =>
-                                  prev.includes(value)
-                                    ? prev.filter(id => id !== value)
-                                    : [...prev, value]
-                                );
+            {isFieldVisible("fleekOrderIds") && (
+              <div className="space-y-2">
+                <Label htmlFor="fleekOrderIds">
+                  Fleek Order IDs {isFieldRequired("fleekOrderIds") ? <span className="text-red-500">*</span> : "(optional)"}
+                </Label>
+                <Popover
+                  open={orderIdsComboOpen}
+                  onOpenChange={(open) => {
+                    setOrderIdsComboOpen(open);
+                    if (!open) setOrderIdSearchValue("");
+                  }}
+                >
+                  <PopoverTrigger asChild>
+                    <Button
+                      variant="outline"
+                      role="combobox"
+                      aria-expanded={orderIdsComboOpen}
+                      className="w-full justify-between font-normal h-auto min-h-10"
+                      data-testid="select-order-ids"
+                      disabled={!newTicket.vendorHandle}
+                    >
+                      <div className="flex flex-wrap gap-1 flex-1">
+                        {selectedOrderIds.length > 0 ? (
+                          selectedOrderIds.map((orderId) => (
+                            <Badge key={orderId} variant="secondary" className="gap-1">
+                              {orderId}
+                              <X
+                                className="h-3 w-3 cursor-pointer"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  setSelectedOrderIds(prev => prev.filter(id => id !== orderId));
+                                }}
+                              />
+                            </Badge>
+                          ))
+                        ) : (
+                          <span className="text-muted-foreground">
+                            {newTicket.vendorHandle ? "Select or type order IDs..." : "Select vendor first"}
+                          </span>
+                        )}
+                      </div>
+                      <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+                    </Button>
+                  </PopoverTrigger>
+                  <PopoverContent className="w-full p-0" align="start">
+                    <Command shouldFilter={false}>
+                      <CommandInput
+                        placeholder="Search or type order ID..."
+                        value={orderIdSearchValue}
+                        onValueChange={setOrderIdSearchValue}
+                      />
+                      <CommandList>
+                        <CommandEmpty>
+                          <div className="p-2">
+                            <p className="text-sm text-muted-foreground mb-2">
+                              {availableOrderIds.length === 0 && newTicket.vendorHandle
+                                ? "No order IDs found for this vendor in BigQuery"
+                                : "Type to manually enter order ID"}
+                            </p>
+                            <Button
+                              size="sm"
+                              variant="ghost"
+                              className="w-full"
+                              onClick={() => {
+                                const value = orderIdSearchValue.trim();
+                                if (value && !selectedOrderIds.includes(value)) {
+                                  setSelectedOrderIds(prev => [...prev, value]);
+                                  setOrderIdSearchValue("");
+                                }
                               }}
                             >
-                              <Check
-                                className={cn(
-                                  "mr-2 h-4 w-4",
-                                  selectedOrderIds.includes(orderId) ? "opacity-100" : "opacity-0"
-                                )}
-                              />
-                              {orderId}
-                            </CommandItem>
-                          ))}
-                      </CommandGroup>
-                    </CommandList>
-                  </Command>
-                </PopoverContent>
-              </Popover>
-              <p className="text-xs text-muted-foreground">
-                Select from available order IDs or type manually. Multiple selections allowed.
-              </p>
-            </div>
+                              <Plus className="h-4 w-4 mr-2" />
+                              Add manually
+                            </Button>
+                          </div>
+                        </CommandEmpty>
+                        <CommandGroup>
+                          {availableOrderIds
+                            .filter((orderId) => {
+                              if (!orderIdSearchValue) return true;
+                              return orderId.toLowerCase().includes(orderIdSearchValue.toLowerCase());
+                            })
+                            .map((orderId) => (
+                              <CommandItem
+                                key={orderId}
+                                value={orderId}
+                                onSelect={(value) => {
+                                  setSelectedOrderIds(prev =>
+                                    prev.includes(value)
+                                      ? prev.filter(id => id !== value)
+                                      : [...prev, value]
+                                  );
+                                }}
+                              >
+                                <Check
+                                  className={cn(
+                                    "mr-2 h-4 w-4",
+                                    selectedOrderIds.includes(orderId) ? "opacity-100" : "opacity-0"
+                                  )}
+                                />
+                                {orderId}
+                              </CommandItem>
+                            ))}
+                        </CommandGroup>
+                      </CommandList>
+                    </Command>
+                  </PopoverContent>
+                </Popover>
+                <p className="text-xs text-muted-foreground">
+                  Select from available order IDs or type manually. Multiple selections allowed.
+                </p>
+              </div>
+            )}
 
             <div className="flex justify-end gap-3 pt-4">
               <Button
@@ -733,12 +796,14 @@ export default function MyTicketsPage() {
                 className="bg-accent text-accent-foreground hover:bg-accent/90"
                 disabled={
                   createTicketMutation.isPending ||
+                  isLoadingFields ||
                   !newTicket.vendorHandle ||
                   !newTicket.department ||
                   !newTicket.issueType ||
                   !newTicket.categoryId ||
                   !newTicket.subject ||
-                  !newTicket.description
+                  !newTicket.description ||
+                  (isFieldRequired("fleekOrderIds") && selectedOrderIds.length === 0)
                 }
                 data-testid="button-submit-ticket"
               >

@@ -1543,6 +1543,11 @@ export async function registerRoutes(
         isActive: true,
       });
 
+      // Save field overrides if provided
+      if (config.fieldOverrides && Array.isArray(config.fieldOverrides) && config.fieldOverrides.length > 0) {
+        await storage.upsertCategoryFieldOverrides(l4Category.id, config.fieldOverrides, config.userId);
+      }
+
       res.status(201).json({
         id: l4Category.id,
         issueType: config.issueType,
