@@ -1,10 +1,11 @@
-import { useState } from "react";
+import { useState, useMemo } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { useLocation } from "wouter";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
+import { useAuth } from "@/hooks/use-auth";
 import {
   Select,
   SelectContent,
@@ -78,6 +79,7 @@ function getCategoryDisplay(ticket: Ticket, categoryMap: Record<string, Category
 
 export default function AllTicketsPage() {
   const [, setLocation] = useLocation();
+  const { user, hasPermission } = useAuth();
   const [searchQuery, setSearchQuery] = useState("");
   const [showFilters, setShowFilters] = useState(false);
   const [statusFilter, setStatusFilter] = useState<string[]>([]);
@@ -89,6 +91,9 @@ export default function AllTicketsPage() {
   const [sortDirection, setSortDirection] = useState<SortDirection>("desc");
   const [currentPage, setCurrentPage] = useState(1);
   const [pageSize, setPageSize] = useState(25);
+
+  // Check if user can view all tickets or only department tickets
+  const canViewAllTickets = hasPermission("view:all_tickets");
 
   const { data: tickets, isLoading: ticketsLoading } = useQuery({
     queryKey: ["tickets"],
@@ -105,7 +110,46 @@ export default function AllTicketsPage() {
     return acc;
   }, {} as Record<string, Category>) || {};
 
-  const filteredTickets = tickets?.filter((ticket) => {
+  // Department-based ticket access filtering
+  // Seller Support agents see Seller Support tickets
+  // Customer Support agents see Customer Support/CX tickets
+  // Other department agents see only their department's tickets
+  const departmentFilteredTickets = useMemo(() => {
+    if (!tickets || !user) return [];
+
+    // If user has view:all_tickets, show all tickets
+    if (canViewAllTickets) {
+      return tickets;
+    }
+
+    // Filter based on user's department/sub-department
+    return tickets.filter((ticket) => {
+      // Seller Support users (sub-department of CX) see Seller Support tickets
+      if (user.subDepartment === "Seller Support") {
+        // Seller Support tickets are marked with department containing "Seller Support" or specific category
+        return ticket.department === "Seller Support" ||
+               ticket.department === "CX" ||
+               (ticket.categorySnapshot?.path?.includes("Seller") ?? false);
+      }
+
+      // CX/Customer Support users (not Seller Support) see Customer Support tickets
+      if (user.department === "CX" && user.subDepartment !== "Seller Support") {
+        return ticket.department === "CX" ||
+               ticket.department === "Customer Support" ||
+               ticket.department === "Experience";
+      }
+
+      // Other department users see only their department's tickets
+      if (user.department) {
+        return ticket.department === user.department;
+      }
+
+      // If no department, show nothing (or could show all assigned to them)
+      return false;
+    });
+  }, [tickets, user, canViewAllTickets]);
+
+  const filteredTickets = departmentFilteredTickets.filter((ticket) => {
     if (searchQuery) {
       const query = searchQuery.toLowerCase();
       if (

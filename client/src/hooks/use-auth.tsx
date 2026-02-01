@@ -105,6 +105,7 @@ export const ROLE_PERMISSIONS: Record<string, string[]> = {
     "create:tickets",
     "edit:tickets",
     "view:assigned_tickets",
+    "view:department_tickets", // Agents can view all tickets within their department/sub-department
   ],
 };
 

@@ -41,7 +41,7 @@ function Router() {
         </ProtectedRoute>
       </Route>
       <Route path="/tickets">
-        <ProtectedRoute requiredPermission="view:all_tickets">
+        <ProtectedRoute requiredPermissions={["view:all_tickets", "view:department_tickets"]}>
           <AllTicketsPage />
         </ProtectedRoute>
       </Route>

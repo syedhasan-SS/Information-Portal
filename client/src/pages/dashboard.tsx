@@ -184,13 +184,10 @@ export default function DashboardPage() {
 
             <div className="flex items-center gap-4">
               <nav className="hidden items-center gap-2 md:flex">
-                {hasPermission("view:all_tickets") && (
+                {(hasPermission("view:all_tickets") || hasPermission("view:department_tickets")) && (
                   <NavButton onClick={() => setLocation("/tickets")} icon={Ticket} label="All Tickets" />
                 )}
                 <NavButton onClick={() => setLocation("/my-tickets")} icon={User} label="My Tickets" />
-                {hasPermission("view:department_tickets") && (
-                  <NavButton onClick={() => setLocation("/department-tickets")} icon={Ticket} label="Department Tickets" />
-                )}
                 {hasPermission("view:vendors") && (
                   <NavButton onClick={() => setLocation("/vendors")} icon={Store} label="Vendors" />
                 )}
@@ -259,10 +256,10 @@ export default function DashboardPage() {
                       <Ticket className="mr-2 h-4 w-4" />
                       My Tickets
                     </DropdownMenuItem>
-                    {hasPermission("view:department_tickets") && (
-                      <DropdownMenuItem onClick={() => setLocation("/department-tickets")}>
+                    {(hasPermission("view:all_tickets") || hasPermission("view:department_tickets")) && (
+                      <DropdownMenuItem onClick={() => setLocation("/tickets")}>
                         <Ticket className="mr-2 h-4 w-4" />
-                        Department Tickets
+                        All Tickets
                       </DropdownMenuItem>
                     )}
                     <DropdownMenuSeparator />
