@@ -624,12 +624,17 @@ export class DatabaseStorage implements IStorage {
 
   // Ticket Field Configurations
   async getTicketFieldConfigurations(): Promise<TicketFieldConfiguration[]> {
-    return await db.select().from(ticketFieldConfigurations).orderBy(ticketFieldConfigurations.displayOrder, ticketFieldConfigurations.fieldName);
+    return await db.select().from(ticketFieldConfigurations)
+      .where(isNull(ticketFieldConfigurations.deletedAt))
+      .orderBy(ticketFieldConfigurations.displayOrder, ticketFieldConfigurations.fieldName);
   }
 
   async getTicketFieldConfigurationsByDepartment(departmentType: "Seller Support" | "Customer Support" | "All"): Promise<TicketFieldConfiguration[]> {
     return await db.select().from(ticketFieldConfigurations)
-      .where(eq(ticketFieldConfigurations.departmentType, departmentType))
+      .where(and(
+        eq(ticketFieldConfigurations.departmentType, departmentType),
+        isNull(ticketFieldConfigurations.deletedAt)
+      ))
       .orderBy(ticketFieldConfigurations.displayOrder, ticketFieldConfigurations.fieldName);
   }
 
