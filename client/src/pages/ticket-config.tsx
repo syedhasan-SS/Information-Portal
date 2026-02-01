@@ -94,6 +94,8 @@ export default function TicketConfigPage() {
 
   // Multi-selection state
   const [selectedConfigs, setSelectedConfigs] = useState<Set<string>>(new Set());
+  const [selectedFields, setSelectedFields] = useState<Set<string>>(new Set());
+  const [selectedTags, setSelectedTags] = useState<Set<string>>(new Set());
 
   // Department filter state
   const [departmentFilter, setDepartmentFilter] = useState<"All" | "Seller Support" | "Customer Support">("All");
@@ -563,6 +565,77 @@ export default function TicketConfigPage() {
       });
     });
     setSelectedConfigs(new Set());
+  };
+
+  // Multi-selection handlers for Custom Fields
+  const toggleSelectAllFields = () => {
+    if (!filteredFields) return;
+    if (selectedFields.size === filteredFields.length) {
+      setSelectedFields(new Set());
+    } else {
+      setSelectedFields(new Set(filteredFields.map((f: any) => f.id)));
+    }
+  };
+
+  const toggleSelectField = (id: string) => {
+    const newSelected = new Set(selectedFields);
+    if (newSelected.has(id)) {
+      newSelected.delete(id);
+    } else {
+      newSelected.add(id);
+    }
+    setSelectedFields(newSelected);
+  };
+
+  const handleBulkDeleteFields = () => {
+    if (selectedFields.size === 0) return;
+    if (confirm(`Are you sure you want to delete ${selectedFields.size} custom field(s)?`)) {
+      selectedFields.forEach(id => {
+        deleteFieldMutation.mutate(id);
+      });
+      setSelectedFields(new Set());
+    }
+  };
+
+  const handleBulkToggleFields = (enable: boolean) => {
+    if (selectedFields.size === 0) return;
+    selectedFields.forEach(id => {
+      updateFieldMutation.mutate({
+        id,
+        data: { isEnabled: enable },
+      });
+    });
+    setSelectedFields(new Set());
+  };
+
+  // Multi-selection handlers for Tags
+  const toggleSelectAllTags = () => {
+    if (!filteredTags) return;
+    if (selectedTags.size === filteredTags.length) {
+      setSelectedTags(new Set());
+    } else {
+      setSelectedTags(new Set(filteredTags.map((t: any) => t.id)));
+    }
+  };
+
+  const toggleSelectTag = (id: string) => {
+    const newSelected = new Set(selectedTags);
+    if (newSelected.has(id)) {
+      newSelected.delete(id);
+    } else {
+      newSelected.add(id);
+    }
+    setSelectedTags(newSelected);
+  };
+
+  const handleBulkDeleteTags = () => {
+    if (selectedTags.size === 0) return;
+    if (confirm(`Are you sure you want to delete ${selectedTags.size} tag(s)?`)) {
+      selectedTags.forEach(id => {
+        deleteTagMutation.mutate(id);
+      });
+      setSelectedTags(new Set());
+    }
   };
 
   const parseCsvFile = (file: File) => {
@@ -1442,9 +1515,27 @@ Information,Tech,Product Listings,Product Information,Category Query,Product cat
         {/* Tags Management Section */}
         <Card className="mt-6">
           <div className="flex items-center justify-between border-b p-6">
-            <div>
-              <h2 className="text-xl font-semibold">Tags</h2>
-              <p className="text-sm text-muted-foreground">Manage custom tags for ticket categorization</p>
+            <div className="flex items-center gap-4">
+              <div>
+                <h2 className="text-xl font-semibold">Tags</h2>
+                <p className="text-sm text-muted-foreground">Manage custom tags for ticket categorization</p>
+              </div>
+              {selectedTags.size > 0 && (
+                <div className="flex gap-2">
+                  <Badge variant="secondary" className="px-3 py-1">
+                    {selectedTags.size} selected
+                  </Badge>
+                  <Button
+                    onClick={handleBulkDeleteTags}
+                    variant="outline"
+                    size="sm"
+                    className="text-red-600 hover:text-red-700"
+                  >
+                    <Trash2 className="h-4 w-4" />
+                    Delete Selected
+                  </Button>
+                </div>
+              )}
             </div>
             <Button
               onClick={() => setShowTagDialog(true)}
@@ -1458,6 +1549,14 @@ Information,Tech,Product Listings,Product Information,Category Query,Product cat
           {/* Tag Filters */}
           <div className="border-b p-4">
             <div className="flex flex-wrap items-center gap-4">
+              <div className="flex items-center gap-2">
+                <Checkbox
+                  checked={filteredTags && filteredTags.length > 0 && selectedTags.size === filteredTags.length}
+                  onCheckedChange={toggleSelectAllTags}
+                />
+                <span className="text-sm font-medium text-muted-foreground">Select All</span>
+              </div>
+              <div className="h-6 w-px bg-border" />
               <span className="text-sm font-medium text-muted-foreground">Status:</span>
               <div className="flex flex-wrap gap-2">
                 <Button
@@ -1520,9 +1619,13 @@ Information,Tech,Product Listings,Product Information,Category Query,Product cat
             <div className="p-6">
               <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
                 {filteredTags && filteredTags.length > 0 ? (
-                  filteredTags.map((tag) => (
+                  filteredTags.map((tag: any) => (
                     <Card key={tag.id} className="p-3 flex items-center justify-between">
                       <div className="flex items-center gap-2">
+                        <Checkbox
+                          checked={selectedTags.has(tag.id)}
+                          onCheckedChange={() => toggleSelectTag(tag.id)}
+                        />
                         <Badge variant="outline">{tag.name}</Badge>
                         <span className="text-xs text-muted-foreground">{tag.departmentType}</span>
                       </div>
@@ -1568,9 +1671,41 @@ Information,Tech,Product Listings,Product Information,Category Query,Product cat
         {/* Custom Field Manager Section */}
         <Card className="mt-6">
           <div className="flex items-center justify-between border-b p-6">
-            <div>
-              <h2 className="text-xl font-semibold">Custom Field Manager</h2>
-              <p className="text-sm text-muted-foreground">Configure custom fields for ticket creation</p>
+            <div className="flex items-center gap-4">
+              <div>
+                <h2 className="text-xl font-semibold">Custom Field Manager</h2>
+                <p className="text-sm text-muted-foreground">Configure custom fields for ticket creation</p>
+              </div>
+              {selectedFields.size > 0 && (
+                <div className="flex gap-2">
+                  <Badge variant="secondary" className="px-3 py-1">
+                    {selectedFields.size} selected
+                  </Badge>
+                  <Button
+                    onClick={() => handleBulkToggleFields(true)}
+                    variant="outline"
+                    size="sm"
+                  >
+                    Enable Selected
+                  </Button>
+                  <Button
+                    onClick={() => handleBulkToggleFields(false)}
+                    variant="outline"
+                    size="sm"
+                  >
+                    Disable Selected
+                  </Button>
+                  <Button
+                    onClick={handleBulkDeleteFields}
+                    variant="outline"
+                    size="sm"
+                    className="text-red-600 hover:text-red-700"
+                  >
+                    <Trash2 className="h-4 w-4" />
+                    Delete Selected
+                  </Button>
+                </div>
+              )}
             </div>
             <div className="flex gap-2">
               <Button
@@ -1664,6 +1799,12 @@ Information,Tech,Product Listings,Product Information,Category Query,Product cat
                   <Table>
                     <TableHeader>
                       <TableRow>
+                        <TableHead className="w-12">
+                          <Checkbox
+                            checked={filteredFields && filteredFields.length > 0 && selectedFields.size === filteredFields.length}
+                            onCheckedChange={toggleSelectAllFields}
+                          />
+                        </TableHead>
                         <TableHead className="w-12">Order</TableHead>
                         <TableHead>Field Name</TableHead>
                         <TableHead>Label</TableHead>
@@ -1676,9 +1817,15 @@ Information,Tech,Product Listings,Product Information,Category Query,Product cat
                     </TableHeader>
                     <TableBody>
                       {filteredFields
-                        .sort((a, b) => a.displayOrder - b.displayOrder)
-                        .map((field) => (
+                        .sort((a: any, b: any) => a.displayOrder - b.displayOrder)
+                        .map((field: any) => (
                           <TableRow key={field.id}>
+                            <TableCell>
+                              <Checkbox
+                                checked={selectedFields.has(field.id)}
+                                onCheckedChange={() => toggleSelectField(field.id)}
+                              />
+                            </TableCell>
                             <TableCell className="text-center">{field.displayOrder}</TableCell>
                             <TableCell className="font-mono text-sm">{field.fieldName}</TableCell>
                             <TableCell className="font-medium">{field.fieldLabel}</TableCell>
