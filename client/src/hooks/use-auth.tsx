@@ -102,7 +102,6 @@ export const ROLE_PERMISSIONS: Record<string, string[]> = {
   Agent: [
     "view:dashboard",
     "view:tickets",
-    "create:tickets",
     "edit:tickets",
     "view:assigned_tickets",
     "view:department_tickets", // Agents can view all tickets within their department/sub-department
