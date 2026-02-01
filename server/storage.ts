@@ -1,4 +1,4 @@
-import { eq, and, desc, sql, isNull } from "drizzle-orm";
+import { eq, and, desc, sql, isNull, asc } from "drizzle-orm";
 import { db } from "./db";
 import {
   vendors,
@@ -15,6 +15,8 @@ import {
   tags,
   categorySettings,
   ticketFieldConfigurations,
+  departments,
+  subDepartments,
   type Vendor,
   type Category,
   type Ticket,
@@ -29,6 +31,8 @@ import {
   type Tag,
   type CategorySettings,
   type TicketFieldConfiguration,
+  type Department,
+  type SubDepartment,
   type InsertVendor,
   type InsertCategory,
   type InsertTicket,
@@ -854,6 +858,92 @@ export class DatabaseStorage implements IStorage {
       byPriority,
       total: allTickets.length,
     };
+  }
+
+  // Department methods
+  async getDepartments(): Promise<Department[]> {
+    return db.select().from(departments).orderBy(asc(departments.displayOrder), asc(departments.name));
+  }
+
+  async getActiveDepartments(): Promise<Department[]> {
+    return db.select().from(departments).where(eq(departments.isActive, true)).orderBy(asc(departments.displayOrder), asc(departments.name));
+  }
+
+  async getDepartmentById(id: string): Promise<Department | undefined> {
+    const result = await db.select().from(departments).where(eq(departments.id, id));
+    return result[0];
+  }
+
+  async getDepartmentByName(name: string): Promise<Department | undefined> {
+    const result = await db.select().from(departments).where(eq(departments.name, name));
+    return result[0];
+  }
+
+  async createDepartment(data: { name: string; description?: string; color?: string; isActive?: boolean; displayOrder?: number }): Promise<Department> {
+    const result = await db.insert(departments).values(data).returning();
+    return result[0];
+  }
+
+  async updateDepartment(id: string, data: Partial<{ name: string; description: string; color: string; isActive: boolean; displayOrder: number }>): Promise<Department | undefined> {
+    const result = await db.update(departments)
+      .set({ ...data, updatedAt: new Date() })
+      .where(eq(departments.id, id))
+      .returning();
+    return result[0];
+  }
+
+  async deleteDepartment(id: string): Promise<void> {
+    await db.delete(departments).where(eq(departments.id, id));
+  }
+
+  // Sub-department methods
+  async getSubDepartments(): Promise<SubDepartment[]> {
+    return db.select().from(subDepartments).orderBy(asc(subDepartments.displayOrder), asc(subDepartments.name));
+  }
+
+  async getSubDepartmentsByDepartment(departmentId: string): Promise<SubDepartment[]> {
+    return db.select().from(subDepartments)
+      .where(eq(subDepartments.departmentId, departmentId))
+      .orderBy(asc(subDepartments.displayOrder), asc(subDepartments.name));
+  }
+
+  async getActiveSubDepartmentsByDepartment(departmentId: string): Promise<SubDepartment[]> {
+    return db.select().from(subDepartments)
+      .where(and(eq(subDepartments.departmentId, departmentId), eq(subDepartments.isActive, true)))
+      .orderBy(asc(subDepartments.displayOrder), asc(subDepartments.name));
+  }
+
+  async getSubDepartmentById(id: string): Promise<SubDepartment | undefined> {
+    const result = await db.select().from(subDepartments).where(eq(subDepartments.id, id));
+    return result[0];
+  }
+
+  async createSubDepartment(data: { name: string; departmentId: string; description?: string; isActive?: boolean; displayOrder?: number }): Promise<SubDepartment> {
+    const result = await db.insert(subDepartments).values(data).returning();
+    return result[0];
+  }
+
+  async updateSubDepartment(id: string, data: Partial<{ name: string; departmentId: string; description: string; isActive: boolean; displayOrder: number }>): Promise<SubDepartment | undefined> {
+    const result = await db.update(subDepartments)
+      .set({ ...data, updatedAt: new Date() })
+      .where(eq(subDepartments.id, id))
+      .returning();
+    return result[0];
+  }
+
+  async deleteSubDepartment(id: string): Promise<void> {
+    await db.delete(subDepartments).where(eq(subDepartments.id, id));
+  }
+
+  // Get departments with their sub-departments
+  async getDepartmentsWithSubDepartments(): Promise<(Department & { subDepartments: SubDepartment[] })[]> {
+    const allDepartments = await this.getDepartments();
+    const allSubDepartments = await this.getSubDepartments();
+
+    return allDepartments.map(dept => ({
+      ...dept,
+      subDepartments: allSubDepartments.filter(sub => sub.departmentId === dept.id),
+    }));
   }
 }
 

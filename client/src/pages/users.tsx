@@ -32,6 +32,10 @@ import {
   Eye,
   EyeOff,
   Network,
+  Building2,
+  ChevronDown,
+  ChevronRight,
+  FolderTree,
 } from "lucide-react";
 import {
   DropdownMenu,
@@ -48,7 +52,13 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { Checkbox } from "@/components/ui/checkbox";
-import type { User } from "@shared/schema";
+import { Textarea } from "@/components/ui/textarea";
+import {
+  Collapsible,
+  CollapsibleContent,
+  CollapsibleTrigger,
+} from "@/components/ui/collapsible";
+import type { User, Department, SubDepartment } from "@shared/schema";
 import { ROLE_PERMISSIONS } from "@/hooks/use-auth";
 
 const ROLES = ["Owner", "Admin", "Seller Support Agent", "Department Head", "Department Manager", "Department Agent"] as const;
@@ -191,7 +201,18 @@ export default function UsersPage() {
   const [managingPermissionsUser, setManagingPermissionsUser] = useState<User | null>(null);
   const [selectedPermissions, setSelectedPermissions] = useState<string[]>([]);
   const [visiblePasswords, setVisiblePasswords] = useState<Set<string>>(new Set());
-  const [activeTab, setActiveTab] = useState<"users" | "hierarchy">("users");
+  const [activeTab, setActiveTab] = useState<"users" | "departments" | "hierarchy">("users");
+
+  // Department management state
+  const [showDeptForm, setShowDeptForm] = useState(false);
+  const [deptFormData, setDeptFormData] = useState({ name: "", description: "", color: "#6366f1" });
+  const [editingDept, setEditingDept] = useState<Department | null>(null);
+  const [deletingDeptId, setDeletingDeptId] = useState<string | null>(null);
+  const [showSubDeptForm, setShowSubDeptForm] = useState(false);
+  const [subDeptFormData, setSubDeptFormData] = useState({ name: "", departmentId: "", description: "" });
+  const [editingSubDept, setEditingSubDept] = useState<SubDepartment | null>(null);
+  const [deletingSubDeptId, setDeletingSubDeptId] = useState<string | null>(null);
+  const [expandedDepts, setExpandedDepts] = useState<Set<string>>(new Set());
 
   const queryClient = useQueryClient();
 
@@ -199,6 +220,170 @@ export default function UsersPage() {
     queryKey: ["users"],
     queryFn: getUsers,
   });
+
+  // Department queries
+  const { data: departmentsData, isLoading: isLoadingDepts } = useQuery({
+    queryKey: ["departments-with-subs"],
+    queryFn: async () => {
+      const res = await fetch("/api/departments/with-sub-departments");
+      if (!res.ok) throw new Error("Failed to fetch departments");
+      return res.json() as Promise<(Department & { subDepartments: SubDepartment[] })[]>;
+    },
+  });
+
+  // Department mutations
+  const createDeptMutation = useMutation({
+    mutationFn: async (data: { name: string; description?: string; color?: string }) => {
+      const res = await fetch("/api/departments", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(data),
+      });
+      if (!res.ok) {
+        const err = await res.json();
+        throw new Error(err.error || "Failed to create department");
+      }
+      return res.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["departments-with-subs"] });
+      setDeptFormData({ name: "", description: "", color: "#6366f1" });
+      setShowDeptForm(false);
+      setSuccess("Department created successfully!");
+      setTimeout(() => setSuccess(""), 3000);
+    },
+    onError: (err: Error) => {
+      setError(err.message);
+    },
+  });
+
+  const updateDeptMutation = useMutation({
+    mutationFn: async ({ id, data }: { id: string; data: Partial<Department> }) => {
+      const res = await fetch(`/api/departments/${id}`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(data),
+      });
+      if (!res.ok) throw new Error("Failed to update department");
+      return res.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["departments-with-subs"] });
+      setEditingDept(null);
+      setSuccess("Department updated successfully!");
+      setTimeout(() => setSuccess(""), 3000);
+    },
+    onError: (err: Error) => {
+      setError(err.message);
+    },
+  });
+
+  const deleteDeptMutation = useMutation({
+    mutationFn: async (id: string) => {
+      const res = await fetch(`/api/departments/${id}`, { method: "DELETE" });
+      if (!res.ok) throw new Error("Failed to delete department");
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["departments-with-subs"] });
+      setDeletingDeptId(null);
+      setSuccess("Department deleted successfully!");
+      setTimeout(() => setSuccess(""), 3000);
+    },
+    onError: (err: Error) => {
+      setError(err.message);
+    },
+  });
+
+  const seedDeptsMutation = useMutation({
+    mutationFn: async () => {
+      const res = await fetch("/api/departments/seed-defaults", { method: "POST" });
+      if (!res.ok) throw new Error("Failed to seed departments");
+      return res.json();
+    },
+    onSuccess: (data) => {
+      queryClient.invalidateQueries({ queryKey: ["departments-with-subs"] });
+      setSuccess(`Seeded ${data.departments?.length || 0} departments (${data.skipped || 0} already existed)`);
+      setTimeout(() => setSuccess(""), 3000);
+    },
+    onError: (err: Error) => {
+      setError(err.message);
+    },
+  });
+
+  // Sub-department mutations
+  const createSubDeptMutation = useMutation({
+    mutationFn: async (data: { name: string; departmentId: string; description?: string }) => {
+      const res = await fetch("/api/sub-departments", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(data),
+      });
+      if (!res.ok) {
+        const err = await res.json();
+        throw new Error(err.error || "Failed to create sub-department");
+      }
+      return res.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["departments-with-subs"] });
+      setSubDeptFormData({ name: "", departmentId: "", description: "" });
+      setShowSubDeptForm(false);
+      setSuccess("Sub-department created successfully!");
+      setTimeout(() => setSuccess(""), 3000);
+    },
+    onError: (err: Error) => {
+      setError(err.message);
+    },
+  });
+
+  const updateSubDeptMutation = useMutation({
+    mutationFn: async ({ id, data }: { id: string; data: Partial<SubDepartment> }) => {
+      const res = await fetch(`/api/sub-departments/${id}`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(data),
+      });
+      if (!res.ok) throw new Error("Failed to update sub-department");
+      return res.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["departments-with-subs"] });
+      setEditingSubDept(null);
+      setSuccess("Sub-department updated successfully!");
+      setTimeout(() => setSuccess(""), 3000);
+    },
+    onError: (err: Error) => {
+      setError(err.message);
+    },
+  });
+
+  const deleteSubDeptMutation = useMutation({
+    mutationFn: async (id: string) => {
+      const res = await fetch(`/api/sub-departments/${id}`, { method: "DELETE" });
+      if (!res.ok) throw new Error("Failed to delete sub-department");
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["departments-with-subs"] });
+      setDeletingSubDeptId(null);
+      setSuccess("Sub-department deleted successfully!");
+      setTimeout(() => setSuccess(""), 3000);
+    },
+    onError: (err: Error) => {
+      setError(err.message);
+    },
+  });
+
+  const toggleDeptExpanded = (deptId: string) => {
+    setExpandedDepts(prev => {
+      const newSet = new Set(prev);
+      if (newSet.has(deptId)) {
+        newSet.delete(deptId);
+      } else {
+        newSet.add(deptId);
+      }
+      return newSet;
+    });
+  };
 
   const mutation = useMutation({
     mutationFn: createUser,
@@ -551,11 +736,15 @@ export default function UsersPage() {
       </header>
 
       <main className="mx-auto max-w-[1600px] px-6 py-8">
-        <Tabs value={activeTab} onValueChange={(v) => setActiveTab(v as "users" | "hierarchy")} className="space-y-6">
-          <TabsList className="grid w-full grid-cols-2">
+        <Tabs value={activeTab} onValueChange={(v) => setActiveTab(v as "users" | "departments" | "hierarchy")} className="space-y-6">
+          <TabsList className="grid w-full grid-cols-3">
             <TabsTrigger value="users">
               <Users className="h-4 w-4 mr-2" />
               Users
+            </TabsTrigger>
+            <TabsTrigger value="departments">
+              <Building2 className="h-4 w-4 mr-2" />
+              Departments
             </TabsTrigger>
             <TabsTrigger value="hierarchy">
               <Network className="h-4 w-4 mr-2" />
@@ -948,6 +1137,215 @@ export default function UsersPage() {
             </Card>
           )}
         </div>
+      </TabsContent>
+
+      <TabsContent value="departments" className="space-y-6">
+        {/* Department Stats */}
+        <div className="grid gap-4 sm:grid-cols-4">
+          <Card className="p-4">
+            <p className="text-xs text-muted-foreground">Total Departments</p>
+            <p className="mt-1 text-2xl font-bold">{departmentsData?.length || 0}</p>
+          </Card>
+          <Card className="p-4">
+            <p className="text-xs text-muted-foreground">Active Departments</p>
+            <p className="mt-1 text-2xl font-bold text-green-600">
+              {departmentsData?.filter(d => d.isActive).length || 0}
+            </p>
+          </Card>
+          <Card className="p-4">
+            <p className="text-xs text-muted-foreground">Total Sub-Departments</p>
+            <p className="mt-1 text-2xl font-bold text-blue-600">
+              {departmentsData?.reduce((acc, d) => acc + d.subDepartments.length, 0) || 0}
+            </p>
+          </Card>
+          <Card className="p-4">
+            <p className="text-xs text-muted-foreground">Users with Departments</p>
+            <p className="mt-1 text-2xl font-bold text-purple-600">
+              {users?.filter(u => u.department).length || 0}
+            </p>
+          </Card>
+        </div>
+
+        {/* Department Management */}
+        <Card>
+          <div className="flex items-center justify-between border-b p-4">
+            <div>
+              <h2 className="text-lg font-semibold">Departments & Sub-Departments</h2>
+              <p className="text-sm text-muted-foreground">Manage organizational structure</p>
+            </div>
+            <div className="flex gap-2">
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => seedDeptsMutation.mutate()}
+                disabled={seedDeptsMutation.isPending}
+              >
+                {seedDeptsMutation.isPending ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : <FolderTree className="h-4 w-4 mr-2" />}
+                Seed Defaults
+              </Button>
+              <Button size="sm" onClick={() => setShowDeptForm(true)}>
+                <Plus className="h-4 w-4 mr-2" />
+                Add Department
+              </Button>
+            </div>
+          </div>
+
+          <div className="p-4">
+            {isLoadingDepts ? (
+              <div className="flex justify-center py-8">
+                <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
+              </div>
+            ) : departmentsData && departmentsData.length > 0 ? (
+              <div className="space-y-2">
+                {departmentsData.map((dept) => (
+                  <Collapsible
+                    key={dept.id}
+                    open={expandedDepts.has(dept.id)}
+                    onOpenChange={() => toggleDeptExpanded(dept.id)}
+                  >
+                    <div className="rounded-lg border">
+                      <CollapsibleTrigger className="flex w-full items-center justify-between p-4 hover:bg-accent/5">
+                        <div className="flex items-center gap-3">
+                          {expandedDepts.has(dept.id) ? (
+                            <ChevronDown className="h-4 w-4 text-muted-foreground" />
+                          ) : (
+                            <ChevronRight className="h-4 w-4 text-muted-foreground" />
+                          )}
+                          <div
+                            className="h-3 w-3 rounded-full"
+                            style={{ backgroundColor: dept.color || "#6366f1" }}
+                          />
+                          <div className="text-left">
+                            <h3 className="font-medium">{dept.name}</h3>
+                            {dept.description && (
+                              <p className="text-xs text-muted-foreground">{dept.description}</p>
+                            )}
+                          </div>
+                        </div>
+                        <div className="flex items-center gap-3">
+                          <Badge variant={dept.isActive ? "default" : "secondary"}>
+                            {dept.isActive ? "Active" : "Inactive"}
+                          </Badge>
+                          <Badge variant="outline">
+                            {dept.subDepartments.length} sub-dept{dept.subDepartments.length !== 1 ? "s" : ""}
+                          </Badge>
+                          <DropdownMenu>
+                            <DropdownMenuTrigger asChild onClick={(e) => e.stopPropagation()}>
+                              <Button variant="ghost" size="sm" className="h-8 w-8 p-0">
+                                <MoreVertical className="h-4 w-4" />
+                              </Button>
+                            </DropdownMenuTrigger>
+                            <DropdownMenuContent align="end">
+                              <DropdownMenuItem onClick={(e) => {
+                                e.stopPropagation();
+                                setEditingDept(dept);
+                                setDeptFormData({ name: dept.name, description: dept.description || "", color: dept.color || "#6366f1" });
+                              }}>
+                                <Edit className="mr-2 h-4 w-4" />
+                                Edit
+                              </DropdownMenuItem>
+                              <DropdownMenuItem onClick={(e) => {
+                                e.stopPropagation();
+                                setSubDeptFormData({ ...subDeptFormData, departmentId: dept.id });
+                                setShowSubDeptForm(true);
+                              }}>
+                                <Plus className="mr-2 h-4 w-4" />
+                                Add Sub-Department
+                              </DropdownMenuItem>
+                              <DropdownMenuItem
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  setDeletingDeptId(dept.id);
+                                }}
+                                className="text-destructive focus:text-destructive"
+                              >
+                                <Trash2 className="mr-2 h-4 w-4" />
+                                Delete
+                              </DropdownMenuItem>
+                            </DropdownMenuContent>
+                          </DropdownMenu>
+                        </div>
+                      </CollapsibleTrigger>
+                      <CollapsibleContent>
+                        <div className="border-t bg-muted/30 p-4">
+                          {dept.subDepartments.length > 0 ? (
+                            <div className="space-y-2">
+                              {dept.subDepartments.map((subDept) => (
+                                <div
+                                  key={subDept.id}
+                                  className="flex items-center justify-between rounded-md border bg-background p-3"
+                                >
+                                  <div className="flex items-center gap-2">
+                                    <div className="h-2 w-2 rounded-full bg-muted-foreground/50" />
+                                    <div>
+                                      <p className="font-medium text-sm">{subDept.name}</p>
+                                      {subDept.description && (
+                                        <p className="text-xs text-muted-foreground">{subDept.description}</p>
+                                      )}
+                                    </div>
+                                  </div>
+                                  <div className="flex items-center gap-2">
+                                    <Badge variant={subDept.isActive ? "outline" : "secondary"} className="text-xs">
+                                      {subDept.isActive ? "Active" : "Inactive"}
+                                    </Badge>
+                                    <Button
+                                      variant="ghost"
+                                      size="sm"
+                                      className="h-7 w-7 p-0"
+                                      onClick={() => {
+                                        setEditingSubDept(subDept);
+                                        setSubDeptFormData({
+                                          name: subDept.name,
+                                          departmentId: subDept.departmentId,
+                                          description: subDept.description || "",
+                                        });
+                                      }}
+                                    >
+                                      <Edit className="h-3 w-3" />
+                                    </Button>
+                                    <Button
+                                      variant="ghost"
+                                      size="sm"
+                                      className="h-7 w-7 p-0 text-destructive hover:text-destructive"
+                                      onClick={() => setDeletingSubDeptId(subDept.id)}
+                                    >
+                                      <Trash2 className="h-3 w-3" />
+                                    </Button>
+                                  </div>
+                                </div>
+                              ))}
+                            </div>
+                          ) : (
+                            <p className="text-sm text-muted-foreground text-center py-4">
+                              No sub-departments yet. Click "Add Sub-Department" to create one.
+                            </p>
+                          )}
+                        </div>
+                      </CollapsibleContent>
+                    </div>
+                  </Collapsible>
+                ))}
+              </div>
+            ) : (
+              <div className="text-center py-8">
+                <Building2 className="mx-auto mb-4 h-12 w-12 text-muted-foreground/50" />
+                <h3 className="text-lg font-medium">No departments yet</h3>
+                <p className="text-sm text-muted-foreground mt-1">
+                  Create departments to organize your team structure
+                </p>
+                <div className="flex justify-center gap-2 mt-4">
+                  <Button variant="outline" onClick={() => seedDeptsMutation.mutate()}>
+                    Seed Default Departments
+                  </Button>
+                  <Button onClick={() => setShowDeptForm(true)}>
+                    <Plus className="h-4 w-4 mr-2" />
+                    Add Department
+                  </Button>
+                </div>
+              </div>
+            )}
+          </div>
+        </Card>
       </TabsContent>
 
       <TabsContent value="hierarchy" className="space-y-6">
@@ -1362,6 +1760,212 @@ export default function UsersPage() {
               ) : (
                 "Update Permissions"
               )}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Create/Edit Department Dialog */}
+      <Dialog open={showDeptForm || !!editingDept} onOpenChange={(open) => {
+        if (!open) {
+          setShowDeptForm(false);
+          setEditingDept(null);
+          setDeptFormData({ name: "", description: "", color: "#6366f1" });
+        }
+      }}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>{editingDept ? "Edit Department" : "Create Department"}</DialogTitle>
+            <DialogDescription>
+              {editingDept ? "Update department details" : "Add a new department to your organization"}
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4">
+            <div className="space-y-2">
+              <Label htmlFor="dept-name">Department Name *</Label>
+              <Input
+                id="dept-name"
+                placeholder="e.g., Engineering"
+                value={deptFormData.name}
+                onChange={(e) => setDeptFormData({ ...deptFormData, name: e.target.value })}
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="dept-description">Description</Label>
+              <Textarea
+                id="dept-description"
+                placeholder="Brief description of the department"
+                value={deptFormData.description}
+                onChange={(e) => setDeptFormData({ ...deptFormData, description: e.target.value })}
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="dept-color">Color</Label>
+              <div className="flex items-center gap-2">
+                <Input
+                  id="dept-color"
+                  type="color"
+                  value={deptFormData.color}
+                  onChange={(e) => setDeptFormData({ ...deptFormData, color: e.target.value })}
+                  className="w-16 h-10 p-1 cursor-pointer"
+                />
+                <Input
+                  value={deptFormData.color}
+                  onChange={(e) => setDeptFormData({ ...deptFormData, color: e.target.value })}
+                  placeholder="#6366f1"
+                  className="flex-1"
+                />
+              </div>
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => {
+              setShowDeptForm(false);
+              setEditingDept(null);
+              setDeptFormData({ name: "", description: "", color: "#6366f1" });
+            }}>
+              Cancel
+            </Button>
+            <Button
+              onClick={() => {
+                if (editingDept) {
+                  updateDeptMutation.mutate({ id: editingDept.id, data: deptFormData });
+                } else {
+                  createDeptMutation.mutate(deptFormData);
+                }
+              }}
+              disabled={!deptFormData.name || createDeptMutation.isPending || updateDeptMutation.isPending}
+            >
+              {(createDeptMutation.isPending || updateDeptMutation.isPending) ? (
+                <><Loader2 className="h-4 w-4 animate-spin mr-2" /> Saving...</>
+              ) : (
+                editingDept ? "Update" : "Create"
+              )}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Delete Department Confirmation Dialog */}
+      <Dialog open={!!deletingDeptId} onOpenChange={(open) => !open && setDeletingDeptId(null)}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Delete Department</DialogTitle>
+            <DialogDescription>
+              Are you sure you want to delete this department? All sub-departments will also be deleted. This action cannot be undone.
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setDeletingDeptId(null)}>Cancel</Button>
+            <Button
+              variant="destructive"
+              onClick={() => deletingDeptId && deleteDeptMutation.mutate(deletingDeptId)}
+              disabled={deleteDeptMutation.isPending}
+            >
+              {deleteDeptMutation.isPending ? <><Loader2 className="h-4 w-4 animate-spin mr-2" /> Deleting...</> : "Delete"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Create/Edit Sub-Department Dialog */}
+      <Dialog open={showSubDeptForm || !!editingSubDept} onOpenChange={(open) => {
+        if (!open) {
+          setShowSubDeptForm(false);
+          setEditingSubDept(null);
+          setSubDeptFormData({ name: "", departmentId: "", description: "" });
+        }
+      }}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>{editingSubDept ? "Edit Sub-Department" : "Create Sub-Department"}</DialogTitle>
+            <DialogDescription>
+              {editingSubDept ? "Update sub-department details" : "Add a new sub-department"}
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4">
+            <div className="space-y-2">
+              <Label htmlFor="sub-dept-name">Sub-Department Name *</Label>
+              <Input
+                id="sub-dept-name"
+                placeholder="e.g., Quality Assurance"
+                value={subDeptFormData.name}
+                onChange={(e) => setSubDeptFormData({ ...subDeptFormData, name: e.target.value })}
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="sub-dept-parent">Parent Department *</Label>
+              <Select
+                value={subDeptFormData.departmentId}
+                onValueChange={(value) => setSubDeptFormData({ ...subDeptFormData, departmentId: value })}
+              >
+                <SelectTrigger>
+                  <SelectValue placeholder="Select department" />
+                </SelectTrigger>
+                <SelectContent>
+                  {departmentsData?.map((dept) => (
+                    <SelectItem key={dept.id} value={dept.id}>
+                      {dept.name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="sub-dept-description">Description</Label>
+              <Textarea
+                id="sub-dept-description"
+                placeholder="Brief description of the sub-department"
+                value={subDeptFormData.description}
+                onChange={(e) => setSubDeptFormData({ ...subDeptFormData, description: e.target.value })}
+              />
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => {
+              setShowSubDeptForm(false);
+              setEditingSubDept(null);
+              setSubDeptFormData({ name: "", departmentId: "", description: "" });
+            }}>
+              Cancel
+            </Button>
+            <Button
+              onClick={() => {
+                if (editingSubDept) {
+                  updateSubDeptMutation.mutate({ id: editingSubDept.id, data: subDeptFormData });
+                } else {
+                  createSubDeptMutation.mutate(subDeptFormData);
+                }
+              }}
+              disabled={!subDeptFormData.name || !subDeptFormData.departmentId || createSubDeptMutation.isPending || updateSubDeptMutation.isPending}
+            >
+              {(createSubDeptMutation.isPending || updateSubDeptMutation.isPending) ? (
+                <><Loader2 className="h-4 w-4 animate-spin mr-2" /> Saving...</>
+              ) : (
+                editingSubDept ? "Update" : "Create"
+              )}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Delete Sub-Department Confirmation Dialog */}
+      <Dialog open={!!deletingSubDeptId} onOpenChange={(open) => !open && setDeletingSubDeptId(null)}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Delete Sub-Department</DialogTitle>
+            <DialogDescription>
+              Are you sure you want to delete this sub-department? This action cannot be undone.
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setDeletingSubDeptId(null)}>Cancel</Button>
+            <Button
+              variant="destructive"
+              onClick={() => deletingSubDeptId && deleteSubDeptMutation.mutate(deletingSubDeptId)}
+              disabled={deleteSubDeptMutation.isPending}
+            >
+              {deleteSubDeptMutation.isPending ? <><Loader2 className="h-4 w-4 animate-spin mr-2" /> Deleting...</> : "Delete"}
             </Button>
           </DialogFooter>
         </DialogContent>

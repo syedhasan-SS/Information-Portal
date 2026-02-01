@@ -297,6 +297,185 @@ export async function registerRoutes(
     }
   });
 
+  // Departments
+  app.get("/api/departments", async (req, res) => {
+    try {
+      const activeOnly = req.query.active === "true";
+      const departments = activeOnly
+        ? await storage.getActiveDepartments()
+        : await storage.getDepartments();
+      res.json(departments);
+    } catch (error: any) {
+      res.status(500).json({ error: error.message });
+    }
+  });
+
+  app.get("/api/departments/with-sub-departments", async (_req, res) => {
+    try {
+      const departments = await storage.getDepartmentsWithSubDepartments();
+      res.json(departments);
+    } catch (error: any) {
+      res.status(500).json({ error: error.message });
+    }
+  });
+
+  app.get("/api/departments/:id", async (req, res) => {
+    try {
+      const department = await storage.getDepartmentById(req.params.id);
+      if (!department) {
+        return res.status(404).json({ error: "Department not found" });
+      }
+      res.json(department);
+    } catch (error: any) {
+      res.status(500).json({ error: error.message });
+    }
+  });
+
+  app.post("/api/departments", async (req, res) => {
+    try {
+      const { name, description, color, isActive, displayOrder } = req.body;
+      if (!name) {
+        return res.status(400).json({ error: "Department name is required" });
+      }
+
+      // Check if department already exists
+      const existing = await storage.getDepartmentByName(name);
+      if (existing) {
+        return res.status(400).json({ error: "A department with this name already exists" });
+      }
+
+      const department = await storage.createDepartment({ name, description, color, isActive, displayOrder });
+      res.status(201).json(department);
+    } catch (error: any) {
+      res.status(500).json({ error: error.message });
+    }
+  });
+
+  app.put("/api/departments/:id", async (req, res) => {
+    try {
+      const department = await storage.updateDepartment(req.params.id, req.body);
+      if (!department) {
+        return res.status(404).json({ error: "Department not found" });
+      }
+      res.json(department);
+    } catch (error: any) {
+      res.status(500).json({ error: error.message });
+    }
+  });
+
+  app.delete("/api/departments/:id", async (req, res) => {
+    try {
+      await storage.deleteDepartment(req.params.id);
+      res.status(204).send();
+    } catch (error: any) {
+      res.status(500).json({ error: error.message });
+    }
+  });
+
+  // Seed default departments
+  app.post("/api/departments/seed-defaults", async (_req, res) => {
+    try {
+      const DEFAULT_DEPARTMENTS = [
+        { name: "Finance", description: "Financial operations and payments", color: "#10b981", displayOrder: 1 },
+        { name: "Operations", description: "Order fulfillment and logistics", color: "#f59e0b", displayOrder: 2 },
+        { name: "Marketplace", description: "Product listings and seller management", color: "#8b5cf6", displayOrder: 3 },
+        { name: "Tech", description: "Technical support and platform issues", color: "#3b82f6", displayOrder: 4 },
+        { name: "Experience", description: "User experience and feedback", color: "#ec4899", displayOrder: 5 },
+        { name: "CX", description: "Customer experience and support", color: "#14b8a6", displayOrder: 6 },
+        { name: "Seller Support", description: "Seller onboarding and assistance", color: "#f97316", displayOrder: 7 },
+      ];
+
+      const created = [];
+      for (const dept of DEFAULT_DEPARTMENTS) {
+        const existing = await storage.getDepartmentByName(dept.name);
+        if (!existing) {
+          const newDept = await storage.createDepartment(dept);
+          created.push(newDept);
+        }
+      }
+
+      res.status(201).json({
+        message: `Seeded ${created.length} departments`,
+        skipped: DEFAULT_DEPARTMENTS.length - created.length,
+        departments: created,
+      });
+    } catch (error: any) {
+      res.status(500).json({ error: error.message });
+    }
+  });
+
+  // Sub-departments
+  app.get("/api/sub-departments", async (req, res) => {
+    try {
+      const departmentId = req.query.departmentId as string;
+      if (departmentId) {
+        const activeOnly = req.query.active === "true";
+        const subDepartments = activeOnly
+          ? await storage.getActiveSubDepartmentsByDepartment(departmentId)
+          : await storage.getSubDepartmentsByDepartment(departmentId);
+        res.json(subDepartments);
+      } else {
+        const subDepartments = await storage.getSubDepartments();
+        res.json(subDepartments);
+      }
+    } catch (error: any) {
+      res.status(500).json({ error: error.message });
+    }
+  });
+
+  app.get("/api/sub-departments/:id", async (req, res) => {
+    try {
+      const subDepartment = await storage.getSubDepartmentById(req.params.id);
+      if (!subDepartment) {
+        return res.status(404).json({ error: "Sub-department not found" });
+      }
+      res.json(subDepartment);
+    } catch (error: any) {
+      res.status(500).json({ error: error.message });
+    }
+  });
+
+  app.post("/api/sub-departments", async (req, res) => {
+    try {
+      const { name, departmentId, description, isActive, displayOrder } = req.body;
+      if (!name || !departmentId) {
+        return res.status(400).json({ error: "Name and departmentId are required" });
+      }
+
+      // Verify department exists
+      const department = await storage.getDepartmentById(departmentId);
+      if (!department) {
+        return res.status(400).json({ error: "Department not found" });
+      }
+
+      const subDepartment = await storage.createSubDepartment({ name, departmentId, description, isActive, displayOrder });
+      res.status(201).json(subDepartment);
+    } catch (error: any) {
+      res.status(500).json({ error: error.message });
+    }
+  });
+
+  app.put("/api/sub-departments/:id", async (req, res) => {
+    try {
+      const subDepartment = await storage.updateSubDepartment(req.params.id, req.body);
+      if (!subDepartment) {
+        return res.status(404).json({ error: "Sub-department not found" });
+      }
+      res.json(subDepartment);
+    } catch (error: any) {
+      res.status(500).json({ error: error.message });
+    }
+  });
+
+  app.delete("/api/sub-departments/:id", async (req, res) => {
+    try {
+      await storage.deleteSubDepartment(req.params.id);
+      res.status(204).send();
+    } catch (error: any) {
+      res.status(500).json({ error: error.message });
+    }
+  });
+
   // Notifications
   app.get("/api/notifications", async (req, res) => {
     try {
