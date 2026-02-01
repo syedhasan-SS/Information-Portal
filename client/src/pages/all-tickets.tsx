@@ -34,7 +34,7 @@ import {
   Clock,
   X,
 } from "lucide-react";
-import type { Ticket, Category } from "@shared/schema";
+import type { Ticket, Category, Department, SubDepartment } from "@shared/schema";
 
 async function getTickets(): Promise<Ticket[]> {
   const res = await fetch("/api/tickets");
@@ -48,9 +48,14 @@ async function getCategories(): Promise<Category[]> {
   return res.json();
 }
 
+async function getDepartments(): Promise<(Department & { subDepartments: SubDepartment[] })[]> {
+  const res = await fetch("/api/departments/with-sub-departments");
+  if (!res.ok) throw new Error("Failed to fetch departments");
+  return res.json();
+}
+
 const STATUSES = ["New", "Open", "Pending", "Solved", "Closed"] as const;
 const PRIORITIES = ["Critical", "High", "Medium", "Low"] as const;
-const DEPARTMENTS = ["Finance", "Operations", "Marketplace", "Tech", "Experience", "CX", "Seller Support"] as const;
 const ISSUE_TYPES = ["Complaint", "Request", "Information"] as const;
 const SLA_STATUSES = ["on_track", "at_risk", "breached"] as const;
 
@@ -105,6 +110,11 @@ export default function AllTicketsPage() {
     queryFn: getCategories,
   });
 
+  const { data: departmentsData } = useQuery({
+    queryKey: ["departments-with-subs"],
+    queryFn: getDepartments,
+  });
+
   const categoryMap = categories?.reduce((acc, cat) => {
     acc[cat.id] = cat;
     return acc;
@@ -124,24 +134,26 @@ export default function AllTicketsPage() {
 
     // Filter based on user's department/sub-department
     return tickets.filter((ticket) => {
+      const ticketDept = ticket.department as string;
+
       // Seller Support users (sub-department of CX) see Seller Support tickets
       if (user.subDepartment === "Seller Support") {
         // Seller Support tickets are marked with department containing "Seller Support" or specific category
-        return ticket.department === "Seller Support" ||
-               ticket.department === "CX" ||
+        return ticketDept === "Seller Support" ||
+               ticketDept === "CX" ||
                (ticket.categorySnapshot?.path?.includes("Seller") ?? false);
       }
 
       // CX/Customer Support users (not Seller Support) see Customer Support tickets
       if (user.department === "CX" && user.subDepartment !== "Seller Support") {
-        return ticket.department === "CX" ||
-               ticket.department === "Customer Support" ||
-               ticket.department === "Experience";
+        return ticketDept === "CX" ||
+               ticketDept === "Customer Support" ||
+               ticketDept === "Experience";
       }
 
       // Other department users see only their department's tickets
       if (user.department) {
-        return ticket.department === user.department;
+        return ticketDept === user.department;
       }
 
       // If no department, show nothing (or could show all assigned to them)
@@ -419,8 +431,8 @@ export default function AllTicketsPage() {
                   </SelectTrigger>
                   <SelectContent>
                     <SelectItem value="all">All Departments</SelectItem>
-                    {DEPARTMENTS.map((dept) => (
-                      <SelectItem key={dept} value={dept}>{dept}</SelectItem>
+                    {departmentsData?.filter(d => d.isActive).map((dept) => (
+                      <SelectItem key={dept.id} value={dept.name}>{dept.name}</SelectItem>
                     ))}
                   </SelectContent>
                 </Select>
