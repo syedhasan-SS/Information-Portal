@@ -71,20 +71,24 @@ export default function DashboardPage() {
       return true;
     }
 
-    // Department Heads and Managers see their department tickets
+    // Seller Support / CX department users can see all tickets (they handle cross-department issues)
+    if (user.department === "Seller Support" || user.department === "CX") {
+      return true;
+    }
+
+    // Department-based access: Heads/Managers/Leads see their department tickets
     if (hasPermission("view:department_tickets") && user.department) {
       return ticket.department === user.department;
     }
 
-    // Department Agents see only assigned tickets or their department tickets
-    if (user.role === "Department Agent") {
-      return ticket.assigneeId === user.id ||
-             (user.department && ticket.department === user.department);
+    // Team-based access: Leads see team tickets
+    if (hasPermission("view:team_tickets") && user.department) {
+      return ticket.department === user.department;
     }
 
-    // Seller Support Agents see all tickets (CX role)
-    if (user.role === "Seller Support Agent") {
-      return true;
+    // Agent/Associate level: see assigned tickets or their department tickets
+    if (["Agent", "Associate"].includes(user.role) && user.department) {
+      return ticket.assigneeId === user.id || ticket.department === user.department;
     }
 
     // Default: only show assigned tickets
@@ -137,14 +141,14 @@ export default function DashboardPage() {
     return acc;
   }, {} as Record<string, number>) || {};
 
-  // Filter users based on current user's department for Department Heads/Managers
+  // Filter users based on current user's department for Heads/Managers
   const filteredUsers = users?.filter((u) => {
     if (!user) return false;
 
     // Owners/Admins see all agents
     if (hasPermission("view:users")) return true;
 
-    // Department Heads/Managers see only agents from their department
+    // Heads/Managers see only users from their department
     if (hasPermission("view:department_tickets") && user.department) {
       return u.department === user.department;
     }

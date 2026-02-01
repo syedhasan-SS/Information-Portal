@@ -5,7 +5,7 @@ type User = {
   id: string;
   email: string;
   name: string;
-  role: "Owner" | "Admin" | "Seller Support Agent" | "Department Head" | "Department Manager" | "Department Agent";
+  role: "Owner" | "Admin" | "Head" | "Manager" | "Lead" | "Associate" | "Agent";
   department: string | null;
   profilePicture: string | null;
   customPermissions: string[] | null; // Agent-level custom permissions
@@ -23,8 +23,10 @@ type AuthContextType = {
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
-// Define permissions for each role
-export const ROLE_PERMISSIONS = {
+// Define default permissions for each role
+// Note: Role + Department determines actual access (e.g., Agent in Seller Support sees all Seller Support tickets)
+// Custom permissions can be set per user to override these defaults
+export const ROLE_PERMISSIONS: Record<string, string[]> = {
   Owner: [
     "view:dashboard",
     "view:tickets",
@@ -61,36 +63,47 @@ export const ROLE_PERMISSIONS = {
     "edit:config",
     "view:all_tickets",
   ],
-  "Department Head": [
+  Head: [
     "view:dashboard",
     "view:tickets",
     "create:tickets",
     "edit:tickets",
+    "view:users",
     "view:vendors",
     "view:analytics",
     "view:department_tickets",
+    "view:department_users",
   ],
-  "Department Manager": [
+  Manager: [
     "view:dashboard",
     "view:tickets",
     "create:tickets",
     "edit:tickets",
     "view:vendors",
     "view:department_tickets",
+    "view:department_users",
   ],
-  "Department Agent": [
+  Lead: [
+    "view:dashboard",
+    "view:tickets",
+    "create:tickets",
+    "edit:tickets",
+    "view:vendors",
+    "view:team_tickets",
+  ],
+  Associate: [
     "view:dashboard",
     "view:tickets",
     "create:tickets",
     "edit:tickets",
     "view:assigned_tickets",
   ],
-  "Seller Support Agent": [
+  Agent: [
     "view:dashboard",
     "view:tickets",
     "create:tickets",
     "edit:tickets",
-    "view:vendors",
+    "view:assigned_tickets",
   ],
 };
 

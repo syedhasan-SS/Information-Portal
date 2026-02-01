@@ -112,15 +112,14 @@ export default function MyTicketsPage() {
   const queryClient = useQueryClient();
   const { toast } = useToast();
 
-  // Determine user's department type from their department or role
+  // Determine user's department type from their department
+  // Role + Department determines access (e.g., Agent in Seller Support vs Agent in Finance)
   const userDepartmentType = useMemo(() => {
     if (!user) return "Seller Support"; // Default fallback
     // Check if user's department is "Seller Support" or "Customer Support"
     if (user.department === "Seller Support") return "Seller Support";
     if (user.department === "Customer Support" || user.department === "CX") return "Customer Support";
-    // Check role as fallback
-    if (user.role === "Seller Support Agent") return "Seller Support";
-    // Default to Seller Support
+    // Default to Seller Support for users without department
     return "Seller Support";
   }, [user]);
 

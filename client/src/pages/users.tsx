@@ -61,8 +61,8 @@ import {
 import type { User, Department, SubDepartment } from "@shared/schema";
 import { ROLE_PERMISSIONS } from "@/hooks/use-auth";
 
-const ROLES = ["Owner", "Admin", "Seller Support Agent", "Department Head", "Department Manager", "Department Agent"] as const;
-const DEPARTMENTS = ["Finance", "Operations", "Marketplace", "Tech", "Supply", "Growth"] as const;
+const ROLES = ["Owner", "Admin", "Head", "Manager", "Lead", "Associate", "Agent"] as const;
+const DEPARTMENTS = ["Finance", "Operations", "Marketplace", "Tech", "Supply", "Growth", "Seller Support", "CX"] as const;
 
 // All available permissions
 const ALL_PERMISSIONS = [
@@ -608,10 +608,11 @@ export default function UsersPage() {
   const roleColors: Record<string, string> = {
     Owner: "bg-red-500/10 text-red-600 border-red-500/20",
     Admin: "bg-purple-500/10 text-purple-600 border-purple-500/20",
-    "Seller Support Agent": "bg-green-500/10 text-green-600 border-green-500/20",
-    "Department Head": "bg-blue-500/10 text-blue-600 border-blue-500/20",
-    "Department Manager": "bg-amber-500/10 text-amber-600 border-amber-500/20",
-    "Department Agent": "bg-slate-500/10 text-slate-600 border-slate-500/20",
+    Head: "bg-blue-500/10 text-blue-600 border-blue-500/20",
+    Manager: "bg-amber-500/10 text-amber-600 border-amber-500/20",
+    Lead: "bg-green-500/10 text-green-600 border-green-500/20",
+    Associate: "bg-cyan-500/10 text-cyan-600 border-cyan-500/20",
+    Agent: "bg-slate-500/10 text-slate-600 border-slate-500/20",
   };
 
   // Org Chart Node component - Visual hierarchy chart
@@ -918,7 +919,7 @@ export default function UsersPage() {
                     ))}
                   </div>
                   <p className="text-xs text-muted-foreground">
-                    Select additional roles to assign multiple responsibilities (e.g., Department Head + Admin)
+                    Select additional roles to assign multiple responsibilities (e.g., Head + Admin)
                   </p>
                 </div>
 

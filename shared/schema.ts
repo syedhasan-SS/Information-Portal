@@ -148,9 +148,9 @@ export const users = pgTable("users", {
   email: text("email").notNull().unique(),
   password: text("password").notNull(),
   name: text("name").notNull(),
-  role: text("role").notNull().$type<"Owner" | "Admin" | "Seller Support Agent" | "Department Head" | "Department Manager" | "Department Agent">(),
-  roles: text("roles").array().$type<Array<"Owner" | "Admin" | "Seller Support Agent" | "Department Head" | "Department Manager" | "Department Agent">>(), // Multi-role support
-  department: text("department").$type<"Finance" | "Operations" | "Marketplace" | "Tech" | "Supply" | "Growth">(),
+  role: text("role").notNull().$type<"Owner" | "Admin" | "Head" | "Manager" | "Lead" | "Associate" | "Agent">(),
+  roles: text("roles").array().$type<Array<"Owner" | "Admin" | "Head" | "Manager" | "Lead" | "Associate" | "Agent">>(), // Multi-role support
+  department: text("department").$type<"Finance" | "Operations" | "Marketplace" | "Tech" | "Supply" | "Growth" | "Seller Support" | "CX">(),
   subDepartment: text("sub_department"), // Sub-department for organizational hierarchy
   managerId: varchar("manager_id").references((): AnyPgColumn => users.id, { onDelete: "set null" }), // Reports to (direct manager)
   profilePicture: text("profile_picture"),
