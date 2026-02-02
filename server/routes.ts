@@ -2234,6 +2234,164 @@ export async function registerRoutes(
 
   // ===== Roles Management API =====
 
+  // Seed default roles and permissions from hardcoded values
+  // IMPORTANT: This route must be defined BEFORE /api/roles to avoid route conflicts
+  app.post("/api/roles/seed-defaults", async (_req, res) => {
+    try {
+      console.log("[seed-defaults] Starting seeding process...");
+
+      // Default permissions to seed
+      const DEFAULT_PERMISSIONS = [
+        { name: "view:dashboard", displayName: "View Dashboard", category: "General", isSystem: true },
+        { name: "view:tickets", displayName: "View Tickets", category: "Tickets", isSystem: true },
+        { name: "create:tickets", displayName: "Create Tickets", category: "Tickets", isSystem: true },
+        { name: "edit:tickets", displayName: "Edit Tickets", category: "Tickets", isSystem: true },
+        { name: "delete:tickets", displayName: "Delete Tickets", category: "Tickets", isSystem: true },
+        { name: "view:all_tickets", displayName: "View All Tickets", category: "Tickets", isSystem: true },
+        { name: "view:department_tickets", displayName: "View Department Tickets", category: "Tickets", isSystem: true },
+        { name: "view:assigned_tickets", displayName: "View Assigned Tickets", category: "Tickets", isSystem: true },
+        { name: "view:team_tickets", displayName: "View Team Tickets", category: "Tickets", isSystem: true },
+        { name: "view:users", displayName: "View Users", category: "Users", isSystem: true },
+        { name: "create:users", displayName: "Create Users", category: "Users", isSystem: true },
+        { name: "edit:users", displayName: "Edit Users", category: "Users", isSystem: true },
+        { name: "delete:users", displayName: "Delete Users", category: "Users", isSystem: true },
+        { name: "view:department_users", displayName: "View Department Users", category: "Users", isSystem: true },
+        { name: "view:vendors", displayName: "View Vendors", category: "Vendors", isSystem: true },
+        { name: "create:vendors", displayName: "Create Vendors", category: "Vendors", isSystem: true },
+        { name: "edit:vendors", displayName: "Edit Vendors", category: "Vendors", isSystem: true },
+        { name: "delete:vendors", displayName: "Delete Vendors", category: "Vendors", isSystem: true },
+        { name: "view:analytics", displayName: "View Analytics", category: "Analytics", isSystem: true },
+        { name: "view:config", displayName: "View Configuration", category: "Settings", isSystem: true },
+        { name: "edit:config", displayName: "Edit Configuration", category: "Settings", isSystem: true },
+        { name: "view:roles", displayName: "View Roles", category: "Settings", isSystem: true },
+        { name: "create:roles", displayName: "Create Roles", category: "Settings", isSystem: true },
+        { name: "edit:roles", displayName: "Edit Roles", category: "Settings", isSystem: true },
+        { name: "delete:roles", displayName: "Delete Roles", category: "Settings", isSystem: true },
+      ];
+
+      // Default system roles
+      const DEFAULT_ROLES = [
+        { name: "Owner", displayName: "Owner", description: "Full system access", isSystem: true },
+        { name: "Admin", displayName: "Administrator", description: "Administrative access", isSystem: true },
+        { name: "Head", displayName: "Department Head", description: "Department leadership access", isSystem: true },
+        { name: "Manager", displayName: "Manager", description: "Team management access", isSystem: true },
+        { name: "Lead", displayName: "Team Lead", description: "Team lead access", isSystem: true },
+        { name: "Associate", displayName: "Associate", description: "Standard employee access", isSystem: true },
+        { name: "Agent", displayName: "Agent", description: "Support agent access", isSystem: true },
+      ];
+
+      // Role to permissions mapping (matching ROLE_PERMISSIONS in use-auth.tsx)
+      const ROLE_PERMISSION_MAPPING: Record<string, string[]> = {
+        Owner: [
+          "view:dashboard", "view:tickets", "create:tickets", "edit:tickets", "delete:tickets",
+          "view:users", "create:users", "edit:users", "delete:users",
+          "view:vendors", "create:vendors", "edit:vendors", "delete:vendors",
+          "view:analytics", "view:config", "edit:config", "view:all_tickets",
+          "view:roles", "create:roles", "edit:roles", "delete:roles",
+        ],
+        Admin: [
+          "view:dashboard", "view:tickets", "create:tickets", "edit:tickets", "delete:tickets",
+          "view:users", "create:users", "edit:users",
+          "view:vendors", "create:vendors", "edit:vendors",
+          "view:analytics", "view:config", "edit:config", "view:all_tickets",
+          "view:roles", "create:roles", "edit:roles",
+        ],
+        Head: [
+          "view:dashboard", "view:tickets", "create:tickets", "edit:tickets",
+          "view:users", "view:vendors", "view:analytics",
+          "view:department_tickets", "view:department_users",
+        ],
+        Manager: [
+          "view:dashboard", "view:tickets", "create:tickets", "edit:tickets",
+          "view:vendors", "view:department_tickets", "view:department_users",
+        ],
+        Lead: [
+          "view:dashboard", "view:tickets", "create:tickets", "edit:tickets",
+          "view:vendors", "view:team_tickets",
+        ],
+        Associate: [
+          "view:dashboard", "view:tickets", "create:tickets", "edit:tickets",
+          "view:assigned_tickets",
+        ],
+        Agent: [
+          "view:dashboard", "view:tickets", "create:tickets", "edit:tickets",
+          "view:assigned_tickets", "view:department_tickets",
+        ],
+      };
+
+      const createdPermissions: any[] = [];
+      const createdRoles: any[] = [];
+      const skippedPermissions: string[] = [];
+      const skippedRoles: string[] = [];
+
+      // Seed permissions
+      console.log("[seed-defaults] Seeding permissions...");
+      for (const perm of DEFAULT_PERMISSIONS) {
+        try {
+          const existing = await storage.getPermissionByName(perm.name);
+          if (existing) {
+            skippedPermissions.push(perm.name);
+            continue;
+          }
+          const created = await storage.createPermission(perm);
+          createdPermissions.push(created);
+        } catch (permError: any) {
+          console.error(`[seed-defaults] Error creating permission ${perm.name}:`, permError.message);
+        }
+      }
+      console.log(`[seed-defaults] Created ${createdPermissions.length} permissions, skipped ${skippedPermissions.length}`);
+
+      // Seed roles and their permissions
+      console.log("[seed-defaults] Seeding roles...");
+      for (const role of DEFAULT_ROLES) {
+        try {
+          const existing = await storage.getRoleByName(role.name);
+          if (existing) {
+            skippedRoles.push(role.name);
+            continue;
+          }
+          const created = await storage.createRole(role);
+          createdRoles.push(created);
+
+          // Assign permissions to this role
+          const rolePermNames = ROLE_PERMISSION_MAPPING[role.name] || [];
+          const permIds: string[] = [];
+          for (const permName of rolePermNames) {
+            const perm = await storage.getPermissionByName(permName);
+            if (perm) {
+              permIds.push(perm.id);
+            }
+          }
+          if (permIds.length > 0) {
+            await storage.setRolePermissions(created.id, permIds);
+          }
+          console.log(`[seed-defaults] Created role ${role.name} with ${permIds.length} permissions`);
+        } catch (roleError: any) {
+          console.error(`[seed-defaults] Error creating role ${role.name}:`, roleError.message);
+        }
+      }
+      console.log(`[seed-defaults] Created ${createdRoles.length} roles, skipped ${skippedRoles.length}`);
+
+      res.json({
+        message: "Seeding complete",
+        permissions: {
+          created: createdPermissions.length,
+          skipped: skippedPermissions.length,
+        },
+        roles: {
+          created: createdRoles.length,
+          skipped: skippedRoles.length,
+        },
+      });
+    } catch (error: any) {
+      console.error("[seed-defaults] Error seeding roles and permissions:", error);
+      res.status(500).json({
+        error: error.message,
+        details: "Check server logs for more information. This might indicate the database tables don't exist yet."
+      });
+    }
+  });
+
   // Get all roles with their permissions
   app.get("/api/roles", async (_req, res) => {
     try {
@@ -2358,145 +2516,6 @@ export async function registerRoutes(
       const permissions = await storage.getRolePermissions(role.id);
       res.json({ ...role, permissions });
     } catch (error: any) {
-      res.status(500).json({ error: error.message });
-    }
-  });
-
-  // Seed default roles and permissions from hardcoded values
-  app.post("/api/roles/seed-defaults", async (_req, res) => {
-    try {
-      // Default permissions to seed
-      const DEFAULT_PERMISSIONS = [
-        { name: "view:dashboard", displayName: "View Dashboard", category: "General", isSystem: true },
-        { name: "view:tickets", displayName: "View Tickets", category: "Tickets", isSystem: true },
-        { name: "create:tickets", displayName: "Create Tickets", category: "Tickets", isSystem: true },
-        { name: "edit:tickets", displayName: "Edit Tickets", category: "Tickets", isSystem: true },
-        { name: "delete:tickets", displayName: "Delete Tickets", category: "Tickets", isSystem: true },
-        { name: "view:all_tickets", displayName: "View All Tickets", category: "Tickets", isSystem: true },
-        { name: "view:department_tickets", displayName: "View Department Tickets", category: "Tickets", isSystem: true },
-        { name: "view:assigned_tickets", displayName: "View Assigned Tickets", category: "Tickets", isSystem: true },
-        { name: "view:team_tickets", displayName: "View Team Tickets", category: "Tickets", isSystem: true },
-        { name: "view:users", displayName: "View Users", category: "Users", isSystem: true },
-        { name: "create:users", displayName: "Create Users", category: "Users", isSystem: true },
-        { name: "edit:users", displayName: "Edit Users", category: "Users", isSystem: true },
-        { name: "delete:users", displayName: "Delete Users", category: "Users", isSystem: true },
-        { name: "view:department_users", displayName: "View Department Users", category: "Users", isSystem: true },
-        { name: "view:vendors", displayName: "View Vendors", category: "Vendors", isSystem: true },
-        { name: "create:vendors", displayName: "Create Vendors", category: "Vendors", isSystem: true },
-        { name: "edit:vendors", displayName: "Edit Vendors", category: "Vendors", isSystem: true },
-        { name: "delete:vendors", displayName: "Delete Vendors", category: "Vendors", isSystem: true },
-        { name: "view:analytics", displayName: "View Analytics", category: "Analytics", isSystem: true },
-        { name: "view:config", displayName: "View Configuration", category: "Settings", isSystem: true },
-        { name: "edit:config", displayName: "Edit Configuration", category: "Settings", isSystem: true },
-        { name: "view:roles", displayName: "View Roles", category: "Settings", isSystem: true },
-        { name: "create:roles", displayName: "Create Roles", category: "Settings", isSystem: true },
-        { name: "edit:roles", displayName: "Edit Roles", category: "Settings", isSystem: true },
-        { name: "delete:roles", displayName: "Delete Roles", category: "Settings", isSystem: true },
-      ];
-
-      // Default system roles
-      const DEFAULT_ROLES = [
-        { name: "Owner", displayName: "Owner", description: "Full system access", isSystem: true },
-        { name: "Admin", displayName: "Administrator", description: "Administrative access", isSystem: true },
-        { name: "Head", displayName: "Department Head", description: "Department leadership access", isSystem: true },
-        { name: "Manager", displayName: "Manager", description: "Team management access", isSystem: true },
-        { name: "Lead", displayName: "Team Lead", description: "Team lead access", isSystem: true },
-        { name: "Associate", displayName: "Associate", description: "Standard employee access", isSystem: true },
-        { name: "Agent", displayName: "Agent", description: "Support agent access", isSystem: true },
-      ];
-
-      // Role to permissions mapping (matching ROLE_PERMISSIONS in use-auth.tsx)
-      const ROLE_PERMISSION_MAPPING: Record<string, string[]> = {
-        Owner: [
-          "view:dashboard", "view:tickets", "create:tickets", "edit:tickets", "delete:tickets",
-          "view:users", "create:users", "edit:users", "delete:users",
-          "view:vendors", "create:vendors", "edit:vendors", "delete:vendors",
-          "view:analytics", "view:config", "edit:config", "view:all_tickets",
-          "view:roles", "create:roles", "edit:roles", "delete:roles",
-        ],
-        Admin: [
-          "view:dashboard", "view:tickets", "create:tickets", "edit:tickets", "delete:tickets",
-          "view:users", "create:users", "edit:users",
-          "view:vendors", "create:vendors", "edit:vendors",
-          "view:analytics", "view:config", "edit:config", "view:all_tickets",
-          "view:roles", "create:roles", "edit:roles",
-        ],
-        Head: [
-          "view:dashboard", "view:tickets", "create:tickets", "edit:tickets",
-          "view:users", "view:vendors", "view:analytics",
-          "view:department_tickets", "view:department_users",
-        ],
-        Manager: [
-          "view:dashboard", "view:tickets", "create:tickets", "edit:tickets",
-          "view:vendors", "view:department_tickets", "view:department_users",
-        ],
-        Lead: [
-          "view:dashboard", "view:tickets", "create:tickets", "edit:tickets",
-          "view:vendors", "view:team_tickets",
-        ],
-        Associate: [
-          "view:dashboard", "view:tickets", "create:tickets", "edit:tickets",
-          "view:assigned_tickets",
-        ],
-        Agent: [
-          "view:dashboard", "view:tickets", "create:tickets", "edit:tickets",
-          "view:assigned_tickets", "view:department_tickets",
-        ],
-      };
-
-      const createdPermissions: any[] = [];
-      const createdRoles: any[] = [];
-      const skippedPermissions: string[] = [];
-      const skippedRoles: string[] = [];
-
-      // Seed permissions
-      for (const perm of DEFAULT_PERMISSIONS) {
-        const existing = await storage.getPermissionByName(perm.name);
-        if (existing) {
-          skippedPermissions.push(perm.name);
-          continue;
-        }
-        const created = await storage.createPermission(perm);
-        createdPermissions.push(created);
-      }
-
-      // Seed roles and their permissions
-      for (const role of DEFAULT_ROLES) {
-        const existing = await storage.getRoleByName(role.name);
-        if (existing) {
-          skippedRoles.push(role.name);
-          continue;
-        }
-        const created = await storage.createRole(role);
-        createdRoles.push(created);
-
-        // Assign permissions to this role
-        const rolePermNames = ROLE_PERMISSION_MAPPING[role.name] || [];
-        const permIds: string[] = [];
-        for (const permName of rolePermNames) {
-          const perm = await storage.getPermissionByName(permName);
-          if (perm) {
-            permIds.push(perm.id);
-          }
-        }
-        if (permIds.length > 0) {
-          await storage.setRolePermissions(created.id, permIds);
-        }
-      }
-
-      res.json({
-        message: "Seeding complete",
-        permissions: {
-          created: createdPermissions.length,
-          skipped: skippedPermissions.length,
-        },
-        roles: {
-          created: createdRoles.length,
-          skipped: skippedRoles.length,
-        },
-      });
-    } catch (error: any) {
-      console.error("Error seeding roles and permissions:", error);
       res.status(500).json({ error: error.message });
     }
   });
