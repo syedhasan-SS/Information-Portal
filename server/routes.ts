@@ -1331,6 +1331,39 @@ export async function registerRoutes(
     }
   });
 
+  // Fix department types for vendorHandle and customer fields
+  app.post("/api/config/field-configurations/fix-department-types", async (_req, res) => {
+    try {
+      const existingFields = await storage.getTicketFieldConfigurations();
+      const updates = [];
+
+      // Fix vendorHandle to be Seller Support only
+      const vendorHandleField = existingFields.find(f => f.fieldName === "vendorHandle");
+      if (vendorHandleField && vendorHandleField.departmentType !== "Seller Support") {
+        const updated = await storage.updateTicketFieldConfiguration(vendorHandleField.id, {
+          departmentType: "Seller Support",
+        });
+        updates.push({ fieldName: "vendorHandle", from: vendorHandleField.departmentType, to: "Seller Support" });
+      }
+
+      // Fix customer to be Customer Support only
+      const customerField = existingFields.find(f => f.fieldName === "customer");
+      if (customerField && customerField.departmentType !== "Customer Support") {
+        const updated = await storage.updateTicketFieldConfiguration(customerField.id, {
+          departmentType: "Customer Support",
+        });
+        updates.push({ fieldName: "customer", from: customerField.departmentType, to: "Customer Support" });
+      }
+
+      res.json({
+        message: `Fixed department types for ${updates.length} field(s)`,
+        updates,
+      });
+    } catch (error: any) {
+      res.status(500).json({ error: error.message });
+    }
+  });
+
   // Category Field Overrides - Configure form fields per category
   app.get("/api/config/categories/:categoryId/field-overrides", async (req, res) => {
     try {
