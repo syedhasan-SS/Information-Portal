@@ -1117,6 +1117,26 @@ export async function registerRoutes(
     try {
       const departmentType = req.query.departmentType as "Seller Support" | "Customer Support" | "All" | undefined;
 
+      // Auto-fix department types if they're wrong (ensures data integrity)
+      const allConfigs = await storage.getTicketFieldConfigurations();
+
+      const vendorHandleField = allConfigs.find(f => f.fieldName === "vendorHandle");
+      if (vendorHandleField && vendorHandleField.departmentType !== "Seller Support") {
+        console.log(`[field-config] Fixing vendorHandle: ${vendorHandleField.departmentType} -> Seller Support`);
+        await storage.updateTicketFieldConfiguration(vendorHandleField.id, {
+          departmentType: "Seller Support",
+        });
+      }
+
+      const customerField = allConfigs.find(f => f.fieldName === "customer");
+      if (customerField && customerField.departmentType !== "Customer Support") {
+        console.log(`[field-config] Fixing customer: ${customerField.departmentType} -> Customer Support`);
+        await storage.updateTicketFieldConfiguration(customerField.id, {
+          departmentType: "Customer Support",
+        });
+      }
+
+      // Re-fetch after potential fixes
       if (departmentType) {
         const configs = await storage.getTicketFieldConfigurationsByDepartment(departmentType);
         res.json(configs);
