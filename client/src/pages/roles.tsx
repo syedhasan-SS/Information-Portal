@@ -39,6 +39,13 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import {
   ArrowLeft,
   Shield,
   Users,
@@ -116,6 +123,7 @@ export default function RolesPage() {
   });
   const [deleteConfirm, setDeleteConfirm] = useState<Role | null>(null);
   const [deletePermissionConfirm, setDeletePermissionConfirm] = useState<Permission | null>(null);
+  const [isCustomCategory, setIsCustomCategory] = useState(false);
 
   const { data: roles, isLoading: rolesLoading } = useQuery({
     queryKey: ["roles"],
@@ -328,6 +336,7 @@ export default function RolesPage() {
   const handleOpenCreatePermissionDialog = () => {
     setEditingPermission(null);
     setPermissionForm({ name: "", displayName: "", description: "", category: "" });
+    setIsCustomCategory(false);
     setShowCreatePermissionDialog(true);
   };
 
@@ -339,6 +348,9 @@ export default function RolesPage() {
       description: permission.description || "",
       category: permission.category,
     });
+    // Check if the permission's category exists in the list
+    const existingCategories = permissionsData?.grouped ? Object.keys(permissionsData.grouped) : [];
+    setIsCustomCategory(!existingCategories.includes(permission.category));
     setShowCreatePermissionDialog(true);
   };
 
@@ -346,6 +358,7 @@ export default function RolesPage() {
     setShowCreatePermissionDialog(false);
     setEditingPermission(null);
     setPermissionForm({ name: "", displayName: "", description: "", category: "" });
+    setIsCustomCategory(false);
   };
 
   const handleSavePermission = () => {
@@ -1006,19 +1019,60 @@ export default function RolesPage() {
 
             <div className="space-y-2">
               <Label htmlFor="perm-category">Category *</Label>
-              <Input
-                id="perm-category"
-                placeholder="e.g., Reports, Analytics, Settings"
-                value={permissionForm.category}
-                onChange={(e) => setPermissionForm({ ...permissionForm, category: e.target.value })}
-                disabled={!!editingPermission?.isSystem}
-                list="category-suggestions"
-              />
-              <datalist id="category-suggestions">
-                {permissionsData?.grouped && Object.keys(permissionsData.grouped).map(cat => (
-                  <option key={cat} value={cat} />
-                ))}
-              </datalist>
+              {isCustomCategory ? (
+                <div className="flex gap-2">
+                  <Input
+                    id="perm-category"
+                    placeholder="Enter new category name"
+                    value={permissionForm.category}
+                    onChange={(e) => setPermissionForm({ ...permissionForm, category: e.target.value })}
+                    disabled={!!editingPermission?.isSystem}
+                    className="flex-1"
+                  />
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    onClick={() => {
+                      setIsCustomCategory(false);
+                      setPermissionForm({ ...permissionForm, category: "" });
+                    }}
+                    disabled={!!editingPermission?.isSystem}
+                  >
+                    Cancel
+                  </Button>
+                </div>
+              ) : (
+                <Select
+                  value={permissionForm.category}
+                  onValueChange={(value) => {
+                    if (value === "__new__") {
+                      setIsCustomCategory(true);
+                      setPermissionForm({ ...permissionForm, category: "" });
+                    } else {
+                      setPermissionForm({ ...permissionForm, category: value });
+                    }
+                  }}
+                  disabled={!!editingPermission?.isSystem}
+                >
+                  <SelectTrigger>
+                    <SelectValue placeholder="Select a category" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {permissionsData?.grouped && Object.keys(permissionsData.grouped).sort().map(cat => (
+                      <SelectItem key={cat} value={cat}>
+                        {cat}
+                      </SelectItem>
+                    ))}
+                    <SelectItem value="__new__" className="text-primary font-medium">
+                      <span className="flex items-center gap-2">
+                        <Plus className="h-3 w-3" />
+                        Create new category
+                      </span>
+                    </SelectItem>
+                  </SelectContent>
+                </Select>
+              )}
               <p className="text-xs text-muted-foreground">
                 Permissions are grouped by category in the UI
               </p>
