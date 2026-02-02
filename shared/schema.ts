@@ -1,5 +1,5 @@
 import { sql } from "drizzle-orm";
-import { pgTable, text, varchar, integer, timestamp, jsonb, boolean, index, type AnyPgColumn } from "drizzle-orm/pg-core";
+import { pgTable, text, varchar, integer, timestamp, jsonb, boolean, index, unique, type AnyPgColumn } from "drizzle-orm/pg-core";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod";
 
@@ -522,6 +522,75 @@ export type CategorySettings = typeof categorySettings.$inferSelect;
 export type TicketFieldConfiguration = typeof ticketFieldConfigurations.$inferSelect;
 export type CategoryFieldOverride = typeof categoryFieldOverrides.$inferSelect;
 export type ConfigurationAuditLog = typeof configurationAuditLog.$inferSelect;
+
+// ============================================
+// Role & Permission Management Tables
+// ============================================
+
+// Permission definitions table
+export const permissions = pgTable("permissions", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  name: text("name").notNull().unique(), // e.g., "view:tickets"
+  displayName: text("display_name").notNull(), // e.g., "View Tickets"
+  description: text("description"),
+  category: text("category").notNull(), // e.g., "Tickets", "Users", "Settings"
+  isSystem: boolean("is_system").notNull().default(false), // System permissions cannot be deleted
+  isActive: boolean("is_active").notNull().default(true),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+  updatedAt: timestamp("updated_at").notNull().defaultNow(),
+});
+
+// Role definitions table
+export const roles = pgTable("roles", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  name: text("name").notNull().unique(), // e.g., "Owner", "Admin", "Custom Manager"
+  displayName: text("display_name").notNull(),
+  description: text("description"),
+  isSystem: boolean("is_system").notNull().default(false), // System roles cannot be deleted
+  isActive: boolean("is_active").notNull().default(true),
+  // Audit fields
+  createdById: varchar("created_by_id").references(() => users.id, { onDelete: "set null" }),
+  updatedById: varchar("updated_by_id").references(() => users.id, { onDelete: "set null" }),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+  updatedAt: timestamp("updated_at").notNull().defaultNow(),
+});
+
+// Role-Permission mapping table (many-to-many)
+export const rolePermissions = pgTable("role_permissions", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  roleId: varchar("role_id").notNull().references(() => roles.id, { onDelete: "cascade" }),
+  permissionId: varchar("permission_id").notNull().references(() => permissions.id, { onDelete: "cascade" }),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+}, (table) => ({
+  uniqueRolePermission: unique("role_permission_unique").on(table.roleId, table.permissionId),
+  roleIdIdx: index("role_permissions_role_id_idx").on(table.roleId),
+  permissionIdIdx: index("role_permissions_permission_id_idx").on(table.permissionId),
+}));
+
+export const insertPermissionSchema = createInsertSchema(permissions).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+});
+
+export const insertRoleSchema = createInsertSchema(roles).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+});
+
+export const insertRolePermissionSchema = createInsertSchema(rolePermissions).omit({
+  id: true,
+  createdAt: true,
+});
+
+export type InsertPermission = z.infer<typeof insertPermissionSchema>;
+export type InsertRole = z.infer<typeof insertRoleSchema>;
+export type InsertRolePermission = z.infer<typeof insertRolePermissionSchema>;
+
+export type Permission = typeof permissions.$inferSelect;
+export type Role = typeof roles.$inferSelect;
+export type RolePermission = typeof rolePermissions.$inferSelect;
 
 export type Vendor = typeof vendors.$inferSelect;
 export type Category = typeof categories.$inferSelect;

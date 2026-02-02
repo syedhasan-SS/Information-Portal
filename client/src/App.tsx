@@ -20,6 +20,7 @@ import TicketConfigPage from "@/pages/ticket-config";
 import DepartmentTicketsPage from "@/pages/department-tickets";
 import NotificationsPage from "@/pages/notifications";
 import OrgHierarchyPage from "@/pages/org-hierarchy";
+import RolesPage from "@/pages/roles";
 
 function Router() {
   return (
@@ -88,6 +89,11 @@ function Router() {
       <Route path="/ticket-config">
         <ProtectedRoute requiredPermission="view:config">
           <TicketConfigPage />
+        </ProtectedRoute>
+      </Route>
+      <Route path="/roles">
+        <ProtectedRoute requiredPermission="view:roles">
+          <RolesPage />
         </ProtectedRoute>
       </Route>
       {/* Fallback to 404 */}

@@ -18,6 +18,9 @@ import {
   categoryFieldOverrides,
   departments,
   subDepartments,
+  permissions,
+  roles,
+  rolePermissions,
   type Vendor,
   type Category,
   type Ticket,
@@ -35,6 +38,9 @@ import {
   type CategoryFieldOverride,
   type Department,
   type SubDepartment,
+  type Permission,
+  type Role,
+  type RolePermission,
   type InsertVendor,
   type InsertCategory,
   type InsertTicket,
@@ -50,6 +56,9 @@ import {
   type InsertCategorySettings,
   type InsertTicketFieldConfiguration,
   type InsertCategoryFieldOverride,
+  type InsertPermission,
+  type InsertRole,
+  type InsertRolePermission,
 } from "@shared/schema";
 
 export interface IStorage {
@@ -1066,6 +1075,189 @@ export class DatabaseStorage implements IStorage {
       ...dept,
       subDepartments: allSubDepartments.filter(sub => sub.departmentId === dept.id),
     }));
+  }
+
+  // ============================================
+  // Permission Methods
+  // ============================================
+
+  async getPermissions(): Promise<Permission[]> {
+    return db.select().from(permissions).orderBy(asc(permissions.category), asc(permissions.name));
+  }
+
+  async getActivePermissions(): Promise<Permission[]> {
+    return db.select().from(permissions)
+      .where(eq(permissions.isActive, true))
+      .orderBy(asc(permissions.category), asc(permissions.name));
+  }
+
+  async getPermissionById(id: string): Promise<Permission | undefined> {
+    const result = await db.select().from(permissions).where(eq(permissions.id, id));
+    return result[0];
+  }
+
+  async getPermissionByName(name: string): Promise<Permission | undefined> {
+    const result = await db.select().from(permissions).where(eq(permissions.name, name));
+    return result[0];
+  }
+
+  async getPermissionsByCategory(category: string): Promise<Permission[]> {
+    return db.select().from(permissions)
+      .where(eq(permissions.category, category))
+      .orderBy(asc(permissions.name));
+  }
+
+  async createPermission(permission: InsertPermission): Promise<Permission> {
+    const result = await db.insert(permissions).values(permission).returning();
+    return result[0];
+  }
+
+  async updatePermission(id: string, updates: Partial<InsertPermission>): Promise<Permission | undefined> {
+    const result = await db.update(permissions)
+      .set({ ...updates, updatedAt: new Date() })
+      .where(eq(permissions.id, id))
+      .returning();
+    return result[0];
+  }
+
+  async deletePermission(id: string): Promise<void> {
+    await db.delete(permissions).where(eq(permissions.id, id));
+  }
+
+  // ============================================
+  // Role Methods
+  // ============================================
+
+  async getRoles(): Promise<Role[]> {
+    return db.select().from(roles).orderBy(asc(roles.name));
+  }
+
+  async getActiveRoles(): Promise<Role[]> {
+    return db.select().from(roles)
+      .where(eq(roles.isActive, true))
+      .orderBy(asc(roles.name));
+  }
+
+  async getRoleById(id: string): Promise<Role | undefined> {
+    const result = await db.select().from(roles).where(eq(roles.id, id));
+    return result[0];
+  }
+
+  async getRoleByName(name: string): Promise<Role | undefined> {
+    const result = await db.select().from(roles).where(eq(roles.name, name));
+    return result[0];
+  }
+
+  async getSystemRoles(): Promise<Role[]> {
+    return db.select().from(roles)
+      .where(eq(roles.isSystem, true))
+      .orderBy(asc(roles.name));
+  }
+
+  async getCustomRoles(): Promise<Role[]> {
+    return db.select().from(roles)
+      .where(eq(roles.isSystem, false))
+      .orderBy(asc(roles.name));
+  }
+
+  async createRole(role: InsertRole): Promise<Role> {
+    const result = await db.insert(roles).values(role).returning();
+    return result[0];
+  }
+
+  async updateRole(id: string, updates: Partial<InsertRole>): Promise<Role | undefined> {
+    const result = await db.update(roles)
+      .set({ ...updates, updatedAt: new Date() })
+      .where(eq(roles.id, id))
+      .returning();
+    return result[0];
+  }
+
+  async deleteRole(id: string): Promise<void> {
+    await db.delete(roles).where(eq(roles.id, id));
+  }
+
+  // ============================================
+  // Role-Permission Mapping Methods
+  // ============================================
+
+  async getRolePermissions(roleId: string): Promise<Permission[]> {
+    const mappings = await db.select({
+      permission: permissions,
+    })
+      .from(rolePermissions)
+      .innerJoin(permissions, eq(rolePermissions.permissionId, permissions.id))
+      .where(eq(rolePermissions.roleId, roleId));
+
+    return mappings.map(m => m.permission);
+  }
+
+  async setRolePermissions(roleId: string, permissionIds: string[]): Promise<void> {
+    // Delete all existing permissions for this role
+    await db.delete(rolePermissions).where(eq(rolePermissions.roleId, roleId));
+
+    // Insert new permissions
+    if (permissionIds.length > 0) {
+      await db.insert(rolePermissions).values(
+        permissionIds.map(permissionId => ({
+          roleId,
+          permissionId,
+        }))
+      );
+    }
+  }
+
+  async addRolePermission(roleId: string, permissionId: string): Promise<RolePermission> {
+    const result = await db.insert(rolePermissions)
+      .values({ roleId, permissionId })
+      .returning();
+    return result[0];
+  }
+
+  async removeRolePermission(roleId: string, permissionId: string): Promise<void> {
+    await db.delete(rolePermissions)
+      .where(and(
+        eq(rolePermissions.roleId, roleId),
+        eq(rolePermissions.permissionId, permissionId)
+      ));
+  }
+
+  // Get roles with their permissions (for UI display)
+  async getRolesWithPermissions(): Promise<Array<Role & { permissions: Permission[] }>> {
+    const allRoles = await this.getRoles();
+    const result: Array<Role & { permissions: Permission[] }> = [];
+
+    for (const role of allRoles) {
+      const rolePerms = await this.getRolePermissions(role.id);
+      result.push({
+        ...role,
+        permissions: rolePerms,
+      });
+    }
+
+    return result;
+  }
+
+  // Get effective permissions for a user (combines role permissions + custom permissions)
+  async getUserEffectivePermissions(userId: string): Promise<string[]> {
+    const user = await this.getUserById(userId);
+    if (!user) return [];
+
+    // Start with custom permissions if any
+    const effectivePermissions = new Set<string>(user.customPermissions || []);
+
+    // Get permissions from user's roles
+    const userRoleNames = user.roles && user.roles.length > 0 ? user.roles : [user.role];
+
+    for (const roleName of userRoleNames) {
+      const role = await this.getRoleByName(roleName);
+      if (role) {
+        const rolePerms = await this.getRolePermissions(role.id);
+        rolePerms.forEach(p => effectivePermissions.add(p.name));
+      }
+    }
+
+    return Array.from(effectivePermissions);
   }
 }
 

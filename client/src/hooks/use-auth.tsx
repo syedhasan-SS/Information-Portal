@@ -6,6 +6,7 @@ type User = {
   email: string;
   name: string;
   role: "Owner" | "Admin" | "Head" | "Manager" | "Lead" | "Associate" | "Agent";
+  roles: ("Owner" | "Admin" | "Head" | "Manager" | "Lead" | "Associate" | "Agent")[] | null; // Multi-role support
   department: string | null;
   subDepartment: string | null; // Sub-department (e.g., "Seller Support" under CX)
   profilePicture: string | null;
@@ -46,6 +47,10 @@ export const ROLE_PERMISSIONS: Record<string, string[]> = {
     "view:config",
     "edit:config",
     "view:all_tickets",
+    "view:roles",
+    "create:roles",
+    "edit:roles",
+    "delete:roles",
   ],
   Admin: [
     "view:dashboard",
@@ -63,6 +68,9 @@ export const ROLE_PERMISSIONS: Record<string, string[]> = {
     "view:config",
     "edit:config",
     "view:all_tickets",
+    "view:roles",
+    "create:roles",
+    "edit:roles",
   ],
   Head: [
     "view:dashboard",
@@ -162,13 +170,26 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       return currentUser.customPermissions.includes(permission);
     }
 
-    // Fall back to role-based permissions
-    const permissions = ROLE_PERMISSIONS[currentUser.role] || [];
-    const hasRolePermission = permissions.includes(permission);
+    // Combine permissions from all roles (multi-role support)
+    // Use roles array if available, otherwise fall back to single role
+    const userRoles = currentUser.roles && currentUser.roles.length > 0
+      ? currentUser.roles
+      : [currentUser.role];
+
+    // Collect all permissions from all assigned roles
+    const allPermissions = new Set<string>();
+    for (const role of userRoles) {
+      const rolePermissions = ROLE_PERMISSIONS[role] || [];
+      rolePermissions.forEach(p => allPermissions.add(p));
+    }
+
+    const hasRolePermission = allPermissions.has(permission);
 
     // Department-based restriction for Agents creating tickets
     // Only Seller Support and Customer Support agents can create tickets
-    if (currentUser.role === "Agent" && permission === "create:tickets") {
+    // Note: If user has Admin or higher role, they bypass this restriction
+    const hasHigherRole = userRoles.some(r => ["Owner", "Admin", "Head", "Manager", "Lead"].includes(r));
+    if (!hasHigherRole && userRoles.includes("Agent") && permission === "create:tickets") {
       const isSellerSupport = currentUser.subDepartment === "Seller Support";
       const isCustomerSupport = currentUser.department === "CX" || currentUser.subDepartment === "Customer Support";
       return hasRolePermission && (isSellerSupport || isCustomerSupport);
@@ -177,9 +198,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     return hasRolePermission;
   };
 
-  const hasRole = (roles: string[]): boolean => {
+  const hasRole = (rolesToCheck: string[]): boolean => {
     if (!currentUser) return false;
-    return roles.includes(currentUser.role);
+    // Check against all assigned roles (multi-role support)
+    const userRoles = currentUser.roles && currentUser.roles.length > 0
+      ? currentUser.roles
+      : [currentUser.role];
+    return userRoles.some(r => rolesToCheck.includes(r));
   };
 
   const logout = async () => {
