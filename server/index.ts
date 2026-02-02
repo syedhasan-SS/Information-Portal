@@ -3,6 +3,7 @@ import express, { type Request, Response, NextFunction } from "express";
 import { registerRoutes } from "./routes";
 import { serveStatic } from "./static";
 import { createServer } from "http";
+import { storage } from "./storage";
 
 const app = express();
 const httpServer = createServer(app);
@@ -34,6 +35,33 @@ export function log(message: string, source = "express") {
   console.log(`${formattedTime} [${source}] ${message}`);
 }
 
+// Fix department types for vendorHandle and customer fields on startup
+async function fixFieldDepartmentTypes() {
+  try {
+    const existingFields = await storage.getTicketFieldConfigurations();
+
+    // Fix vendorHandle to be Seller Support only
+    const vendorHandleField = existingFields.find(f => f.fieldName === "vendorHandle");
+    if (vendorHandleField && vendorHandleField.departmentType !== "Seller Support") {
+      await storage.updateTicketFieldConfiguration(vendorHandleField.id, {
+        departmentType: "Seller Support",
+      });
+      log(`Fixed vendorHandle departmentType: ${vendorHandleField.departmentType} -> Seller Support`, "startup");
+    }
+
+    // Fix customer to be Customer Support only
+    const customerField = existingFields.find(f => f.fieldName === "customer");
+    if (customerField && customerField.departmentType !== "Customer Support") {
+      await storage.updateTicketFieldConfiguration(customerField.id, {
+        departmentType: "Customer Support",
+      });
+      log(`Fixed customer departmentType: ${customerField.departmentType} -> Customer Support`, "startup");
+    }
+  } catch (error) {
+    console.error("Failed to fix field department types:", error);
+  }
+}
+
 app.use((req, res, next) => {
   const start = Date.now();
   const path = req.path;
@@ -62,6 +90,9 @@ app.use((req, res, next) => {
 
 (async () => {
   await registerRoutes(httpServer, app);
+
+  // Fix field department types on startup
+  await fixFieldDepartmentTypes();
 
   app.use((err: any, _req: Request, res: Response, next: NextFunction) => {
     const status = err.status || err.statusCode || 500;

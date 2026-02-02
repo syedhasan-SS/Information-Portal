@@ -116,11 +116,6 @@ export default function MyTicketsPage() {
   // Role + Department determines access (e.g., Agent in Seller Support vs Agent in Finance)
   // Seller Support is a sub-department of CX
   const userDepartmentType = useMemo(() => {
-    console.log("[DEBUG] User department info:", {
-      department: user?.department,
-      subDepartment: user?.subDepartment,
-      role: user?.role,
-    });
     if (!user) return "Seller Support"; // Default fallback
     // Check if user's sub-department is "Seller Support" (under CX)
     if (user.subDepartment === "Seller Support") return "Seller Support";
@@ -129,8 +124,6 @@ export default function MyTicketsPage() {
     // Default to Seller Support for users without department
     return "Seller Support";
   }, [user]);
-
-  console.log("[DEBUG] Calculated userDepartmentType:", userDepartmentType);
 
   const { data: tickets, isLoading } = useQuery({
     queryKey: ["tickets"],
@@ -163,12 +156,9 @@ export default function MyTicketsPage() {
   // 2. User's department type (default visibility)
   const sortedVisibleFields = useMemo(() => {
     if (!fieldConfigs) return [];
-    console.log("[DEBUG] All fieldConfigs:", fieldConfigs.map((f: any) => ({ fieldName: f.fieldName, departmentType: f.departmentType, isEnabled: f.isEnabled })));
-    const filtered = fieldConfigs
+    return fieldConfigs
       .filter((f: any) => f.isEnabled)
       .sort((a: any, b: any) => a.displayOrder - b.displayOrder);
-    console.log("[DEBUG] sortedVisibleFields (all enabled):", filtered.map((f: any) => f.fieldName));
-    return filtered;
   }, [fieldConfigs]);
 
   // Helper to get field config by name
