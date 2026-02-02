@@ -103,10 +103,12 @@ export default function MyTicketsPage() {
   });
   const [vendorComboOpen, setVendorComboOpen] = useState(false);
   const [orderIdsComboOpen, setOrderIdsComboOpen] = useState(false);
+  const [categoryComboOpen, setCategoryComboOpen] = useState(false);
   const [selectedOrderIds, setSelectedOrderIds] = useState<string[]>([]);
   const [availableOrderIds, setAvailableOrderIds] = useState<string[]>([]);
   const [vendorSearchValue, setVendorSearchValue] = useState("");
   const [orderIdSearchValue, setOrderIdSearchValue] = useState("");
+  const [categorySearchValue, setCategorySearchValue] = useState("");
   const [resolvedFields, setResolvedFields] = useState<ResolvedField[]>([]);
   const [isLoadingFields, setIsLoadingFields] = useState(false);
   const queryClient = useQueryClient();
@@ -746,28 +748,106 @@ export default function MyTicketsPage() {
                 );
               }
 
-              // Category field
+              // Category field - Searchable hierarchical dropdown
               if (fieldName === "categoryId") {
+                const selectedCategory = categories?.find(c => c.id === newTicket.categoryId);
+                const getCategoryDisplayPath = (cat: typeof selectedCategory) => {
+                  if (!cat) return "";
+                  // Display as L2 > L3 > L4 (excluding L1 which is department)
+                  const parts = [cat.l2, cat.l3];
+                  if (cat.l4) parts.push(cat.l4);
+                  return parts.join(" > ");
+                };
+
                 return (
                   <div key={fieldName} className="space-y-2">
                     <Label htmlFor="category">
                       {getFieldLabel(fieldName)} {isFieldRequired(fieldName) ? <span className="text-red-500">*</span> : ""}
                     </Label>
-                    <Select
-                      value={newTicket.categoryId}
-                      onValueChange={(val) => setNewTicket({ ...newTicket, categoryId: val })}
+                    <Popover
+                      open={categoryComboOpen}
+                      onOpenChange={(open) => {
+                        setCategoryComboOpen(open);
+                        if (!open) setCategorySearchValue("");
+                      }}
                     >
-                      <SelectTrigger data-testid="select-category">
-                        <SelectValue placeholder="Select category" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {filteredCategories.map((c) => (
-                          <SelectItem key={c.id} value={c.id}>
-                            {c.l3} {c.l4 && `> ${c.l4}`}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
+                      <PopoverTrigger asChild>
+                        <Button
+                          variant="outline"
+                          role="combobox"
+                          aria-expanded={categoryComboOpen}
+                          className="w-full justify-between font-normal h-auto min-h-10 text-left"
+                          data-testid="select-category"
+                        >
+                          <span className={selectedCategory ? "" : "text-muted-foreground"}>
+                            {selectedCategory ? getCategoryDisplayPath(selectedCategory) : "Search or select category..."}
+                          </span>
+                          <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+                        </Button>
+                      </PopoverTrigger>
+                      <PopoverContent className="w-[400px] p-0" align="start">
+                        <Command shouldFilter={false}>
+                          <CommandInput
+                            placeholder="Type to search categories..."
+                            value={categorySearchValue}
+                            onValueChange={setCategorySearchValue}
+                          />
+                          <CommandList className="max-h-[300px]">
+                            <CommandEmpty>
+                              <p className="text-sm text-muted-foreground p-2">
+                                No categories found matching "{categorySearchValue}"
+                              </p>
+                            </CommandEmpty>
+                            <CommandGroup>
+                              {filteredCategories
+                                .filter((c) => {
+                                  if (!categorySearchValue) return true;
+                                  const search = categorySearchValue.toLowerCase();
+                                  // Search across all levels
+                                  return (
+                                    c.l2.toLowerCase().includes(search) ||
+                                    c.l3.toLowerCase().includes(search) ||
+                                    (c.l4 && c.l4.toLowerCase().includes(search)) ||
+                                    c.path.toLowerCase().includes(search)
+                                  );
+                                })
+                                .map((c) => (
+                                  <CommandItem
+                                    key={c.id}
+                                    value={c.id}
+                                    onSelect={() => {
+                                      setNewTicket({ ...newTicket, categoryId: c.id });
+                                      setCategoryComboOpen(false);
+                                      setCategorySearchValue("");
+                                    }}
+                                    className="flex items-center gap-2"
+                                  >
+                                    <Check
+                                      className={cn(
+                                        "h-4 w-4 shrink-0",
+                                        newTicket.categoryId === c.id ? "opacity-100" : "opacity-0"
+                                      )}
+                                    />
+                                    <div className="flex flex-col">
+                                      <span className="font-medium">
+                                        {c.l4 || c.l3}
+                                      </span>
+                                      <span className="text-xs text-muted-foreground">
+                                        {getCategoryDisplayPath(c)}
+                                      </span>
+                                    </div>
+                                  </CommandItem>
+                                ))}
+                            </CommandGroup>
+                          </CommandList>
+                        </Command>
+                      </PopoverContent>
+                    </Popover>
+                    {selectedCategory && (
+                      <p className="text-xs text-muted-foreground">
+                        Full path: {selectedCategory.issueType} &gt; {selectedCategory.l1} &gt; {getCategoryDisplayPath(selectedCategory)}
+                      </p>
+                    )}
                   </div>
                 );
               }
