@@ -99,14 +99,23 @@ export default function RolesPage() {
   const [activeTab, setActiveTab] = useState("system");
   const [showRoleDialog, setShowRoleDialog] = useState(false);
   const [showPermissionDialog, setShowPermissionDialog] = useState(false);
+  const [showCreatePermissionDialog, setShowCreatePermissionDialog] = useState(false);
   const [editingRole, setEditingRole] = useState<Role | null>(null);
+  const [editingPermission, setEditingPermission] = useState<Permission | null>(null);
   const [selectedPermissions, setSelectedPermissions] = useState<Set<string>>(new Set());
   const [roleForm, setRoleForm] = useState({
     name: "",
     displayName: "",
     description: "",
   });
+  const [permissionForm, setPermissionForm] = useState({
+    name: "",
+    displayName: "",
+    description: "",
+    category: "",
+  });
   const [deleteConfirm, setDeleteConfirm] = useState<Role | null>(null);
+  const [deletePermissionConfirm, setDeletePermissionConfirm] = useState<Permission | null>(null);
 
   const { data: roles, isLoading: rolesLoading } = useQuery({
     queryKey: ["roles"],
@@ -236,6 +245,54 @@ export default function RolesPage() {
     },
   });
 
+  // Create/Update permission mutation
+  const savePermissionMutation = useMutation({
+    mutationFn: async (data: { permission: typeof permissionForm; isEdit: boolean; permissionId?: string }) => {
+      const url = data.isEdit ? `/api/permissions/${data.permissionId}` : "/api/permissions";
+      const method = data.isEdit ? "PUT" : "POST";
+
+      const res = await fetch(url, {
+        method,
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(data.permission),
+      });
+
+      if (!res.ok) {
+        const err = await res.json();
+        throw new Error(err.error || "Failed to save permission");
+      }
+      return res.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["permissions"] });
+      toast({ title: "Success", description: editingPermission ? "Permission updated" : "Permission created" });
+      handleClosePermissionDialog();
+    },
+    onError: (err: Error) => {
+      toast({ title: "Error", description: err.message, variant: "destructive" });
+    },
+  });
+
+  // Delete permission mutation
+  const deletePermissionMutation = useMutation({
+    mutationFn: async (permissionId: string) => {
+      const res = await fetch(`/api/permissions/${permissionId}`, { method: "DELETE" });
+      if (!res.ok) {
+        const err = await res.json();
+        throw new Error(err.error || "Failed to delete permission");
+      }
+      return res.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["permissions"] });
+      toast({ title: "Success", description: "Permission deleted" });
+      setDeletePermissionConfirm(null);
+    },
+    onError: (err: Error) => {
+      toast({ title: "Error", description: err.message, variant: "destructive" });
+    },
+  });
+
   const handleOpenCreateDialog = () => {
     setEditingRole(null);
     setRoleForm({ name: "", displayName: "", description: "" });
@@ -266,6 +323,37 @@ export default function RolesPage() {
     setEditingRole(null);
     setRoleForm({ name: "", displayName: "", description: "" });
     setSelectedPermissions(new Set());
+  };
+
+  const handleOpenCreatePermissionDialog = () => {
+    setEditingPermission(null);
+    setPermissionForm({ name: "", displayName: "", description: "", category: "" });
+    setShowCreatePermissionDialog(true);
+  };
+
+  const handleOpenEditPermissionDialog = (permission: Permission) => {
+    setEditingPermission(permission);
+    setPermissionForm({
+      name: permission.name,
+      displayName: permission.displayName,
+      description: permission.description || "",
+      category: permission.category,
+    });
+    setShowCreatePermissionDialog(true);
+  };
+
+  const handleClosePermissionDialog = () => {
+    setShowCreatePermissionDialog(false);
+    setEditingPermission(null);
+    setPermissionForm({ name: "", displayName: "", description: "", category: "" });
+  };
+
+  const handleSavePermission = () => {
+    savePermissionMutation.mutate({
+      permission: permissionForm,
+      isEdit: !!editingPermission,
+      permissionId: editingPermission?.id,
+    });
   };
 
   const handleSaveRole = () => {
@@ -578,6 +666,19 @@ export default function RolesPage() {
                 </div>
               ) : (
                 <div className="space-y-6">
+                  {/* Create Permission Button */}
+                  <div className="flex justify-between items-center">
+                    <p className="text-sm text-muted-foreground">
+                      Manage all permissions in the system. System permissions cannot be deleted.
+                    </p>
+                    {canCreateRoles && (
+                      <Button size="sm" onClick={handleOpenCreatePermissionDialog}>
+                        <Plus className="mr-2 h-4 w-4" />
+                        Create Permission
+                      </Button>
+                    )}
+                  </div>
+
                   {permissionsData?.grouped && Object.entries(permissionsData.grouped).sort().map(([category, perms]) => (
                     <div key={category}>
                       <h4 className="font-semibold text-sm mb-3 flex items-center gap-2">
@@ -592,6 +693,7 @@ export default function RolesPage() {
                             <TableHead>Display Name</TableHead>
                             <TableHead>Description</TableHead>
                             <TableHead>Type</TableHead>
+                            <TableHead className="w-20">Actions</TableHead>
                           </TableRow>
                         </TableHeader>
                         <TableBody>
@@ -607,6 +709,34 @@ export default function RolesPage() {
                                 <Badge variant={perm.isSystem ? "secondary" : "outline"}>
                                   {perm.isSystem ? "System" : "Custom"}
                                 </Badge>
+                              </TableCell>
+                              <TableCell>
+                                <DropdownMenu>
+                                  <DropdownMenuTrigger asChild>
+                                    <Button variant="ghost" size="sm">
+                                      <MoreVertical className="h-4 w-4" />
+                                    </Button>
+                                  </DropdownMenuTrigger>
+                                  <DropdownMenuContent align="end">
+                                    <DropdownMenuItem
+                                      onClick={() => handleOpenEditPermissionDialog(perm)}
+                                      disabled={!canEditRoles}
+                                    >
+                                      <Pencil className="mr-2 h-4 w-4" />
+                                      Edit
+                                    </DropdownMenuItem>
+                                    {!perm.isSystem && (
+                                      <DropdownMenuItem
+                                        onClick={() => setDeletePermissionConfirm(perm)}
+                                        disabled={!canDeleteRoles}
+                                        className="text-destructive"
+                                      >
+                                        <Trash2 className="mr-2 h-4 w-4" />
+                                        Delete
+                                      </DropdownMenuItem>
+                                    )}
+                                  </DropdownMenuContent>
+                                </DropdownMenu>
                               </TableCell>
                             </TableRow>
                           ))}
@@ -829,6 +959,124 @@ export default function RolesPage() {
               disabled={deleteMutation.isPending}
             >
               {deleteMutation.isPending && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+              Delete
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Create/Edit Permission Dialog */}
+      <Dialog open={showCreatePermissionDialog} onOpenChange={setShowCreatePermissionDialog}>
+        <DialogContent className="max-w-lg">
+          <DialogHeader>
+            <DialogTitle>
+              {editingPermission ? "Edit Permission" : "Create Permission"}
+            </DialogTitle>
+            <DialogDescription>
+              {editingPermission?.isSystem
+                ? "System permissions can only have their display name and description modified."
+                : "Define a new permission that can be assigned to roles."}
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="space-y-4">
+            <div className="space-y-2">
+              <Label htmlFor="perm-name">Permission Name *</Label>
+              <Input
+                id="perm-name"
+                placeholder="e.g., view:reports"
+                value={permissionForm.name}
+                onChange={(e) => setPermissionForm({ ...permissionForm, name: e.target.value })}
+                disabled={!!editingPermission?.isSystem}
+              />
+              <p className="text-xs text-muted-foreground">
+                Use format: action:resource (e.g., view:tickets, create:users)
+              </p>
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="perm-displayName">Display Name *</Label>
+              <Input
+                id="perm-displayName"
+                placeholder="e.g., View Reports"
+                value={permissionForm.displayName}
+                onChange={(e) => setPermissionForm({ ...permissionForm, displayName: e.target.value })}
+              />
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="perm-category">Category *</Label>
+              <Input
+                id="perm-category"
+                placeholder="e.g., Reports, Analytics, Settings"
+                value={permissionForm.category}
+                onChange={(e) => setPermissionForm({ ...permissionForm, category: e.target.value })}
+                disabled={!!editingPermission?.isSystem}
+                list="category-suggestions"
+              />
+              <datalist id="category-suggestions">
+                {permissionsData?.grouped && Object.keys(permissionsData.grouped).map(cat => (
+                  <option key={cat} value={cat} />
+                ))}
+              </datalist>
+              <p className="text-xs text-muted-foreground">
+                Permissions are grouped by category in the UI
+              </p>
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="perm-description">Description</Label>
+              <Textarea
+                id="perm-description"
+                placeholder="Describe what this permission allows..."
+                value={permissionForm.description}
+                onChange={(e) => setPermissionForm({ ...permissionForm, description: e.target.value })}
+              />
+            </div>
+          </div>
+
+          <DialogFooter>
+            <Button variant="outline" onClick={handleClosePermissionDialog}>
+              Cancel
+            </Button>
+            <Button
+              onClick={handleSavePermission}
+              disabled={
+                savePermissionMutation.isPending ||
+                !permissionForm.name ||
+                !permissionForm.displayName ||
+                !permissionForm.category
+              }
+            >
+              {savePermissionMutation.isPending && (
+                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+              )}
+              {editingPermission ? "Save Changes" : "Create Permission"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Delete Permission Confirmation Dialog */}
+      <Dialog open={!!deletePermissionConfirm} onOpenChange={() => setDeletePermissionConfirm(null)}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Delete Permission</DialogTitle>
+            <DialogDescription>
+              Are you sure you want to delete the permission "{deletePermissionConfirm?.displayName}"?
+              This will remove it from all roles that have it assigned.
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setDeletePermissionConfirm(null)}>
+              Cancel
+            </Button>
+            <Button
+              variant="destructive"
+              onClick={() => deletePermissionConfirm && deletePermissionMutation.mutate(deletePermissionConfirm.id)}
+              disabled={deletePermissionMutation.isPending}
+            >
+              {deletePermissionMutation.isPending && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
               Delete
             </Button>
           </DialogFooter>
