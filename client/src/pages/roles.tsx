@@ -140,10 +140,20 @@ export default function RolesPage() {
     onSuccess: (data) => {
       queryClient.invalidateQueries({ queryKey: ["roles"] });
       queryClient.invalidateQueries({ queryKey: ["permissions"] });
+
+      const hasErrors = data.errors && data.errors.length > 0;
+      const description = hasErrors
+        ? `Created ${data.permissions.created} permissions, ${data.roles.created} roles. Errors: ${data.errors.length}`
+        : `Created ${data.permissions.created} permissions, ${data.roles.created} roles. Skipped ${data.permissions.skipped} existing permissions, ${data.roles.skipped} existing roles.`;
+
       toast({
-        title: "Defaults Seeded",
-        description: `Created ${data.permissions.created} permissions, ${data.roles.created} roles`,
+        title: hasErrors ? "Seeding Completed with Errors" : "Defaults Seeded",
+        description,
+        variant: hasErrors ? "destructive" : "default",
       });
+
+      // Log full details to console for debugging
+      console.log("[Seed Results]", data);
     },
     onError: (err: Error) => {
       toast({ title: "Error", description: err.message, variant: "destructive" });

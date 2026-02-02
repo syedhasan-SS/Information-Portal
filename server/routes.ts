@@ -2323,6 +2323,7 @@ export async function registerRoutes(
       const createdRoles: any[] = [];
       const skippedPermissions: string[] = [];
       const skippedRoles: string[] = [];
+      const errors: string[] = [];
 
       // Seed permissions
       console.log("[seed-defaults] Seeding permissions...");
@@ -2336,7 +2337,9 @@ export async function registerRoutes(
           const created = await storage.createPermission(perm);
           createdPermissions.push(created);
         } catch (permError: any) {
-          console.error(`[seed-defaults] Error creating permission ${perm.name}:`, permError.message);
+          const errorMsg = `Permission ${perm.name}: ${permError.message}`;
+          console.error(`[seed-defaults] ${errorMsg}`);
+          errors.push(errorMsg);
         }
       }
       console.log(`[seed-defaults] Created ${createdPermissions.length} permissions, skipped ${skippedPermissions.length}`);
@@ -2367,21 +2370,26 @@ export async function registerRoutes(
           }
           console.log(`[seed-defaults] Created role ${role.name} with ${permIds.length} permissions`);
         } catch (roleError: any) {
-          console.error(`[seed-defaults] Error creating role ${role.name}:`, roleError.message);
+          const errorMsg = `Role ${role.name}: ${roleError.message}`;
+          console.error(`[seed-defaults] ${errorMsg}`);
+          errors.push(errorMsg);
         }
       }
       console.log(`[seed-defaults] Created ${createdRoles.length} roles, skipped ${skippedRoles.length}`);
 
       res.json({
-        message: "Seeding complete",
+        message: errors.length > 0 ? "Seeding completed with errors" : "Seeding complete",
         permissions: {
           created: createdPermissions.length,
           skipped: skippedPermissions.length,
+          skippedNames: skippedPermissions,
         },
         roles: {
           created: createdRoles.length,
           skipped: skippedRoles.length,
+          skippedNames: skippedRoles,
         },
+        errors: errors.length > 0 ? errors : undefined,
       });
     } catch (error: any) {
       console.error("[seed-defaults] Error seeding roles and permissions:", error);
