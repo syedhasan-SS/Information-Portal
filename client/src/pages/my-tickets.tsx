@@ -157,23 +157,19 @@ export default function MyTicketsPage() {
     },
   });
 
-  // Get sorted visible fields based on displayOrder and user's department type
-  // Fields with departmentType "All" are included for all users
-  // Fields matching user's department type are also included
+  // Get ALL enabled fields sorted by displayOrder
+  // Visibility is controlled by isFieldVisible() which considers:
+  // 1. Category-level overrides (if category selected)
+  // 2. User's department type (default visibility)
   const sortedVisibleFields = useMemo(() => {
     if (!fieldConfigs) return [];
     console.log("[DEBUG] All fieldConfigs:", fieldConfigs.map((f: any) => ({ fieldName: f.fieldName, departmentType: f.departmentType, isEnabled: f.isEnabled })));
     const filtered = fieldConfigs
-      .filter((f: any) => {
-        if (!f.isEnabled) return false;
-        // Include fields where departmentType is "All" or matches user's department type
-        const fieldDeptType = f.departmentType || "All";
-        return fieldDeptType === "All" || fieldDeptType === userDepartmentType;
-      })
+      .filter((f: any) => f.isEnabled)
       .sort((a: any, b: any) => a.displayOrder - b.displayOrder);
-    console.log("[DEBUG] sortedVisibleFields:", filtered.map((f: any) => f.fieldName));
+    console.log("[DEBUG] sortedVisibleFields (all enabled):", filtered.map((f: any) => f.fieldName));
     return filtered;
-  }, [fieldConfigs, userDepartmentType]);
+  }, [fieldConfigs]);
 
   // Helper to get field config by name
   const getFieldConfig = (fieldName: string) => {
@@ -252,17 +248,25 @@ export default function MyTicketsPage() {
   }, [newTicket.categoryId]);
 
   // Helper function to check if a field should be visible
+  // Priority: 1) Category override, 2) User department type default
   const isFieldVisible = (fieldName: string): boolean => {
-    // If we have resolved fields (category selected), use those
+    // If we have resolved fields (category selected), check for explicit overrides
     if (resolvedFields.length > 0) {
       const field = resolvedFields.find(f => f.fieldName === fieldName);
-      if (!field) return true; // Field not in resolved config, show it
-      return field.effectiveVisibility === "visible";
+      if (field) {
+        // Category has an explicit override for this field
+        return field.effectiveVisibility === "visible";
+      }
+      // No category override - fall through to department-based default
     }
-    // Otherwise, use base field config
-    const baseField = getFieldConfig(fieldName);
-    if (!baseField) return true; // Field not found, show it
-    return baseField.isEnabled;
+
+    // Default visibility based on user's department type
+    const baseField = sortedVisibleFields.find((f: any) => f.fieldName === fieldName);
+    if (!baseField) return false; // Field not found
+
+    const fieldDeptType = baseField.departmentType || "All";
+    // Show if field is for "All" departments OR matches user's department type
+    return fieldDeptType === "All" || fieldDeptType === userDepartmentType;
   };
 
   // Helper function to check if a field is required
