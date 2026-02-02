@@ -49,13 +49,29 @@ async function fixFieldDepartmentTypes() {
       log(`Fixed vendorHandle departmentType: ${vendorHandleField.departmentType} -> Seller Support`, "startup");
     }
 
-    // Fix customer to be Customer Support only
+    // Fix customer to be Customer Support only, or create if missing
     const customerField = existingFields.find(f => f.fieldName === "customer");
     if (customerField && customerField.departmentType !== "Customer Support") {
       await storage.updateTicketFieldConfiguration(customerField.id, {
         departmentType: "Customer Support",
       });
       log(`Fixed customer departmentType: ${customerField.departmentType} -> Customer Support`, "startup");
+    } else if (!customerField) {
+      // Customer field doesn't exist - create it
+      await storage.createTicketFieldConfiguration({
+        fieldName: "customer",
+        fieldLabel: "Customer",
+        fieldType: "text",
+        departmentType: "Customer Support",
+        isEnabled: true,
+        isRequired: true,
+        displayOrder: 1,
+        metadata: {
+          placeholder: "Enter customer name or ID",
+          helpText: "The customer associated with this ticket",
+        },
+      });
+      log(`Created missing customer field with departmentType: Customer Support`, "startup");
     }
   } catch (error) {
     console.error("Failed to fix field department types:", error);

@@ -1134,6 +1134,22 @@ export async function registerRoutes(
         await storage.updateTicketFieldConfiguration(customerField.id, {
           departmentType: "Customer Support",
         });
+      } else if (!customerField) {
+        // Customer field doesn't exist - create it
+        console.log(`[field-config] Creating missing customer field`);
+        await storage.createTicketFieldConfiguration({
+          fieldName: "customer",
+          fieldLabel: "Customer",
+          fieldType: "text",
+          departmentType: "Customer Support",
+          isEnabled: true,
+          isRequired: true,
+          displayOrder: 1,
+          metadata: {
+            placeholder: "Enter customer name or ID",
+            helpText: "The customer associated with this ticket",
+          },
+        });
       }
 
       // Re-fetch after potential fixes
