@@ -32,6 +32,8 @@ import {
   Bell,
   Network,
   Shield,
+  FlaskConical,
+  ChevronDown,
 } from "lucide-react";
 import type { Ticket as TicketType, User as UserType } from "@shared/schema";
 
@@ -192,17 +194,45 @@ export default function DashboardPage() {
                 {hasPermission("view:vendors") && (
                   <NavButton onClick={() => setLocation("/vendors")} icon={Store} label="Vendors" />
                 )}
-                {hasPermission("view:users") && (
-                  <NavButton onClick={() => setLocation("/users")} icon={Users} label="Users" />
-                )}
                 {hasPermission("view:analytics") && (
                   <NavButton onClick={() => setLocation("/analytics")} icon={BarChart3} label="Analytics" />
                 )}
-                {hasPermission("view:config") && (
-                  <NavButton onClick={() => setLocation("/ticket-config")} icon={Settings} label="Ticket Manager" />
-                )}
-                {hasPermission("view:roles") && (
-                  <NavButton onClick={() => setLocation("/roles")} icon={Shield} label="Roles" />
+                {/* Labs dropdown - contains admin/config features */}
+                {(hasPermission("view:config") || hasPermission("view:users") || hasPermission("view:roles")) && (
+                  <DropdownMenu>
+                    <DropdownMenuTrigger asChild>
+                      <button
+                        className="flex items-center gap-2 rounded-lg px-3 py-2 text-sm font-medium text-muted-foreground hover:bg-muted hover:text-foreground transition-colors"
+                        data-testid="nav-labs"
+                      >
+                        <FlaskConical className="h-4 w-4" />
+                        Labs
+                        <ChevronDown className="h-3 w-3" />
+                      </button>
+                    </DropdownMenuTrigger>
+                    <DropdownMenuContent align="end" className="w-48">
+                      <DropdownMenuLabel>Administration</DropdownMenuLabel>
+                      <DropdownMenuSeparator />
+                      {hasPermission("view:config") && (
+                        <DropdownMenuItem onClick={() => setLocation("/ticket-config")}>
+                          <Settings className="mr-2 h-4 w-4" />
+                          Ticket Manager
+                        </DropdownMenuItem>
+                      )}
+                      {hasPermission("view:users") && (
+                        <DropdownMenuItem onClick={() => setLocation("/users")}>
+                          <Users className="mr-2 h-4 w-4" />
+                          User Management
+                        </DropdownMenuItem>
+                      )}
+                      {hasPermission("view:roles") && (
+                        <DropdownMenuItem onClick={() => setLocation("/roles")}>
+                          <Shield className="mr-2 h-4 w-4" />
+                          Roles Management
+                        </DropdownMenuItem>
+                      )}
+                    </DropdownMenuContent>
+                  </DropdownMenu>
                 )}
               </nav>
 
