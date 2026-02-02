@@ -22,6 +22,100 @@ import {
 } from "./notifications";
 import { auditService } from "./audit-service";
 
+// Hardcoded default permissions (fallback when database is empty)
+const HARDCODED_PERMISSIONS = [
+  { id: "hc-p-1", name: "view:dashboard", displayName: "View Dashboard", category: "General", isSystem: true, isActive: true },
+  { id: "hc-p-2", name: "view:tickets", displayName: "View Tickets", category: "Tickets", isSystem: true, isActive: true },
+  { id: "hc-p-3", name: "create:tickets", displayName: "Create Tickets", category: "Tickets", isSystem: true, isActive: true },
+  { id: "hc-p-4", name: "edit:tickets", displayName: "Edit Tickets", category: "Tickets", isSystem: true, isActive: true },
+  { id: "hc-p-5", name: "delete:tickets", displayName: "Delete Tickets", category: "Tickets", isSystem: true, isActive: true },
+  { id: "hc-p-6", name: "view:all_tickets", displayName: "View All Tickets", category: "Tickets", isSystem: true, isActive: true },
+  { id: "hc-p-7", name: "view:department_tickets", displayName: "View Department Tickets", category: "Tickets", isSystem: true, isActive: true },
+  { id: "hc-p-8", name: "view:assigned_tickets", displayName: "View Assigned Tickets", category: "Tickets", isSystem: true, isActive: true },
+  { id: "hc-p-9", name: "view:team_tickets", displayName: "View Team Tickets", category: "Tickets", isSystem: true, isActive: true },
+  { id: "hc-p-10", name: "view:users", displayName: "View Users", category: "Users", isSystem: true, isActive: true },
+  { id: "hc-p-11", name: "create:users", displayName: "Create Users", category: "Users", isSystem: true, isActive: true },
+  { id: "hc-p-12", name: "edit:users", displayName: "Edit Users", category: "Users", isSystem: true, isActive: true },
+  { id: "hc-p-13", name: "delete:users", displayName: "Delete Users", category: "Users", isSystem: true, isActive: true },
+  { id: "hc-p-14", name: "view:department_users", displayName: "View Department Users", category: "Users", isSystem: true, isActive: true },
+  { id: "hc-p-15", name: "view:vendors", displayName: "View Vendors", category: "Vendors", isSystem: true, isActive: true },
+  { id: "hc-p-16", name: "create:vendors", displayName: "Create Vendors", category: "Vendors", isSystem: true, isActive: true },
+  { id: "hc-p-17", name: "edit:vendors", displayName: "Edit Vendors", category: "Vendors", isSystem: true, isActive: true },
+  { id: "hc-p-18", name: "delete:vendors", displayName: "Delete Vendors", category: "Vendors", isSystem: true, isActive: true },
+  { id: "hc-p-19", name: "view:analytics", displayName: "View Analytics", category: "Analytics", isSystem: true, isActive: true },
+  { id: "hc-p-20", name: "view:config", displayName: "View Configuration", category: "Settings", isSystem: true, isActive: true },
+  { id: "hc-p-21", name: "edit:config", displayName: "Edit Configuration", category: "Settings", isSystem: true, isActive: true },
+  { id: "hc-p-22", name: "view:roles", displayName: "View Roles", category: "Settings", isSystem: true, isActive: true },
+  { id: "hc-p-23", name: "create:roles", displayName: "Create Roles", category: "Settings", isSystem: true, isActive: true },
+  { id: "hc-p-24", name: "edit:roles", displayName: "Edit Roles", category: "Settings", isSystem: true, isActive: true },
+  { id: "hc-p-25", name: "delete:roles", displayName: "Delete Roles", category: "Settings", isSystem: true, isActive: true },
+];
+
+// Hardcoded role permissions mapping
+const HARDCODED_ROLE_PERMISSIONS: Record<string, string[]> = {
+  Owner: [
+    "view:dashboard", "view:tickets", "create:tickets", "edit:tickets", "delete:tickets",
+    "view:users", "create:users", "edit:users", "delete:users",
+    "view:vendors", "create:vendors", "edit:vendors", "delete:vendors",
+    "view:analytics", "view:config", "edit:config", "view:all_tickets",
+    "view:roles", "create:roles", "edit:roles", "delete:roles",
+  ],
+  Admin: [
+    "view:dashboard", "view:tickets", "create:tickets", "edit:tickets", "delete:tickets",
+    "view:users", "create:users", "edit:users",
+    "view:vendors", "create:vendors", "edit:vendors",
+    "view:analytics", "view:config", "edit:config", "view:all_tickets",
+    "view:roles", "create:roles", "edit:roles",
+  ],
+  Head: [
+    "view:dashboard", "view:tickets", "create:tickets", "edit:tickets",
+    "view:users", "view:vendors", "view:analytics",
+    "view:department_tickets", "view:department_users",
+  ],
+  Manager: [
+    "view:dashboard", "view:tickets", "create:tickets", "edit:tickets",
+    "view:vendors", "view:department_tickets", "view:department_users",
+  ],
+  Lead: [
+    "view:dashboard", "view:tickets", "create:tickets", "edit:tickets",
+    "view:vendors", "view:team_tickets",
+  ],
+  Associate: [
+    "view:dashboard", "view:tickets", "create:tickets", "edit:tickets",
+    "view:assigned_tickets",
+  ],
+  Agent: [
+    "view:dashboard", "view:tickets", "create:tickets", "edit:tickets",
+    "view:assigned_tickets", "view:department_tickets",
+  ],
+};
+
+// Helper to build hardcoded roles with their permissions
+function getHardcodedRolesWithPermissions() {
+  const roleDescriptions: Record<string, string> = {
+    Owner: "Full system access",
+    Admin: "Administrative access",
+    Head: "Department leadership access",
+    Manager: "Team management access",
+    Lead: "Team lead access",
+    Associate: "Standard employee access",
+    Agent: "Support agent access",
+  };
+
+  return Object.entries(HARDCODED_ROLE_PERMISSIONS).map(([roleName, permNames], index) => ({
+    id: `hc-r-${index + 1}`,
+    name: roleName,
+    displayName: roleName === "Admin" ? "Administrator" : roleName === "Head" ? "Department Head" : roleName === "Lead" ? "Team Lead" : roleName,
+    description: roleDescriptions[roleName] || "",
+    isSystem: true,
+    isActive: true,
+    permissions: permNames.map(permName => {
+      const perm = HARDCODED_PERMISSIONS.find(p => p.name === permName);
+      return perm || { id: "", name: permName, displayName: permName, category: "Unknown", isSystem: true, isActive: true };
+    }),
+  }));
+}
+
 export async function registerRoutes(
   httpServer: Server,
   app: Express
@@ -2133,7 +2227,14 @@ export async function registerRoutes(
   // Get all permissions
   app.get("/api/permissions", async (_req, res) => {
     try {
-      const allPermissions = await storage.getPermissions();
+      let allPermissions = await storage.getPermissions();
+
+      // Fallback to hardcoded permissions if database is empty
+      if (!allPermissions || allPermissions.length === 0) {
+        console.log("[permissions] Database empty, using hardcoded defaults");
+        allPermissions = HARDCODED_PERMISSIONS as any;
+      }
+
       // Group by category
       const grouped = allPermissions.reduce((acc, perm) => {
         if (!acc[perm.category]) {
@@ -2145,8 +2246,16 @@ export async function registerRoutes(
 
       res.json({ permissions: allPermissions, grouped });
     } catch (error: any) {
-      console.error("Error fetching permissions:", error);
-      res.status(500).json({ error: error.message });
+      // On database error, return hardcoded defaults
+      console.error("Error fetching permissions, using hardcoded:", error);
+      const grouped = HARDCODED_PERMISSIONS.reduce((acc, perm) => {
+        if (!acc[perm.category]) {
+          acc[perm.category] = [];
+        }
+        acc[perm.category].push(perm);
+        return acc;
+      }, {} as Record<string, any[]>);
+      res.json({ permissions: HARDCODED_PERMISSIONS, grouped });
     }
   });
 
@@ -2404,10 +2513,19 @@ export async function registerRoutes(
   app.get("/api/roles", async (_req, res) => {
     try {
       const rolesWithPerms = await storage.getRolesWithPermissions();
+
+      // Fallback to hardcoded roles if database is empty
+      if (!rolesWithPerms || rolesWithPerms.length === 0) {
+        console.log("[roles] Database empty, using hardcoded defaults");
+        res.json(getHardcodedRolesWithPermissions());
+        return;
+      }
+
       res.json(rolesWithPerms);
     } catch (error: any) {
-      console.error("Error fetching roles:", error);
-      res.status(500).json({ error: error.message });
+      // On database error, return hardcoded defaults
+      console.error("Error fetching roles, using hardcoded:", error);
+      res.json(getHardcodedRolesWithPermissions());
     }
   });
 
