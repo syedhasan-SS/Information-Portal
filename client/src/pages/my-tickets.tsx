@@ -71,6 +71,28 @@ async function getTickets(): Promise<Ticket[]> {
   return res.json();
 }
 
+// Unified ticket config type from the new category system
+type TicketConfig = {
+  id: string;
+  issueType: "Complaint" | "Request" | "Information";
+  l1: string;
+  l2: string;
+  l3: string;
+  l4: string | null;
+  description: string;
+  departmentType: "Seller Support" | "Customer Support" | "All";
+  isActive: boolean;
+  slaResponseHours: number | null;
+  slaResolutionHours: number;
+};
+
+async function getTicketConfigs(): Promise<TicketConfig[]> {
+  const res = await fetch("/api/config/ticket-configs");
+  if (!res.ok) throw new Error("Failed to fetch ticket configs");
+  return res.json();
+}
+
+// Keep old categories API as fallback
 async function getCategories(): Promise<Category[]> {
   const res = await fetch("/api/categories");
   if (!res.ok) throw new Error("Failed to fetch categories");
@@ -137,6 +159,12 @@ export default function MyTicketsPage() {
     queryFn: getCategories,
   });
 
+  // Fetch unified ticket configs from the new category system
+  const { data: ticketConfigs } = useQuery({
+    queryKey: ["ticket-configs"],
+    queryFn: getTicketConfigs,
+  });
+
   const { data: vendors } = useQuery({
     queryKey: ["vendors"],
     queryFn: getVendors,
@@ -168,16 +196,35 @@ export default function MyTicketsPage() {
     return sortedVisibleFields.find((f: any) => f.fieldName === fieldName);
   };
 
-  const categoryMap = categories?.reduce((acc, cat) => {
+  // Use ticketConfigs from the new system, fallback to old categories
+  const availableCategories = useMemo(() => {
+    // Prefer new ticket configs system
+    if (ticketConfigs && ticketConfigs.length > 0) {
+      return ticketConfigs.filter(config => config.isActive).map(config => ({
+        id: config.id,
+        issueType: config.issueType,
+        l1: config.l1,
+        l2: config.l2,
+        l3: config.l3,
+        l4: config.l4,
+        path: `${config.issueType} > ${config.l1} > ${config.l2} > ${config.l3}${config.l4 ? ` > ${config.l4}` : ''}`,
+        issuePriorityPoints: 10, // Default, actual priority calculated separately
+      }));
+    }
+    // Fallback to old categories
+    return categories || [];
+  }, [ticketConfigs, categories]);
+
+  const categoryMap = availableCategories.reduce((acc, cat) => {
     acc[cat.id] = cat;
     return acc;
-  }, {} as Record<string, Category>) || {};
+  }, {} as Record<string, typeof availableCategories[0]>) || {};
 
-  const filteredCategories = categories?.filter((cat) => {
+  const filteredCategories = availableCategories.filter((cat) => {
     if (newTicket.department && cat.l1 !== newTicket.department) return false;
     if (newTicket.issueType && cat.issueType !== newTicket.issueType) return false;
     return true;
-  }) || [];
+  });
 
   // Fetch order IDs from BigQuery when vendor is selected
   useEffect(() => {
@@ -750,8 +797,8 @@ export default function MyTicketsPage() {
 
               // Category field - Searchable hierarchical dropdown
               if (fieldName === "categoryId") {
-                const selectedCategory = categories?.find(c => c.id === newTicket.categoryId);
-                const getCategoryDisplayPath = (cat: typeof selectedCategory) => {
+                const selectedCategory = availableCategories.find(c => c.id === newTicket.categoryId);
+                const getCategoryDisplayPath = (cat: typeof availableCategories[0] | undefined) => {
                   if (!cat) return "";
                   // Display as L2 > L3 > L4 (excluding L1 which is department)
                   const parts = [cat.l2, cat.l3];
