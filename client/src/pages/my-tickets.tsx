@@ -119,8 +119,8 @@ export default function MyTicketsPage() {
     if (!user) return "Seller Support"; // Default fallback
     // Check if user's sub-department is "Seller Support" (under CX)
     if (user.subDepartment === "Seller Support") return "Seller Support";
-    // Check if user is in CX but not Seller Support (they handle Customer Support)
-    if (user.department === "CX" || user.department === "Customer Support") return "Customer Support";
+    // Check if user is in Customer Support (via department OR sub-department)
+    if (user.department === "CX" || user.department === "Customer Support" || user.subDepartment === "Customer Support") return "Customer Support";
     // Default to Seller Support for users without department
     return "Seller Support";
   }, [user]);
