@@ -9,7 +9,7 @@ import { Badge } from "@/components/ui/badge";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Textarea } from "@/components/ui/textarea";
 import { useToast } from "@/hooks/use-toast";
-import { useAuth } from "@/hooks/use-auth";
+import { useAuth, ROLE_PERMISSIONS } from "@/hooks/use-auth";
 import {
   Dialog,
   DialogContent,
@@ -544,6 +544,10 @@ export default function RolesPage() {
                   <Key className="h-4 w-4" />
                   Permissions
                 </TabsTrigger>
+                <TabsTrigger value="defaults" className="gap-2">
+                  <Shield className="h-4 w-4" />
+                  Hardcoded Defaults
+                </TabsTrigger>
               </TabsList>
             </div>
 
@@ -617,6 +621,66 @@ export default function RolesPage() {
                   )}
                 </div>
               )}
+            </TabsContent>
+
+            <TabsContent value="defaults" className="mt-0 p-4">
+              <div className="space-y-6">
+                <div className="bg-amber-50 dark:bg-amber-950 border border-amber-200 dark:border-amber-800 rounded-lg p-4 mb-6">
+                  <h4 className="font-semibold text-amber-800 dark:text-amber-200 mb-2">Hardcoded Default Permissions</h4>
+                  <p className="text-sm text-amber-700 dark:text-amber-300">
+                    These are the default role permissions defined in the codebase. They are used as a fallback when database permissions are not available.
+                    Click "Seed Defaults" above to copy these to the database for customization.
+                  </p>
+                </div>
+
+                {Object.entries(ROLE_PERMISSIONS).map(([roleName, permissions]) => (
+                  <div key={roleName} className="border rounded-lg p-4">
+                    <div className="flex items-center justify-between mb-3">
+                      <h4 className="font-semibold text-lg flex items-center gap-2">
+                        <Shield className="h-5 w-5 text-primary" />
+                        {roleName}
+                      </h4>
+                      <Badge variant="secondary">{permissions.length} permissions</Badge>
+                    </div>
+                    <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-2">
+                      {permissions.map((perm) => (
+                        <div
+                          key={perm}
+                          className="flex items-center gap-2 text-sm bg-muted/50 rounded px-2 py-1"
+                        >
+                          <Check className="h-3 w-3 text-green-600" />
+                          <span className="font-mono text-xs">{perm}</span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                ))}
+
+                <div className="border-t pt-6 mt-6">
+                  <h4 className="font-semibold mb-4">All Available Permissions</h4>
+                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                    {[
+                      { category: "General", permissions: ["view:dashboard"] },
+                      { category: "Tickets", permissions: ["view:tickets", "create:tickets", "edit:tickets", "delete:tickets", "view:all_tickets", "view:department_tickets", "view:assigned_tickets", "view:team_tickets"] },
+                      { category: "Users", permissions: ["view:users", "create:users", "edit:users", "delete:users", "view:department_users"] },
+                      { category: "Vendors", permissions: ["view:vendors", "create:vendors", "edit:vendors", "delete:vendors"] },
+                      { category: "Analytics", permissions: ["view:analytics"] },
+                      { category: "Settings", permissions: ["view:config", "edit:config", "view:roles", "create:roles", "edit:roles", "delete:roles"] },
+                    ].map(({ category, permissions }) => (
+                      <div key={category} className="border rounded-lg p-3">
+                        <h5 className="font-medium text-sm mb-2 text-muted-foreground">{category}</h5>
+                        <div className="space-y-1">
+                          {permissions.map((perm) => (
+                            <div key={perm} className="font-mono text-xs bg-muted/30 rounded px-2 py-1">
+                              {perm}
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              </div>
             </TabsContent>
           </Tabs>
         </Card>
