@@ -31,6 +31,7 @@ import {
   LogOut,
   Bell,
   Network,
+  Shield,
 } from "lucide-react";
 import type { Ticket as TicketType, User as UserType } from "@shared/schema";
 
@@ -199,6 +200,9 @@ export default function DashboardPage() {
                 )}
                 {hasPermission("view:config") && (
                   <NavButton onClick={() => setLocation("/ticket-config")} icon={Settings} label="Ticket Manager" />
+                )}
+                {hasPermission("view:roles") && (
+                  <NavButton onClick={() => setLocation("/roles")} icon={Shield} label="Roles" />
                 )}
               </nav>
 
