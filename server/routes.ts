@@ -1616,6 +1616,45 @@ export async function registerRoutes(
     }
   });
 
+  // Remove duplicate field configurations (keep only the first occurrence of each fieldName)
+  app.post("/api/config/field-configurations/remove-duplicates", async (_req, res) => {
+    try {
+      const existingFields = await storage.getTicketFieldConfigurations();
+      const fieldNameMap = new Map<string, string[]>(); // fieldName -> array of IDs
+
+      // Group fields by fieldName
+      for (const field of existingFields) {
+        if (!fieldNameMap.has(field.fieldName)) {
+          fieldNameMap.set(field.fieldName, []);
+        }
+        fieldNameMap.get(field.fieldName)!.push(field.id);
+      }
+
+      const removed = [];
+      // For each fieldName that has duplicates, keep the first ID and delete the rest
+      for (const [fieldName, ids] of fieldNameMap.entries()) {
+        if (ids.length > 1) {
+          // Keep the first one, delete the rest
+          const toDelete = ids.slice(1);
+          for (const id of toDelete) {
+            await storage.deleteTicketFieldConfiguration(id);
+            removed.push({ fieldName, id });
+          }
+        }
+      }
+
+      res.json({
+        message: `Removed ${removed.length} duplicate field configuration(s)`,
+        removed,
+        duplicateFields: Array.from(fieldNameMap.entries())
+          .filter(([_, ids]) => ids.length > 1)
+          .map(([fieldName, ids]) => ({ fieldName, count: ids.length })),
+      });
+    } catch (error: any) {
+      res.status(500).json({ error: error.message });
+    }
+  });
+
   // Category Field Overrides - Configure form fields per category
   app.get("/api/config/categories/:categoryId/field-overrides", async (req, res) => {
     try {

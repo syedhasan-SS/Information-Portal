@@ -456,7 +456,17 @@ async function seed() {
     // Seed ticket field configurations
     console.log("📝 Seeding ticket field configurations...");
     for (const field of DEFAULT_TICKET_FIELDS) {
-      await db.insert(ticketFieldConfigurations).values(field).onConflictDoNothing();
+      // Check if field already exists by fieldName
+      const existing = await db.select()
+        .from(ticketFieldConfigurations)
+        .where(eq(ticketFieldConfigurations.fieldName, field.fieldName));
+
+      if (existing.length > 0) {
+        console.log(`  ↪ Field already exists: ${field.fieldName}`);
+      } else {
+        await db.insert(ticketFieldConfigurations).values(field);
+        console.log(`  ✓ Created field: ${field.fieldName}`);
+      }
     }
     console.log(`✅ Seeded ${DEFAULT_TICKET_FIELDS.length} ticket field configurations`);
 
