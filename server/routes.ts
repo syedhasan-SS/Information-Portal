@@ -411,34 +411,67 @@ export async function registerRoutes(
 
   app.put("/api/users/:id", async (req, res) => {
     try {
+      console.log("🔍 PUT /api/users/:id called");
+      console.log("User ID:", req.params.id);
+      console.log("Request body:", JSON.stringify(req.body, null, 2));
+
       const updates = { ...req.body };
+
+      // Get current user state BEFORE update
+      const currentUser = await storage.getUserById(req.params.id);
+      if (!currentUser) {
+        console.log("❌ User not found:", req.params.id);
+        return res.status(404).json({ error: "User not found" });
+      }
+      console.log("📊 Current user state:", {
+        role: currentUser.role,
+        roles: currentUser.roles,
+      });
 
       // FIX: Sync the singular 'role' field with the 'roles' array
       if (updates.roles && Array.isArray(updates.roles)) {
+        console.log("🔧 Processing roles array:", updates.roles);
         if (updates.roles.length > 0) {
           // If roles array has items, sync primary role with first item
           updates.role = updates.roles[0];
+          console.log("✅ Set role to first item in roles array:", updates.role);
         } else if (updates.roles.length === 0) {
+          console.log("⚠️  Roles array is empty, handling edge case");
           // If roles array is empty (all secondary roles removed),
           // populate it with just the primary role if role field exists
           if (updates.role) {
             updates.roles = [updates.role];
+            console.log("✅ Populated empty roles with role field:", updates.roles);
           } else {
-            // Get current user to use their existing role
-            const currentUser = await storage.getUserById(req.params.id);
-            if (currentUser && currentUser.role) {
+            // Use current user's role if no role specified
+            if (currentUser.role) {
               updates.roles = [currentUser.role];
+              console.log("✅ Populated empty roles with current user role:", updates.roles);
             }
           }
         }
+      } else {
+        console.log("ℹ️  No roles array in update, or not an array");
       }
+
+      console.log("📝 Final updates to apply:", JSON.stringify(updates, null, 2));
 
       const user = await storage.updateUser(req.params.id, updates);
       if (!user) {
+        console.log("❌ Update failed: storage.updateUser returned null");
         return res.status(404).json({ error: "User not found" });
       }
+
+      console.log("✅ User updated successfully:", {
+        id: user.id,
+        role: user.role,
+        roles: user.roles,
+      });
+
       res.json(user);
     } catch (error: any) {
+      console.error("❌ PUT /api/users/:id error:", error);
+      console.error("Error stack:", error.stack);
       res.status(500).json({ error: error.message });
     }
   });
