@@ -204,8 +204,20 @@ export async function registerRoutes(
     try {
       const parsed = insertTicketSchema.safeParse(req.body);
       if (!parsed.success) {
+        console.error('Ticket validation failed:', parsed.error);
         return res.status(400).json({ error: parsed.error.message });
       }
+
+      // Validate vendorHandle exists if provided (for Seller Support)
+      if (parsed.data.vendorHandle) {
+        const vendor = await storage.getVendorByHandle(parsed.data.vendorHandle);
+        if (!vendor) {
+          return res.status(400).json({
+            error: `Vendor with handle "${parsed.data.vendorHandle}" not found. Please select a valid vendor from the dropdown or create the vendor first.`
+          });
+        }
+      }
+
       const ticket = await storage.createTicket(parsed.data);
 
       // Create notifications for new ticket (non-blocking)
@@ -216,7 +228,16 @@ export async function registerRoutes(
 
       res.status(201).json(ticket);
     } catch (error: any) {
-      res.status(500).json({ error: error.message });
+      console.error('Failed to create ticket:', error);
+
+      // Better error messages for common issues
+      if (error.code === '23503') { // Foreign key violation
+        return res.status(400).json({
+          error: 'Invalid vendor handle or category. Please ensure the vendor exists and category is selected correctly.'
+        });
+      }
+
+      res.status(500).json({ error: error.message || 'Failed to create ticket' });
     }
   });
 
@@ -332,10 +353,16 @@ export async function registerRoutes(
         return res.status(400).json({ error: "A user with this email already exists" });
       }
 
-      // Store plain password for email before creating user
-      const plainPassword = parsed.data.password;
+      // FIX: Ensure 'role' field is synced with 'roles' array
+      const userData = { ...parsed.data };
+      if (userData.roles && Array.isArray(userData.roles) && userData.roles.length > 0) {
+        userData.role = userData.roles[0]; // Set primary role to first role in array
+      }
 
-      const user = await storage.createUser(parsed.data);
+      // Store plain password for email before creating user
+      const plainPassword = userData.password;
+
+      const user = await storage.createUser(userData);
 
       // Send welcome email with credentials (don't await to avoid blocking response)
       sendNewUserEmail(user, plainPassword).catch(err => {
@@ -350,7 +377,15 @@ export async function registerRoutes(
 
   app.patch("/api/users/:id", async (req, res) => {
     try {
-      const user = await storage.updateUser(req.params.id, req.body);
+      const updates = { ...req.body };
+
+      // FIX: Sync the singular 'role' field with the 'roles' array
+      // If roles array is being updated, set the primary role to the first role
+      if (updates.roles && Array.isArray(updates.roles) && updates.roles.length > 0) {
+        updates.role = updates.roles[0]; // Set primary role to first role in array
+      }
+
+      const user = await storage.updateUser(req.params.id, updates);
       if (!user) {
         return res.status(404).json({ error: "User not found" });
       }
@@ -362,7 +397,15 @@ export async function registerRoutes(
 
   app.put("/api/users/:id", async (req, res) => {
     try {
-      const user = await storage.updateUser(req.params.id, req.body);
+      const updates = { ...req.body };
+
+      // FIX: Sync the singular 'role' field with the 'roles' array
+      // If roles array is being updated, set the primary role to the first role
+      if (updates.roles && Array.isArray(updates.roles) && updates.roles.length > 0) {
+        updates.role = updates.roles[0]; // Set primary role to first role in array
+      }
+
+      const user = await storage.updateUser(req.params.id, updates);
       if (!user) {
         return res.status(404).json({ error: "User not found" });
       }
