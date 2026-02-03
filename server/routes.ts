@@ -2809,5 +2809,86 @@ export async function registerRoutes(
     }
   });
 
+  // Debug endpoint: Get user by email
+  app.get("/api/admin/user-by-email/:email", async (req, res) => {
+    try {
+      const allUsers = await storage.getUsers();
+      const user = allUsers.find(u => u.email.toLowerCase().includes(req.params.email.toLowerCase()));
+
+      if (!user) {
+        return res.status(404).json({ error: "User not found" });
+      }
+
+      res.json({
+        id: user.id,
+        email: user.email,
+        name: user.name,
+        role: user.role,
+        roles: user.roles,
+        department: user.department,
+        isActive: user.isActive,
+        createdAt: user.createdAt,
+        updatedAt: user.updatedAt,
+      });
+    } catch (error: any) {
+      res.status(500).json({ error: error.message });
+    }
+  });
+
+  // Force update a specific user's role (for debugging)
+  app.post("/api/admin/force-update-role", async (req, res) => {
+    try {
+      const { email, role, roles } = req.body;
+
+      if (!email || !role || !roles) {
+        return res.status(400).json({ error: "Missing required fields: email, role, roles" });
+      }
+
+      const allUsers = await storage.getUsers();
+      const user = allUsers.find(u => u.email.toLowerCase().includes(email.toLowerCase()));
+
+      if (!user) {
+        return res.status(404).json({ error: "User not found" });
+      }
+
+      console.log("🔧 Force updating user:", {
+        id: user.id,
+        email: user.email,
+        currentRole: user.role,
+        currentRoles: user.roles,
+        newRole: role,
+        newRoles: roles,
+      });
+
+      const updated = await storage.updateUser(user.id, {
+        role,
+        roles: Array.isArray(roles) ? roles : [roles],
+      });
+
+      console.log("✅ Force update result:", {
+        id: updated.id,
+        email: updated.email,
+        role: updated.role,
+        roles: updated.roles,
+      });
+
+      res.json({
+        success: true,
+        message: "User role force-updated",
+        before: {
+          role: user.role,
+          roles: user.roles,
+        },
+        after: {
+          role: updated.role,
+          roles: updated.roles,
+        },
+      });
+    } catch (error: any) {
+      console.error('Force update error:', error);
+      res.status(500).json({ error: error.message });
+    }
+  });
+
   return httpServer;
 }
