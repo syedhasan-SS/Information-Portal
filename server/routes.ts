@@ -202,23 +202,35 @@ export async function registerRoutes(
 
   app.post("/api/tickets", async (req, res) => {
     try {
+      console.log('📝 Creating ticket with data:', JSON.stringify(req.body, null, 2));
+
       const parsed = insertTicketSchema.safeParse(req.body);
       if (!parsed.success) {
-        console.error('Ticket validation failed:', parsed.error);
-        return res.status(400).json({ error: parsed.error.message });
+        console.error('❌ Ticket validation failed:', JSON.stringify(parsed.error.issues, null, 2));
+        return res.status(400).json({
+          error: 'Validation failed: ' + parsed.error.issues.map(i => `${i.path.join('.')}: ${i.message}`).join(', '),
+          details: parsed.error.issues
+        });
       }
+
+      console.log('✅ Ticket validation passed');
 
       // Validate vendorHandle exists if provided (for Seller Support)
       if (parsed.data.vendorHandle) {
+        console.log('🔍 Validating vendor handle:', parsed.data.vendorHandle);
         const vendor = await storage.getVendorByHandle(parsed.data.vendorHandle);
         if (!vendor) {
+          console.error('❌ Vendor not found:', parsed.data.vendorHandle);
           return res.status(400).json({
             error: `Vendor with handle "${parsed.data.vendorHandle}" not found. Please select a valid vendor from the dropdown or create the vendor first.`
           });
         }
+        console.log('✅ Vendor validated:', vendor.name);
       }
 
+      console.log('💾 Attempting to create ticket in database...');
       const ticket = await storage.createTicket(parsed.data);
+      console.log('✅ Ticket created successfully:', ticket.ticketNumber);
 
       // Create notifications for new ticket (non-blocking)
       const creator = await getCurrentUser(req);
@@ -228,16 +240,33 @@ export async function registerRoutes(
 
       res.status(201).json(ticket);
     } catch (error: any) {
-      console.error('Failed to create ticket:', error);
+      console.error('❌ Failed to create ticket:', error);
+      console.error('Error stack:', error.stack);
+      console.error('Error code:', error.code);
+      console.error('Error details:', error.detail);
 
       // Better error messages for common issues
       if (error.code === '23503') { // Foreign key violation
+        console.error('Foreign key violation - constraint:', error.constraint);
         return res.status(400).json({
-          error: 'Invalid vendor handle or category. Please ensure the vendor exists and category is selected correctly.'
+          error: 'Invalid vendor handle or category. Please ensure the vendor exists and category is selected correctly.',
+          details: error.detail
         });
       }
 
-      res.status(500).json({ error: error.message || 'Failed to create ticket' });
+      if (error.code === '23505') { // Unique constraint violation
+        console.error('Unique constraint violation:', error.constraint);
+        return res.status(400).json({
+          error: 'Duplicate ticket number. Please try again.',
+          details: error.detail
+        });
+      }
+
+      res.status(500).json({
+        error: error.message || 'Failed to create ticket',
+        code: error.code,
+        details: error.detail
+      });
     }
   });
 
