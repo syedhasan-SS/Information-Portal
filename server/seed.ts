@@ -107,6 +107,8 @@ const DEFAULT_PERMISSIONS = [
   // Settings
   { name: "manage:settings", displayName: "Manage Settings", description: "Access and modify system settings", category: "Settings" },
   { name: "view:settings", displayName: "View Settings", description: "View system settings", category: "Settings" },
+  { name: "view:config", displayName: "View Configuration", description: "Access ticket configuration and custom fields", category: "Settings" },
+  { name: "edit:config", displayName: "Edit Configuration", description: "Modify ticket configuration and custom fields", category: "Settings" },
 
   // Analytics
   { name: "view:analytics", displayName: "View Analytics", description: "Access analytics and reports", category: "Analytics" },
@@ -132,7 +134,7 @@ const DEFAULT_ROLES = [
       "manage:users", "view:users", "assign:roles",
       "manage:roles", "view:roles", "manage:permissions",
       "manage:departments", "view:departments",
-      "manage:settings", "view:settings",
+      "manage:settings", "view:settings", "view:config", "edit:config",
       "view:analytics", "export:data",
       "manage:vendors", "view:vendors",
     ],
@@ -149,7 +151,7 @@ const DEFAULT_ROLES = [
       "manage:users", "view:users", "assign:roles",
       "view:roles",
       "manage:departments", "view:departments",
-      "view:settings",
+      "view:settings", "view:config", "edit:config",
       "view:analytics", "export:data",
       "manage:vendors", "view:vendors",
     ],
