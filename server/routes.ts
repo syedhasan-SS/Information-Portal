@@ -380,9 +380,23 @@ export async function registerRoutes(
       const updates = { ...req.body };
 
       // FIX: Sync the singular 'role' field with the 'roles' array
-      // If roles array is being updated, set the primary role to the first role
-      if (updates.roles && Array.isArray(updates.roles) && updates.roles.length > 0) {
-        updates.role = updates.roles[0]; // Set primary role to first role in array
+      if (updates.roles && Array.isArray(updates.roles)) {
+        if (updates.roles.length > 0) {
+          // If roles array has items, sync primary role with first item
+          updates.role = updates.roles[0];
+        } else if (updates.roles.length === 0) {
+          // If roles array is empty (all secondary roles removed),
+          // populate it with just the primary role if role field exists
+          if (updates.role) {
+            updates.roles = [updates.role];
+          } else {
+            // Get current user to use their existing role
+            const currentUser = await storage.getUserById(req.params.id);
+            if (currentUser && currentUser.role) {
+              updates.roles = [currentUser.role];
+            }
+          }
+        }
       }
 
       const user = await storage.updateUser(req.params.id, updates);
@@ -400,9 +414,23 @@ export async function registerRoutes(
       const updates = { ...req.body };
 
       // FIX: Sync the singular 'role' field with the 'roles' array
-      // If roles array is being updated, set the primary role to the first role
-      if (updates.roles && Array.isArray(updates.roles) && updates.roles.length > 0) {
-        updates.role = updates.roles[0]; // Set primary role to first role in array
+      if (updates.roles && Array.isArray(updates.roles)) {
+        if (updates.roles.length > 0) {
+          // If roles array has items, sync primary role with first item
+          updates.role = updates.roles[0];
+        } else if (updates.roles.length === 0) {
+          // If roles array is empty (all secondary roles removed),
+          // populate it with just the primary role if role field exists
+          if (updates.role) {
+            updates.roles = [updates.role];
+          } else {
+            // Get current user to use their existing role
+            const currentUser = await storage.getUserById(req.params.id);
+            if (currentUser && currentUser.role) {
+              updates.roles = [currentUser.role];
+            }
+          }
+        }
       }
 
       const user = await storage.updateUser(req.params.id, updates);

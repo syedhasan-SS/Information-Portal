@@ -484,7 +484,7 @@ export default function UsersPage() {
     mutation.mutate({
       ...formData,
       managerId: formData.managerId === "__none__" ? undefined : formData.managerId,
-      roles: selectedRoles.length > 0 ? selectedRoles : undefined,
+      roles: selectedRoles, // Always send roles array, even if empty
       department: formData.department || undefined,
     });
   };
@@ -517,7 +517,7 @@ export default function UsersPage() {
       data: {
         ...editFormData,
         managerId: editFormData.managerId === "__none__" ? undefined : editFormData.managerId,
-        roles: editSelectedRoles.length > 0 ? editSelectedRoles : undefined,
+        roles: editSelectedRoles, // Always send roles array, even if empty (to clear secondary roles)
         department: editFormData.department || undefined,
       },
     });
