@@ -89,9 +89,10 @@ export default function OrgHierarchyPage() {
               <Button
                 variant="ghost"
                 size="sm"
-                onClick={() => setLocation("/users")}
+                onClick={() => setLocation(`/users?edit=${user.id}`)}
+                className="hover:bg-primary/10"
               >
-                View Details
+                Edit User
                 <ChevronRight className="h-4 w-4 ml-1" />
               </Button>
             </div>

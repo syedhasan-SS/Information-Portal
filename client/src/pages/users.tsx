@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -226,6 +226,22 @@ export default function UsersPage() {
     queryKey: ["users"],
     queryFn: getUsers,
   });
+
+  // Handle edit query parameter from org hierarchy
+  useEffect(() => {
+    if (users && !isLoading) {
+      const params = new URLSearchParams(window.location.search);
+      const editUserId = params.get('edit');
+      if (editUserId) {
+        const userToEdit = users.find(u => u.id === editUserId);
+        if (userToEdit) {
+          handleEditClick(userToEdit);
+          // Clean up URL without reload
+          window.history.replaceState({}, '', window.location.pathname);
+        }
+      }
+    }
+  }, [users, isLoading]);
 
   // Department queries
   const { data: departmentsData, isLoading: isLoadingDepts } = useQuery({
