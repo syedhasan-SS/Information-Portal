@@ -91,18 +91,27 @@ const DEFAULT_PERMISSIONS = [
   { name: "resolve:tickets", displayName: "Resolve Tickets", description: "Mark tickets as resolved", category: "Tickets" },
 
   // Users
-  { name: "manage:users", displayName: "Manage Users", description: "Create, edit, delete users", category: "Users" },
   { name: "view:users", displayName: "View Users", description: "View user list", category: "Users" },
+  { name: "create:users", displayName: "Create Users", description: "Create new users", category: "Users" },
+  { name: "edit:users", displayName: "Edit Users", description: "Edit existing users", category: "Users" },
+  { name: "delete:users", displayName: "Delete Users", description: "Delete users", category: "Users" },
+  { name: "manage:users", displayName: "Manage Users", description: "Full user management (legacy)", category: "Users" },
   { name: "assign:roles", displayName: "Assign Roles", description: "Assign roles to users", category: "Users" },
 
   // Roles & Permissions
-  { name: "manage:roles", displayName: "Manage Roles", description: "Create, edit, delete roles", category: "Roles" },
   { name: "view:roles", displayName: "View Roles", description: "View roles list", category: "Roles" },
+  { name: "create:roles", displayName: "Create Roles", description: "Create new roles", category: "Roles" },
+  { name: "edit:roles", displayName: "Edit Roles", description: "Edit existing roles", category: "Roles" },
+  { name: "delete:roles", displayName: "Delete Roles", description: "Delete roles", category: "Roles" },
+  { name: "manage:roles", displayName: "Manage Roles", description: "Full role management (legacy)", category: "Roles" },
   { name: "manage:permissions", displayName: "Manage Permissions", description: "Assign permissions to roles", category: "Roles" },
 
   // Departments
-  { name: "manage:departments", displayName: "Manage Departments", description: "Create, edit, delete departments", category: "Departments" },
   { name: "view:departments", displayName: "View Departments", description: "View department list", category: "Departments" },
+  { name: "create:departments", displayName: "Create Departments", description: "Create new departments", category: "Departments" },
+  { name: "edit:departments", displayName: "Edit Departments", description: "Edit existing departments", category: "Departments" },
+  { name: "delete:departments", displayName: "Delete Departments", description: "Delete departments", category: "Departments" },
+  { name: "manage:departments", displayName: "Manage Departments", description: "Full department management (legacy)", category: "Departments" },
 
   // Settings
   { name: "manage:settings", displayName: "Manage Settings", description: "Access and modify system settings", category: "Settings" },
@@ -115,8 +124,11 @@ const DEFAULT_PERMISSIONS = [
   { name: "export:data", displayName: "Export Data", description: "Export data and reports", category: "Analytics" },
 
   // Vendors (Seller Support)
-  { name: "manage:vendors", displayName: "Manage Vendors", description: "Manage vendor information", category: "Vendors" },
   { name: "view:vendors", displayName: "View Vendors", description: "View vendor information", category: "Vendors" },
+  { name: "create:vendors", displayName: "Create Vendors", description: "Create new vendors", category: "Vendors" },
+  { name: "edit:vendors", displayName: "Edit Vendors", description: "Edit existing vendors", category: "Vendors" },
+  { name: "delete:vendors", displayName: "Delete Vendors", description: "Delete vendors", category: "Vendors" },
+  { name: "manage:vendors", displayName: "Manage Vendors", description: "Full vendor management (legacy)", category: "Vendors" },
 ];
 
 // Default roles with their permission mappings
@@ -127,16 +139,24 @@ const DEFAULT_ROLES = [
     description: "Full system access - highest level administrator",
     isSystem: true,
     permissions: [
-      // All permissions
-      "view:dashboard", "view:tickets", "create:tickets", "edit:tickets", "delete:tickets",
+      // All permissions - Dashboard
+      "view:dashboard",
+      // Tickets
+      "view:tickets", "create:tickets", "edit:tickets", "delete:tickets",
       "view:all_tickets", "view:department_tickets", "view:assigned_tickets", "view:team_tickets",
       "assign:tickets", "resolve:tickets",
-      "manage:users", "view:users", "assign:roles",
-      "manage:roles", "view:roles", "manage:permissions",
-      "manage:departments", "view:departments",
+      // Users
+      "view:users", "create:users", "edit:users", "delete:users", "manage:users", "assign:roles",
+      // Roles & Permissions
+      "view:roles", "create:roles", "edit:roles", "delete:roles", "manage:roles", "manage:permissions",
+      // Departments
+      "view:departments", "create:departments", "edit:departments", "delete:departments", "manage:departments",
+      // Settings
       "manage:settings", "view:settings", "view:config", "edit:config",
+      // Analytics
       "view:analytics", "export:data",
-      "manage:vendors", "view:vendors",
+      // Vendors
+      "view:vendors", "create:vendors", "edit:vendors", "delete:vendors", "manage:vendors",
     ],
   },
   {
@@ -145,15 +165,24 @@ const DEFAULT_ROLES = [
     description: "Administrative access with user and role management",
     isSystem: true,
     permissions: [
-      "view:dashboard", "view:tickets", "create:tickets", "edit:tickets", "delete:tickets",
+      // Dashboard
+      "view:dashboard",
+      // Tickets
+      "view:tickets", "create:tickets", "edit:tickets", "delete:tickets",
       "view:all_tickets", "view:department_tickets", "view:assigned_tickets", "view:team_tickets",
       "assign:tickets", "resolve:tickets",
-      "manage:users", "view:users", "assign:roles",
+      // Users
+      "view:users", "create:users", "edit:users", "delete:users", "manage:users", "assign:roles",
+      // Roles (view only, can't edit)
       "view:roles",
-      "manage:departments", "view:departments",
+      // Departments
+      "view:departments", "create:departments", "edit:departments", "delete:departments", "manage:departments",
+      // Settings
       "view:settings", "view:config", "edit:config",
+      // Analytics
       "view:analytics", "export:data",
-      "manage:vendors", "view:vendors",
+      // Vendors
+      "view:vendors", "create:vendors", "edit:vendors", "delete:vendors", "manage:vendors",
     ],
   },
   {
