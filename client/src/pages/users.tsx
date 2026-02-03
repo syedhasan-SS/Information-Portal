@@ -36,6 +36,8 @@ import {
   ChevronDown,
   ChevronRight,
   FolderTree,
+  ChevronsUpDown,
+  Check,
 } from "lucide-react";
 import {
   DropdownMenu,
@@ -58,6 +60,19 @@ import {
   CollapsibleContent,
   CollapsibleTrigger,
 } from "@/components/ui/collapsible";
+import {
+  Command,
+  CommandEmpty,
+  CommandGroup,
+  CommandInput,
+  CommandItem,
+  CommandList,
+} from "@/components/ui/command";
+import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from "@/components/ui/popover";
 import type { User, Department, SubDepartment } from "@shared/schema";
 import { ROLE_PERMISSIONS } from "@/hooks/use-auth";
 
@@ -202,6 +217,17 @@ export default function UsersPage() {
   const [selectedPermissions, setSelectedPermissions] = useState<string[]>([]);
   const [visiblePasswords, setVisiblePasswords] = useState<Set<string>>(new Set());
   const [activeTab, setActiveTab] = useState<"users" | "departments" | "hierarchy">("users");
+
+  // Manager combobox state
+  const [managerComboOpen, setManagerComboOpen] = useState(false);
+  const [managerSearchValue, setManagerSearchValue] = useState("");
+  const [editManagerComboOpen, setEditManagerComboOpen] = useState(false);
+  const [editManagerSearchValue, setEditManagerSearchValue] = useState("");
+
+  // Reportees combobox state
+  const [reporteesComboOpen, setReporteesComboOpen] = useState(false);
+  const [reporteesSearchValue, setReporteesSearchValue] = useState("");
+  const [selectedReportees, setSelectedReportees] = useState<string[]>([]);
 
   // Department management state
   const [showDeptForm, setShowDeptForm] = useState(false);
@@ -430,6 +456,7 @@ export default function UsersPage() {
       queryClient.invalidateQueries({ queryKey: ["users"] });
       setEditingUser(null);
       setEditSelectedRoles([]);
+      setSelectedReportees([]);
       setSuccess("User updated successfully!");
       setError("");
       setTimeout(() => setSuccess(""), 3000);
@@ -516,9 +543,12 @@ export default function UsersPage() {
       managerId: user.managerId || "__none__",
     });
     setEditSelectedRoles(user.roles || []);
+    // Initialize reportees with current direct reports
+    const currentReportees = users?.filter(u => u.managerId === user.id).map(u => u.id) || [];
+    setSelectedReportees(currentReportees);
   };
 
-  const handleEditSubmit = (e: React.FormEvent) => {
+  const handleEditSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!editingUser) return;
 
@@ -528,6 +558,7 @@ export default function UsersPage() {
       return;
     }
 
+    // First update the user
     updateMutation.mutate({
       id: editingUser.id,
       data: {
@@ -537,6 +568,38 @@ export default function UsersPage() {
         department: editFormData.department || undefined,
       },
     });
+
+    // Update reportees (direct reports)
+    const currentReportees = users?.filter(u => u.managerId === editingUser.id).map(u => u.id) || [];
+
+    // Find users to add as reportees (selected but not currently reporting)
+    const toAdd = selectedReportees.filter(id => !currentReportees.includes(id));
+
+    // Find users to remove as reportees (currently reporting but not selected)
+    const toRemove = currentReportees.filter(id => !selectedReportees.includes(id));
+
+    // Update users who should now report to this person
+    for (const userId of toAdd) {
+      try {
+        await updateUser(userId, { managerId: editingUser.id });
+      } catch (error) {
+        console.error("Failed to add reportee:", error);
+      }
+    }
+
+    // Update users who should no longer report to this person
+    for (const userId of toRemove) {
+      try {
+        await updateUser(userId, { managerId: undefined });
+      } catch (error) {
+        console.error("Failed to remove reportee:", error);
+      }
+    }
+
+    // Refresh the user list after reportees updates
+    if (toAdd.length > 0 || toRemove.length > 0) {
+      queryClient.invalidateQueries({ queryKey: ["users"] });
+    }
   };
 
   const handleDeleteConfirm = () => {
@@ -999,23 +1062,92 @@ export default function UsersPage() {
 
                 <div className="space-y-2 sm:col-span-2">
                   <Label htmlFor="managerId">Reports To (optional)</Label>
-                  <Select
-                    value={formData.managerId}
-                    onValueChange={(value) => setFormData({ ...formData, managerId: value })}
+                  <Popover
+                    open={managerComboOpen}
+                    onOpenChange={(open) => {
+                      setManagerComboOpen(open);
+                      if (!open) setManagerSearchValue("");
+                    }}
                   >
-                    <SelectTrigger data-testid="select-manager">
-                      <SelectValue placeholder="Select manager" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="__none__">None</SelectItem>
-                      {users?.filter(u => u.isActive).map((user) => (
-                        <SelectItem key={user.id} value={user.id}>
-                          {user.name} - {user.role}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                  <p className="text-xs text-muted-foreground">Select the direct manager for this user</p>
+                    <PopoverTrigger asChild>
+                      <Button
+                        variant="outline"
+                        role="combobox"
+                        aria-expanded={managerComboOpen}
+                        className="w-full justify-between font-normal"
+                        data-testid="select-manager"
+                      >
+                        {formData.managerId && formData.managerId !== "__none__"
+                          ? users?.find((u) => u.id === formData.managerId)?.name + " - " + users?.find((u) => u.id === formData.managerId)?.role
+                          : "Search or select manager..."}
+                        <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+                      </Button>
+                    </PopoverTrigger>
+                    <PopoverContent className="w-full p-0" align="start">
+                      <Command shouldFilter={false}>
+                        <CommandInput
+                          placeholder="Search by name or role..."
+                          value={managerSearchValue}
+                          onValueChange={setManagerSearchValue}
+                        />
+                        <CommandList>
+                          <CommandEmpty>
+                            <p className="text-sm text-muted-foreground p-2">
+                              No users found
+                            </p>
+                          </CommandEmpty>
+                          <CommandGroup>
+                            <CommandItem
+                              value="__none__"
+                              onSelect={() => {
+                                setFormData({ ...formData, managerId: "__none__" });
+                                setManagerComboOpen(false);
+                                setManagerSearchValue("");
+                              }}
+                            >
+                              <Check
+                                className={cn(
+                                  "mr-2 h-4 w-4",
+                                  formData.managerId === "__none__" ? "opacity-100" : "opacity-0"
+                                )}
+                              />
+                              None
+                            </CommandItem>
+                            {users
+                              ?.filter((u) => {
+                                if (!u.isActive) return false;
+                                if (!managerSearchValue) return true;
+                                const search = managerSearchValue.toLowerCase();
+                                return (
+                                  u.name.toLowerCase().includes(search) ||
+                                  u.role.toLowerCase().includes(search)
+                                );
+                              })
+                              .map((user) => (
+                                <CommandItem
+                                  key={user.id}
+                                  value={user.id}
+                                  onSelect={() => {
+                                    setFormData({ ...formData, managerId: user.id });
+                                    setManagerComboOpen(false);
+                                    setManagerSearchValue("");
+                                  }}
+                                >
+                                  <Check
+                                    className={cn(
+                                      "mr-2 h-4 w-4",
+                                      formData.managerId === user.id ? "opacity-100" : "opacity-0"
+                                    )}
+                                  />
+                                  {user.name} - {user.role}
+                                </CommandItem>
+                              ))}
+                          </CommandGroup>
+                        </CommandList>
+                      </Command>
+                    </PopoverContent>
+                  </Popover>
+                  <p className="text-xs text-muted-foreground">Search and select the direct manager for this user</p>
                 </div>
               </div>
 
@@ -1675,29 +1807,207 @@ export default function UsersPage() {
 
             <div className="space-y-2">
               <Label htmlFor="edit-managerId">Reports To (optional)</Label>
-              <Select
-                value={editFormData.managerId}
-                onValueChange={(value) => setEditFormData({ ...editFormData, managerId: value })}
+              <Popover
+                open={editManagerComboOpen}
+                onOpenChange={(open) => {
+                  setEditManagerComboOpen(open);
+                  if (!open) setEditManagerSearchValue("");
+                }}
               >
-                <SelectTrigger>
-                  <SelectValue placeholder="Select manager" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="__none__">None</SelectItem>
-                  {users?.filter(u => {
-                    // Include active users (excluding the user being edited)
-                    if (u.isActive && u.id !== editingUser?.id) return true;
-                    // Also include the current manager even if inactive (so the Select value is valid)
-                    if (editFormData.managerId !== "__none__" && u.id === editFormData.managerId && u.id !== editingUser?.id) return true;
-                    return false;
-                  }).map((user) => (
-                    <SelectItem key={user.id} value={user.id}>
-                      {user.name} - {user.role}{!user.isActive ? " (Inactive)" : ""}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-              <p className="text-xs text-muted-foreground">Select the direct manager</p>
+                <PopoverTrigger asChild>
+                  <Button
+                    variant="outline"
+                    role="combobox"
+                    aria-expanded={editManagerComboOpen}
+                    className="w-full justify-between font-normal"
+                  >
+                    {editFormData.managerId && editFormData.managerId !== "__none__"
+                      ? users?.find((u) => u.id === editFormData.managerId)?.name + " - " + users?.find((u) => u.id === editFormData.managerId)?.role + (!users?.find((u) => u.id === editFormData.managerId)?.isActive ? " (Inactive)" : "")
+                      : "Search or select manager..."}
+                    <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+                  </Button>
+                </PopoverTrigger>
+                <PopoverContent className="w-full p-0" align="start">
+                  <Command shouldFilter={false}>
+                    <CommandInput
+                      placeholder="Search by name or role..."
+                      value={editManagerSearchValue}
+                      onValueChange={setEditManagerSearchValue}
+                    />
+                    <CommandList>
+                      <CommandEmpty>
+                        <p className="text-sm text-muted-foreground p-2">
+                          No users found
+                        </p>
+                      </CommandEmpty>
+                      <CommandGroup>
+                        <CommandItem
+                          value="__none__"
+                          onSelect={() => {
+                            setEditFormData({ ...editFormData, managerId: "__none__" });
+                            setEditManagerComboOpen(false);
+                            setEditManagerSearchValue("");
+                          }}
+                        >
+                          <Check
+                            className={cn(
+                              "mr-2 h-4 w-4",
+                              editFormData.managerId === "__none__" ? "opacity-100" : "opacity-0"
+                            )}
+                          />
+                          None
+                        </CommandItem>
+                        {users
+                          ?.filter((u) => {
+                            // Exclude the user being edited
+                            if (u.id === editingUser?.id) return false;
+                            // Include active users
+                            if (u.isActive) {
+                              if (!editManagerSearchValue) return true;
+                              const search = editManagerSearchValue.toLowerCase();
+                              return (
+                                u.name.toLowerCase().includes(search) ||
+                                u.role.toLowerCase().includes(search)
+                              );
+                            }
+                            // Also include the current manager even if inactive (so the value is valid)
+                            if (editFormData.managerId !== "__none__" && u.id === editFormData.managerId) {
+                              if (!editManagerSearchValue) return true;
+                              const search = editManagerSearchValue.toLowerCase();
+                              return (
+                                u.name.toLowerCase().includes(search) ||
+                                u.role.toLowerCase().includes(search)
+                              );
+                            }
+                            return false;
+                          })
+                          .map((user) => (
+                            <CommandItem
+                              key={user.id}
+                              value={user.id}
+                              onSelect={() => {
+                                setEditFormData({ ...editFormData, managerId: user.id });
+                                setEditManagerComboOpen(false);
+                                setEditManagerSearchValue("");
+                              }}
+                            >
+                              <Check
+                                className={cn(
+                                  "mr-2 h-4 w-4",
+                                  editFormData.managerId === user.id ? "opacity-100" : "opacity-0"
+                                )}
+                              />
+                              {user.name} - {user.role}{!user.isActive ? " (Inactive)" : ""}
+                            </CommandItem>
+                          ))}
+                      </CommandGroup>
+                    </CommandList>
+                  </Command>
+                </PopoverContent>
+              </Popover>
+              <p className="text-xs text-muted-foreground">Search and select the direct manager</p>
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="edit-reportees">Direct Reports (Reportees)</Label>
+              <Popover
+                open={reporteesComboOpen}
+                onOpenChange={(open) => {
+                  setReporteesComboOpen(open);
+                  if (!open) setReporteesSearchValue("");
+                }}
+              >
+                <PopoverTrigger asChild>
+                  <Button
+                    variant="outline"
+                    role="combobox"
+                    aria-expanded={reporteesComboOpen}
+                    className="w-full justify-between font-normal h-auto min-h-10"
+                  >
+                    <div className="flex flex-wrap gap-1 flex-1">
+                      {selectedReportees.length > 0 ? (
+                        selectedReportees.map((userId) => {
+                          const user = users?.find((u) => u.id === userId);
+                          return user ? (
+                            <Badge key={userId} variant="secondary" className="gap-1">
+                              {user.name}
+                              <button
+                                type="button"
+                                className="ml-1 hover:bg-muted rounded-full"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  setSelectedReportees(prev => prev.filter(id => id !== userId));
+                                }}
+                              >
+                                ×
+                              </button>
+                            </Badge>
+                          ) : null;
+                        })
+                      ) : (
+                        <span className="text-muted-foreground">Select users who report to this person...</span>
+                      )}
+                    </div>
+                    <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+                  </Button>
+                </PopoverTrigger>
+                <PopoverContent className="w-full p-0" align="start">
+                  <Command shouldFilter={false}>
+                    <CommandInput
+                      placeholder="Search by name or role..."
+                      value={reporteesSearchValue}
+                      onValueChange={setReporteesSearchValue}
+                    />
+                    <CommandList>
+                      <CommandEmpty>
+                        <p className="text-sm text-muted-foreground p-2">
+                          No users found
+                        </p>
+                      </CommandEmpty>
+                      <CommandGroup>
+                        {users
+                          ?.filter((u) => {
+                            // Exclude the user being edited
+                            if (u.id === editingUser?.id) return false;
+                            // Only include active users
+                            if (!u.isActive) return false;
+                            // Apply search filter
+                            if (!reporteesSearchValue) return true;
+                            const search = reporteesSearchValue.toLowerCase();
+                            return (
+                              u.name.toLowerCase().includes(search) ||
+                              u.role.toLowerCase().includes(search)
+                            );
+                          })
+                          .map((user) => (
+                            <CommandItem
+                              key={user.id}
+                              value={user.id}
+                              onSelect={(value) => {
+                                setSelectedReportees(prev =>
+                                  prev.includes(value)
+                                    ? prev.filter(id => id !== value)
+                                    : [...prev, value]
+                                );
+                              }}
+                            >
+                              <Check
+                                className={cn(
+                                  "mr-2 h-4 w-4",
+                                  selectedReportees.includes(user.id) ? "opacity-100" : "opacity-0"
+                                )}
+                              />
+                              {user.name} - {user.role}
+                            </CommandItem>
+                          ))}
+                      </CommandGroup>
+                    </CommandList>
+                  </Command>
+                </PopoverContent>
+              </Popover>
+              <p className="text-xs text-muted-foreground">
+                Select users who will report directly to this person. Multiple selections allowed.
+              </p>
             </div>
 
             <DialogFooter>
