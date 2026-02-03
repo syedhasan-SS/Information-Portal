@@ -2689,5 +2689,39 @@ export async function registerRoutes(
     }
   });
 
+  // TEMPORARY: Fix for users with mismatched role/roles fields
+  // This endpoint syncs the singular 'role' field with the 'roles' array
+  // Can be removed after all users are migrated
+  app.post("/api/admin/fix-user-roles", async (req, res) => {
+    try {
+      // Get all users
+      const allUsers = await storage.getUsers();
+      const fixed: string[] = [];
+      const skipped: string[] = [];
+
+      for (const user of allUsers) {
+        // If user has roles array and it doesn't match the role field
+        if (user.roles && user.roles.length > 0 && user.role !== user.roles[0]) {
+          await storage.updateUser(user.id, {
+            role: user.roles[0] // Sync role with first item in roles array
+          });
+          fixed.push(`${user.email} (${user.role} → ${user.roles[0]})`);
+        } else {
+          skipped.push(user.email);
+        }
+      }
+
+      res.json({
+        success: true,
+        message: `Fixed ${fixed.length} users, skipped ${skipped.length} users`,
+        fixed,
+        skipped
+      });
+    } catch (error: any) {
+      console.error('Failed to fix user roles:', error);
+      res.status(500).json({ error: error.message });
+    }
+  });
+
   return httpServer;
 }
