@@ -2890,5 +2890,101 @@ export async function registerRoutes(
     }
   });
 
+  // One-click fix for atta user (GET endpoint - just visit the URL)
+  app.get("/api/admin/fix-atta-now", async (req, res) => {
+    try {
+      console.log("🔍 Starting atta fix...");
+
+      const allUsers = await storage.getUsers();
+      const atta = allUsers.find(u => u.email.toLowerCase().includes('atta'));
+
+      if (!atta) {
+        return res.status(404).send(`
+          <html><body style="font-family: monospace; padding: 40px; background: #1a1a1a; color: #fff;">
+            <h1>❌ User 'atta' not found</h1>
+            <p>Available users:</p>
+            <pre>${allUsers.map(u => `${u.email} - ${u.role}`).join('\n')}</pre>
+          </body></html>
+        `);
+      }
+
+      console.log("📊 Atta BEFORE fix:", {
+        id: atta.id,
+        email: atta.email,
+        role: atta.role,
+        roles: atta.roles,
+      });
+
+      // Fix atta to Admin with proper roles array
+      const updated = await storage.updateUser(atta.id, {
+        role: 'Admin',
+        roles: ['Admin', 'Associate'],
+      });
+
+      console.log("✅ Atta AFTER fix:", {
+        id: updated.id,
+        email: updated.email,
+        role: updated.role,
+        roles: updated.roles,
+      });
+
+      res.send(`
+        <html>
+        <head>
+          <style>
+            body { font-family: monospace; padding: 40px; background: #1a1a1a; color: #fff; }
+            .success { color: #4ade80; }
+            .error { color: #f87171; }
+            .info { color: #60a5fa; }
+            pre { background: #2a2a2a; padding: 20px; border-radius: 8px; overflow-x: auto; }
+            h1 { color: #4ade80; }
+            .box { background: #2a2a2a; padding: 20px; border-radius: 8px; margin: 20px 0; }
+          </style>
+        </head>
+        <body>
+          <h1>✅ Atta User Fixed!</h1>
+
+          <div class="box">
+            <h2>Before:</h2>
+            <pre>role:  ${atta.role}
+roles: ${JSON.stringify(atta.roles, null, 2)}</pre>
+          </div>
+
+          <div class="box">
+            <h2>After:</h2>
+            <pre>role:  ${updated.role}
+roles: ${JSON.stringify(updated.roles, null, 2)}</pre>
+          </div>
+
+          <div class="box">
+            <h2 class="info">✅ Next Steps:</h2>
+            <ol>
+              <li><strong>Have atta LOGOUT</strong> from the portal</li>
+              <li><strong>Have atta LOGIN</strong> again</li>
+              <li><strong>Test access to:</strong>
+                <ul>
+                  <li>All Tickets page</li>
+                  <li>User Management</li>
+                  <li>Roles page</li>
+                </ul>
+              </li>
+            </ol>
+          </div>
+
+          <p class="success">Atta should now have full Admin access! 🎉</p>
+        </body>
+        </html>
+      `);
+    } catch (error: any) {
+      console.error('Fix atta error:', error);
+      res.status(500).send(`
+        <html><body style="font-family: monospace; padding: 40px; background: #1a1a1a; color: #f87171;">
+          <h1>❌ Error fixing atta</h1>
+          <pre>${error.message}\n\n${error.stack}</pre>
+        </body></html>
+      `);
+    }
+  });
+
   return httpServer;
 }
