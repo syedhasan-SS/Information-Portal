@@ -884,7 +884,16 @@ export default function UsersPage() {
                   <Label htmlFor="role">Primary Role *</Label>
                   <Select
                     value={formData.role}
-                    onValueChange={(value) => setFormData({ ...formData, role: value })}
+                    onValueChange={(value) => {
+                      setFormData({ ...formData, role: value });
+                      // Sync with additional roles: ensure primary role is always included
+                      if (!selectedRoles.includes(value)) {
+                        setSelectedRoles([value, ...selectedRoles]);
+                      } else {
+                        // Move it to front if already exists
+                        setSelectedRoles([value, ...selectedRoles.filter(r => r !== value)]);
+                      }
+                    }}
                   >
                     <SelectTrigger data-testid="select-role">
                       <SelectValue placeholder="Select primary role" />
@@ -1551,7 +1560,16 @@ export default function UsersPage() {
               <Label htmlFor="edit-role">Primary Role *</Label>
               <Select
                 value={editFormData.role}
-                onValueChange={(value) => setEditFormData({ ...editFormData, role: value })}
+                onValueChange={(value) => {
+                  setEditFormData({ ...editFormData, role: value });
+                  // Sync with additional roles: ensure primary role is always included as first item
+                  if (!editSelectedRoles.includes(value)) {
+                    setEditSelectedRoles([value, ...editSelectedRoles]);
+                  } else {
+                    // Move it to front if already exists
+                    setEditSelectedRoles([value, ...editSelectedRoles.filter(r => r !== value)]);
+                  }
+                }}
               >
                 <SelectTrigger>
                   <SelectValue placeholder="Select primary role" />
