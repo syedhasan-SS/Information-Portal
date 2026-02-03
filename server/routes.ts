@@ -2717,6 +2717,31 @@ export async function registerRoutes(
     }
   });
 
+  // DEBUG: Diagnostic endpoint to check user data
+  app.get("/api/admin/debug-user/:id", async (req, res) => {
+    try {
+      const user = await storage.getUserById(req.params.id);
+      if (!user) {
+        return res.status(404).json({ error: "User not found" });
+      }
+      res.json({
+        userId: user.id,
+        email: user.email,
+        name: user.name,
+        role: user.role,
+        roles: user.roles,
+        department: user.department,
+        isActive: user.isActive,
+        roleType: typeof user.role,
+        rolesType: typeof user.roles,
+        rolesIsArray: Array.isArray(user.roles),
+        rolesLength: user.roles ? user.roles.length : 0,
+      });
+    } catch (error: any) {
+      res.status(500).json({ error: error.message });
+    }
+  });
+
   // TEMPORARY: Fix for users with mismatched role/roles fields
   // This endpoint syncs the singular 'role' field with the 'roles' array
   // Can be removed after all users are migrated
