@@ -911,7 +911,25 @@ export async function registerRoutes(
 
       console.log("[AUTH/ME] Returning user:", user.email);
       const { password: _, ...userWithoutPassword } = user;
-      res.json(userWithoutPassword);
+
+      // Try to get effective permissions from database (roles + permissions tables)
+      let effectivePermissions: string[] = [];
+      try {
+        effectivePermissions = await storage.getUserEffectivePermissions(user.id);
+        console.log("[AUTH/ME] Loaded effective permissions from database:", effectivePermissions.length, "permissions");
+      } catch (dbError: any) {
+        console.warn("[AUTH/ME] Could not load permissions from database:", dbError.message);
+        // Fallback: use custom permissions if database roles not available yet
+        effectivePermissions = user.customPermissions || [];
+      }
+
+      // Override customPermissions with effective permissions
+      const userWithEffectivePermissions = {
+        ...userWithoutPassword,
+        customPermissions: effectivePermissions,
+      };
+
+      res.json(userWithEffectivePermissions);
     } catch (error: any) {
       console.error("[AUTH/ME] Error:", error);
       res.status(500).json({ error: error.message });

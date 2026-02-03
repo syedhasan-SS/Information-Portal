@@ -1,5 +1,7 @@
+import "dotenv/config";
 import { db } from "./db";
-import { vendors, categories, ticketFieldConfigurations } from "@shared/schema";
+import { vendors, categories, ticketFieldConfigurations, roles, permissions, rolePermissions } from "@shared/schema";
+import { eq } from "drizzle-orm";
 
 const MOCK_VENDORS = [
   { handle: "vendor_fleek_moda", name: "Fleek Moda", gmvTier: "XL" as const, kam: "Ayesha Khan", zone: "West", persona: "Strategic" },
@@ -69,6 +71,152 @@ const CATEGORY_PATHS = [
   "Information > Marketplace > Product Listing > Product Listing Information",
   "Information > Marketplace > Promotion & Discount > Make an Offer",
   "Information > Marketplace > Promotion & Discount > Campaign Discount Info",
+];
+
+// Default permissions
+const DEFAULT_PERMISSIONS = [
+  // Dashboard
+  { name: "view:dashboard", displayName: "View Dashboard", description: "Access to main dashboard", category: "Dashboard" },
+
+  // Tickets
+  { name: "view:tickets", displayName: "View Tickets", description: "View ticket list", category: "Tickets" },
+  { name: "create:tickets", displayName: "Create Tickets", description: "Create new tickets", category: "Tickets" },
+  { name: "edit:tickets", displayName: "Edit Tickets", description: "Edit existing tickets", category: "Tickets" },
+  { name: "delete:tickets", displayName: "Delete Tickets", description: "Delete tickets", category: "Tickets" },
+  { name: "view:all_tickets", displayName: "View All Tickets", description: "View all tickets across the organization", category: "Tickets" },
+  { name: "view:department_tickets", displayName: "View Department Tickets", description: "View tickets in own department", category: "Tickets" },
+  { name: "view:assigned_tickets", displayName: "View Assigned Tickets", description: "View only assigned tickets", category: "Tickets" },
+  { name: "view:team_tickets", displayName: "View Team Tickets", description: "View team member tickets", category: "Tickets" },
+  { name: "assign:tickets", displayName: "Assign Tickets", description: "Assign tickets to users", category: "Tickets" },
+  { name: "resolve:tickets", displayName: "Resolve Tickets", description: "Mark tickets as resolved", category: "Tickets" },
+
+  // Users
+  { name: "manage:users", displayName: "Manage Users", description: "Create, edit, delete users", category: "Users" },
+  { name: "view:users", displayName: "View Users", description: "View user list", category: "Users" },
+  { name: "assign:roles", displayName: "Assign Roles", description: "Assign roles to users", category: "Users" },
+
+  // Roles & Permissions
+  { name: "manage:roles", displayName: "Manage Roles", description: "Create, edit, delete roles", category: "Roles" },
+  { name: "view:roles", displayName: "View Roles", description: "View roles list", category: "Roles" },
+  { name: "manage:permissions", displayName: "Manage Permissions", description: "Assign permissions to roles", category: "Roles" },
+
+  // Departments
+  { name: "manage:departments", displayName: "Manage Departments", description: "Create, edit, delete departments", category: "Departments" },
+  { name: "view:departments", displayName: "View Departments", description: "View department list", category: "Departments" },
+
+  // Settings
+  { name: "manage:settings", displayName: "Manage Settings", description: "Access and modify system settings", category: "Settings" },
+  { name: "view:settings", displayName: "View Settings", description: "View system settings", category: "Settings" },
+
+  // Analytics
+  { name: "view:analytics", displayName: "View Analytics", description: "Access analytics and reports", category: "Analytics" },
+  { name: "export:data", displayName: "Export Data", description: "Export data and reports", category: "Analytics" },
+
+  // Vendors (Seller Support)
+  { name: "manage:vendors", displayName: "Manage Vendors", description: "Manage vendor information", category: "Vendors" },
+  { name: "view:vendors", displayName: "View Vendors", description: "View vendor information", category: "Vendors" },
+];
+
+// Default roles with their permission mappings
+const DEFAULT_ROLES = [
+  {
+    name: "Owner",
+    displayName: "Owner",
+    description: "Full system access - highest level administrator",
+    isSystem: true,
+    permissions: [
+      // All permissions
+      "view:dashboard", "view:tickets", "create:tickets", "edit:tickets", "delete:tickets",
+      "view:all_tickets", "view:department_tickets", "view:assigned_tickets", "view:team_tickets",
+      "assign:tickets", "resolve:tickets",
+      "manage:users", "view:users", "assign:roles",
+      "manage:roles", "view:roles", "manage:permissions",
+      "manage:departments", "view:departments",
+      "manage:settings", "view:settings",
+      "view:analytics", "export:data",
+      "manage:vendors", "view:vendors",
+    ],
+  },
+  {
+    name: "Admin",
+    displayName: "Admin",
+    description: "Administrative access with user and role management",
+    isSystem: true,
+    permissions: [
+      "view:dashboard", "view:tickets", "create:tickets", "edit:tickets", "delete:tickets",
+      "view:all_tickets", "view:department_tickets", "view:assigned_tickets", "view:team_tickets",
+      "assign:tickets", "resolve:tickets",
+      "manage:users", "view:users", "assign:roles",
+      "view:roles",
+      "manage:departments", "view:departments",
+      "view:settings",
+      "view:analytics", "export:data",
+      "manage:vendors", "view:vendors",
+    ],
+  },
+  {
+    name: "Head",
+    displayName: "Head",
+    description: "Department head with full department access",
+    isSystem: true,
+    permissions: [
+      "view:dashboard", "view:tickets", "create:tickets", "edit:tickets",
+      "view:department_tickets", "view:assigned_tickets", "view:team_tickets",
+      "assign:tickets", "resolve:tickets",
+      "view:users",
+      "view:departments",
+      "view:analytics",
+      "view:vendors",
+    ],
+  },
+  {
+    name: "Manager",
+    displayName: "Manager",
+    description: "Team manager with team-level access",
+    isSystem: true,
+    permissions: [
+      "view:dashboard", "view:tickets", "create:tickets", "edit:tickets",
+      "view:team_tickets", "view:assigned_tickets",
+      "assign:tickets", "resolve:tickets",
+      "view:users",
+      "view:vendors",
+    ],
+  },
+  {
+    name: "Lead",
+    displayName: "Lead",
+    description: "Team lead with team visibility",
+    isSystem: true,
+    permissions: [
+      "view:dashboard", "view:tickets", "create:tickets", "edit:tickets",
+      "view:team_tickets", "view:assigned_tickets",
+      "resolve:tickets",
+      "view:vendors",
+    ],
+  },
+  {
+    name: "Associate",
+    displayName: "Associate",
+    description: "Standard team member",
+    isSystem: true,
+    permissions: [
+      "view:dashboard", "view:tickets", "create:tickets", "edit:tickets",
+      "view:assigned_tickets",
+      "resolve:tickets",
+      "view:vendors",
+    ],
+  },
+  {
+    name: "Agent",
+    displayName: "Agent",
+    description: "Basic access for support agents",
+    isSystem: true,
+    permissions: [
+      "view:dashboard", "view:tickets", "create:tickets", "edit:tickets",
+      "view:assigned_tickets",
+      "resolve:tickets",
+    ],
+  },
 ];
 
 // Default ticket form fields to be managed via Custom Field Manager
@@ -234,6 +382,60 @@ async function seed() {
   console.log("🌱 Seeding database...");
 
   try {
+    // Seed permissions first
+    console.log("🔐 Seeding permissions...");
+    const permissionMap = new Map<string, string>(); // name -> id
+    for (const perm of DEFAULT_PERMISSIONS) {
+      const existing = await db.select().from(permissions).where(eq(permissions.name, perm.name));
+      if (existing.length > 0) {
+        permissionMap.set(perm.name, existing[0].id);
+        console.log(`  ↪ Permission already exists: ${perm.name}`);
+      } else {
+        const result = await db.insert(permissions).values({
+          ...perm,
+          isSystem: true,
+        }).returning();
+        permissionMap.set(perm.name, result[0].id);
+        console.log(`  ✓ Created permission: ${perm.name}`);
+      }
+    }
+    console.log(`✅ Seeded ${DEFAULT_PERMISSIONS.length} permissions`);
+
+    // Seed roles
+    console.log("👥 Seeding roles...");
+    for (const roleData of DEFAULT_ROLES) {
+      const { permissions: rolePermNames, ...roleInfo } = roleData;
+
+      // Check if role exists
+      const existing = await db.select().from(roles).where(eq(roles.name, roleInfo.name));
+      let roleId: string;
+
+      if (existing.length > 0) {
+        roleId = existing[0].id;
+        console.log(`  ↪ Role already exists: ${roleInfo.name}`);
+      } else {
+        const result = await db.insert(roles).values(roleInfo).returning();
+        roleId = result[0].id;
+        console.log(`  ✓ Created role: ${roleInfo.name}`);
+      }
+
+      // Clear existing role permissions
+      await db.delete(rolePermissions).where(eq(rolePermissions.roleId, roleId));
+
+      // Assign permissions to role
+      for (const permName of rolePermNames) {
+        const permId = permissionMap.get(permName);
+        if (permId) {
+          await db.insert(rolePermissions).values({
+            roleId,
+            permissionId: permId,
+          }).onConflictDoNothing();
+        }
+      }
+      console.log(`  ✓ Assigned ${rolePermNames.length} permissions to ${roleInfo.name}`);
+    }
+    console.log(`✅ Seeded ${DEFAULT_ROLES.length} roles`);
+
     // Seed vendors
     console.log("📦 Seeding vendors...");
     for (const vendor of MOCK_VENDORS) {
