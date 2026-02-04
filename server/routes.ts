@@ -21,6 +21,17 @@ import {
   getCurrentUser,
 } from "./notifications";
 import { auditService } from "./audit-service";
+import {
+  syncVendorsFromBigQuery,
+  syncVendorMetricsFromBigQuery,
+  runScheduledBigQuerySync,
+} from "./bigquery-automation";
+import {
+  isN8nConfigured,
+  triggerN8nWorkflow,
+  triggerTicketCreated,
+  triggerTicketUpdated,
+} from "./n8n-integration";
 
 // Hardcoded default permissions (fallback when database is empty)
 const HARDCODED_PERMISSIONS = [
@@ -2256,6 +2267,101 @@ export async function registerRoutes(
         configured: !!(process.env.BIGQUERY_PROJECT_ID),
       });
     } catch (error: any) {
+      res.status(500).json({ error: error.message });
+    }
+  });
+
+  // BigQuery Automation Endpoints
+  app.post("/api/automation/bigquery/sync-vendors", async (_req, res) => {
+    try {
+      const results = await syncVendorsFromBigQuery();
+      res.json({
+        success: true,
+        message: "Vendor sync completed",
+        results,
+      });
+    } catch (error: any) {
+      res.status(500).json({ error: error.message });
+    }
+  });
+
+  app.post("/api/automation/bigquery/sync-metrics", async (_req, res) => {
+    try {
+      const count = await syncVendorMetricsFromBigQuery();
+      res.json({
+        success: true,
+        message: "Metrics sync completed",
+        vendorsUpdated: count,
+      });
+    } catch (error: any) {
+      res.status(500).json({ error: error.message });
+    }
+  });
+
+  app.post("/api/automation/bigquery/sync-all", async (_req, res) => {
+    try {
+      await runScheduledBigQuerySync();
+      res.json({
+        success: true,
+        message: "Full BigQuery sync completed",
+      });
+    } catch (error: any) {
+      res.status(500).json({ error: error.message });
+    }
+  });
+
+  // n8n Integration Endpoints
+  app.get("/api/n8n/status", async (_req, res) => {
+    res.json({
+      configured: isN8nConfigured(),
+      apiKeySet: !!(process.env.N8N_API_KEY || process.env.n8n_api_key),
+      webhookUrlSet: !!(process.env.N8N_WEBHOOK_URL || process.env.n8n_webhook_url),
+    });
+  });
+
+  app.post("/api/n8n/trigger", async (req, res) => {
+    try {
+      const { event, data } = req.body;
+
+      if (!event) {
+        return res.status(400).json({ error: "Event name is required" });
+      }
+
+      const success = await triggerN8nWorkflow(event, data);
+      res.json({
+        success,
+        message: success ? "Workflow triggered" : "Failed to trigger workflow",
+      });
+    } catch (error: any) {
+      res.status(500).json({ error: error.message });
+    }
+  });
+
+  // Webhook endpoint for n8n to call back
+  app.post("/api/webhook/n8n", async (req, res) => {
+    try {
+      const { event, data } = req.body;
+
+      console.log(`[Webhook] Received n8n webhook: ${event}`);
+
+      // Handle different webhook events
+      switch (event) {
+        case 'bigquery.sync.trigger':
+          await runScheduledBigQuerySync();
+          break;
+        case 'vendor.sync.trigger':
+          await syncVendorsFromBigQuery();
+          break;
+        case 'metrics.sync.trigger':
+          await syncVendorMetricsFromBigQuery();
+          break;
+        default:
+          console.log(`[Webhook] Unknown event: ${event}`);
+      }
+
+      res.json({ success: true, message: `Processed ${event}` });
+    } catch (error: any) {
+      console.error('[Webhook] Error:', error);
       res.status(500).json({ error: error.message });
     }
   });
