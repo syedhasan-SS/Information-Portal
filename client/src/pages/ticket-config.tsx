@@ -721,6 +721,7 @@ export default function TicketConfigPage() {
           l3: row['l3'],
           l4: row['l4'],
           description: row['description'],
+          departmentType: row['department type'] || row['department'] || 'All', // Default to 'All' if not specified
           isActive: row['active']?.toLowerCase() === 'true' || row['active']?.toLowerCase() === 'yes',
           slaResponseHours: row['sla response hours'] ? parseInt(row['sla response hours']) : null,
           slaResolutionHours: parseInt(row['sla resolution hours']),
