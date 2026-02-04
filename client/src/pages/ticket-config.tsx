@@ -689,7 +689,7 @@ export default function TicketConfigPage() {
 
       // Parse header using proper CSV parsing
       const headers = parseCsvLine(lines[0]).map(h => h.trim().toLowerCase());
-      const requiredHeaders = ['issue type', 'l1', 'l2', 'l3', 'description', 'active', 'department type'];
+      const requiredHeaders = ['issue type', 'l1', 'l2', 'l3', 'description', 'active'];
 
       // SLA column can be either 'sla (hrs)' or 'sla resolution hours'
       const hasSlaColumn = headers.includes('sla (hrs)') || headers.includes('sla resolution hours');
@@ -697,6 +697,17 @@ export default function TicketConfigPage() {
         toast({
           title: "Invalid CSV Format",
           description: "Missing required SLA column (must have 'SLA (hrs)' or 'SLA Resolution Hours')",
+          variant: "destructive"
+        });
+        return;
+      }
+
+      // Department column can be either 'department type' or 'department'
+      const hasDepartmentColumn = headers.includes('department type') || headers.includes('department');
+      if (!hasDepartmentColumn) {
+        toast({
+          title: "Invalid CSV Format",
+          description: "Missing required Department column (must have 'Department Type' or 'Department')",
           variant: "destructive"
         });
         return;
@@ -2481,10 +2492,13 @@ export default function TicketConfigPage() {
               <AlertDescription>
                 <div className="font-semibold mb-1">CSV Format:</div>
                 <div className="text-sm text-muted-foreground">
-                  Columns: No., Issue Type, L1, L2, L3, L4, Description, Department Type, Active, SLA (hrs)
+                  <strong>Option 1:</strong> Issue Type, L1, L2, L3, L4, Description, Department, Active, SLA Response Hours, SLA Resolution Hours
                 </div>
-                <div className="text-xs text-muted-foreground mt-1">
-                  Note: No. and L4 are optional. Department Type must be "Seller Support", "Customer Support", or "All".
+                <div className="text-sm text-muted-foreground mt-1">
+                  <strong>Option 2:</strong> No., Issue Type, L1, L2, L3, L4, Description, Department Type, Active, SLA (hrs)
+                </div>
+                <div className="text-xs text-muted-foreground mt-2">
+                  Note: No. and L4 are optional. Department/Department Type must be "Seller Support", "Customer Support", or "All".
                 </div>
               </AlertDescription>
             </Alert>
