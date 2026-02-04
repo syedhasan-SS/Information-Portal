@@ -144,6 +144,46 @@ export class DatabaseStorage implements IStorage {
   }
 
   async createTicket(ticket: InsertTicket): Promise<Ticket> {
+    // Generate ticket number if not provided
+    if (!ticket.ticketNumber) {
+      const lastTicket = await db.select({ ticketNumber: tickets.ticketNumber })
+        .from(tickets)
+        .orderBy(sql`${tickets.ticketNumber} DESC`)
+        .limit(1);
+
+      const lastNumber = lastTicket[0]?.ticketNumber
+        ? parseInt(lastTicket[0].ticketNumber.replace(/[^\d]/g, ''))
+        : 1000;
+
+      ticket.ticketNumber = `TKT-${(lastNumber + 1).toString().padStart(6, '0')}`;
+    }
+
+    // Set default ownerTeam if not provided
+    if (!ticket.ownerTeam) {
+      ticket.ownerTeam = ticket.department || 'Seller Support';
+    }
+
+    // Set default priority fields if not provided
+    if (!ticket.priorityScore) {
+      ticket.priorityScore = 0;
+    }
+    if (!ticket.priorityTier) {
+      ticket.priorityTier = 'Low';
+    }
+    if (!ticket.priorityBadge) {
+      ticket.priorityBadge = 'P3';
+    }
+    if (!ticket.priorityBreakdown) {
+      ticket.priorityBreakdown = {
+        vendorTicketVolume: 0,
+        vendorGmvTier: "Unknown",
+        issuePriorityPoints: 0,
+        gmvPoints: 0,
+        ticketHistoryPoints: 0,
+        issuePoints: 0,
+      };
+    }
+
     // Capture configuration snapshots
     const snapshots = await this.captureConfigurationSnapshots(ticket);
 
@@ -162,17 +202,13 @@ export class DatabaseStorage implements IStorage {
   private async captureConfigurationSnapshots(ticketData: InsertTicket) {
     // Fetch configuration data in parallel
     const [category, slaConfig, tagsData] = await Promise.all([
-      this.getCategoryById(ticketData.categoryId),
+      ticketData.categoryId ? this.getCategoryById(ticketData.categoryId) : Promise.resolve(null),
       this.findMatchingSlaConfiguration(ticketData.categoryId, ticketData.department),
       ticketData.tags ? this.getTagsByNames(ticketData.tags) : Promise.resolve([]),
     ]);
 
-    if (!category) {
-      throw new Error(`Category ${ticketData.categoryId} not found`);
-    }
-
-    // Build category snapshot
-    const categorySnapshot = {
+    // Build category snapshot (with defaults if no category selected)
+    const categorySnapshot = category ? {
       categoryId: ticketData.categoryId,
       issueType: ticketData.issueType,
       l1: category.l1,
@@ -182,6 +218,16 @@ export class DatabaseStorage implements IStorage {
       path: category.path,
       departmentType: category.departmentType,
       issuePriorityPoints: category.issuePriorityPoints,
+    } : {
+      categoryId: null,
+      issueType: ticketData.issueType,
+      l1: 'General',
+      l2: 'Uncategorized',
+      l3: 'Other',
+      l4: null,
+      path: 'General / Uncategorized / Other',
+      departmentType: ticketData.department,
+      issuePriorityPoints: 0,
     };
 
     // Build SLA snapshot

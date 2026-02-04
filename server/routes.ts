@@ -226,6 +226,11 @@ export async function registerRoutes(
 
       console.log('✅ Ticket validation passed');
 
+      // Clean up empty strings to null for optional fields
+      if (parsed.data.categoryId === '') {
+        parsed.data.categoryId = null as any; // Temporarily set to null for uncategorized tickets
+      }
+
       // Validate vendorHandle exists if provided (for Seller Support)
       if (parsed.data.vendorHandle) {
         console.log('🔍 Validating vendor handle:', parsed.data.vendorHandle);

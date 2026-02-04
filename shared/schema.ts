@@ -223,6 +223,19 @@ export const insertTicketSchema = createInsertSchema(tickets).omit({
   id: true,
   createdAt: true,
   updatedAt: true,
+}).partial({
+  // Server-generated fields that should be optional on creation
+  ticketNumber: true,
+  priorityScore: true,
+  priorityBadge: true,
+  priorityBreakdown: true,
+  ownerTeam: true,
+  categorySnapshot: true,
+  slaSnapshot: true,
+  prioritySnapshot: true,
+  tagsSnapshot: true,
+  snapshotVersion: true,
+  snapshotCapturedAt: true,
 });
 
 export const insertCommentSchema = createInsertSchema(comments).omit({
