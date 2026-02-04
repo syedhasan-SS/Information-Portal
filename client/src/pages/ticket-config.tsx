@@ -689,7 +689,7 @@ export default function TicketConfigPage() {
 
       // Parse header using proper CSV parsing
       const headers = parseCsvLine(lines[0]).map(h => h.trim().toLowerCase());
-      const requiredHeaders = ['issue type', 'l1', 'l2', 'l3', 'description', 'active'];
+      const requiredHeaders = ['issue type', 'l1', 'l2', 'l3', 'description', 'active', 'department type'];
 
       // SLA column can be either 'sla (hrs)' or 'sla resolution hours'
       const hasSlaColumn = headers.includes('sla (hrs)') || headers.includes('sla resolution hours');
@@ -735,7 +735,7 @@ export default function TicketConfigPage() {
           l3: row['l3'],
           l4: row['l4'] || '', // L4 is optional
           description: row['description'],
-          departmentType: row['department type'] || row['department'] || 'All', // Default to 'All' if not specified
+          departmentType: row['department type'] || row['department'],
           isActive: row['active']?.toLowerCase() === 'true' || row['active']?.toLowerCase() === 'yes',
           slaResponseHours: row['sla response hours'] ? parseInt(row['sla response hours']) : null,
           slaResolutionHours: parseInt(slaValue),
@@ -747,6 +747,11 @@ export default function TicketConfigPage() {
         }
         if (!config.l1 || !config.l2 || !config.l3) {
           errors.push(`Row ${i}: Missing required category fields (l1, l2, l3 are required; l4 is optional)`);
+        }
+        if (!config.departmentType) {
+          errors.push(`Row ${i}: Missing required Department Type`);
+        } else if (!['Seller Support', 'Customer Support', 'All'].includes(config.departmentType)) {
+          errors.push(`Row ${i}: Invalid Department Type "${config.departmentType}" (must be "Seller Support", "Customer Support", or "All")`);
         }
         if (!config.slaResolutionHours || isNaN(config.slaResolutionHours)) {
           errors.push(`Row ${i}: Invalid or missing SLA resolution hours (must be a number)`);
@@ -811,10 +816,10 @@ export default function TicketConfigPage() {
   };
 
   const downloadCsvTemplate = () => {
-    const template = `No.,Issue Type,L1,L2,L3,L4,Description,Active,SLA (hrs)
-1,Complaint,Finance,Payment,Payment Not Processed,Commission Issue,Payment related complaint,true,48
-2,Request,Operations,Order Management,Order Modification,Cancel Request,Order cancellation request,true,24
-3,Information,Tech,Product Listings,Product Information,,Product category information,true,8`;
+    const template = `No.,Issue Type,L1,L2,L3,L4,Description,Department Type,Active,SLA (hrs)
+1,Complaint,Finance,Payment,Payment Not Processed,Commission Issue,Payment related complaint,Seller Support,true,48
+2,Request,Operations,Order Management,Order Modification,Cancel Request,Order cancellation request,Seller Support,true,24
+3,Information,Tech,Product Listings,Product Information,,Product category information,All,true,8`;
 
     const blob = new Blob([template], { type: 'text/csv' });
     const url = window.URL.createObjectURL(blob);
@@ -2476,10 +2481,10 @@ export default function TicketConfigPage() {
               <AlertDescription>
                 <div className="font-semibold mb-1">CSV Format:</div>
                 <div className="text-sm text-muted-foreground">
-                  Columns: No., Issue Type, L1, L2, L3, L4, Description, Active, SLA (hrs)
+                  Columns: No., Issue Type, L1, L2, L3, L4, Description, Department Type, Active, SLA (hrs)
                 </div>
                 <div className="text-xs text-muted-foreground mt-1">
-                  Note: No., L4, and Department Type columns are optional. Department Type defaults to "All" if not specified.
+                  Note: No. and L4 are optional. Department Type must be "Seller Support", "Customer Support", or "All".
                 </div>
               </AlertDescription>
             </Alert>
