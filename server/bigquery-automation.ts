@@ -20,6 +20,7 @@ interface BigQueryVendorData {
   zone?: string;
   region?: string;
   country?: string;
+  geo?: string;
   persona?: string;
 }
 
@@ -96,6 +97,7 @@ export async function syncVendorsFromBigQuery(): Promise<{
         zone,
         region,
         country,
+        geo,
         persona
       FROM \`${projectId}.aurora_postgres_public.vendors\`
       WHERE handle IS NOT NULL
@@ -127,6 +129,7 @@ export async function syncVendorsFromBigQuery(): Promise<{
           zone: row.zone || null,
           region: row.region || null,
           country: row.country || null,
+          geo: row.geo || null,
           persona: row.persona || null,
         };
 

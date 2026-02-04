@@ -15,6 +15,7 @@ export const vendors = pgTable("vendors", {
   zone: text("zone"),
   region: text("region"),
   country: text("country"),
+  geo: text("geo"), // Geographic location/market
   persona: text("persona"),
   createdAt: timestamp("created_at").notNull().defaultNow(),
   updatedAt: timestamp("updated_at").notNull().defaultNow(),
