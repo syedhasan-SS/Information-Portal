@@ -1,0 +1,37 @@
+MANAGER / LEAD / ASSOCIATE ROLES - UAT TEST CASES
+
+Test ID	Role	Feature	Test Scenario	Test Steps	Expected Result	Status	Notes
+MGR-001	Manager	Login	Login as Manager	Login with Manager credentials	Dashboard visible	NOT TESTED
+MGR-002	Manager	Dashboard	View Dashboard	Check dashboard	Department-level statistics only	NOT TESTED
+MGR-003	Manager	Tickets	View Department Tickets	Navigate to tickets	Only OWN department tickets visible	NOT TESTED
+MGR-004	Manager	Tickets	Create Ticket	New Ticket → Submit	Ticket created	NOT TESTED
+MGR-005	Manager	Tickets	Edit Ticket	Edit department ticket	Ticket updated	NOT TESTED
+MGR-006	Manager	Tickets	Cannot Delete	Check ticket options	No delete button	NOT TESTED
+MGR-007	Manager	Users	No User Management	Check Labs menu	User Management NOT visible	NOT TESTED
+MGR-008	Manager	Roles	No Roles Access	Check Labs menu	Roles NOT visible	NOT TESTED
+MGR-009	Manager	Vendors	View Vendors	Navigate to Vendors	Can view vendors	NOT TESTED
+MGR-010	Manager	Vendors	Cannot Manage Vendors	Check vendor options	Cannot create/edit/delete	NOT TESTED
+MGR-011	Manager	Analytics	No Analytics Access	Check navigation	Analytics NOT visible/accessible	NOT TESTED
+MGR-012	Manager	Config	No Config Access	Check Labs menu	Ticket Config NOT visible	NOT TESTED
+LEAD-001	Lead	Login	Login as Lead	Login with Lead credentials	Dashboard visible	NOT TESTED
+LEAD-002	Lead	Dashboard	View Dashboard	Check dashboard	Team-level statistics only (not full dept)	NOT TESTED
+LEAD-003	Lead	Tickets	View Team Tickets	Navigate to tickets	Only TEAM tickets visible (not full department)	NOT TESTED
+LEAD-004	Lead	Tickets	Cannot See Full Dept	Check ticket visibility	Cannot see other teams in same dept	NOT TESTED
+LEAD-005	Lead	Tickets	Create Ticket	New Ticket → Submit	Ticket created	NOT TESTED
+LEAD-006	Lead	Tickets	Edit Team Ticket	Edit ticket	Ticket updated	NOT TESTED
+LEAD-007	Lead	Users	No User Management	Check Labs menu	User Management NOT visible	NOT TESTED
+LEAD-008	Lead	Roles	No Roles Access	Check Labs menu	Roles NOT visible	NOT TESTED
+LEAD-009	Lead	Vendors	View Vendors	Navigate to Vendors	Can view vendors	NOT TESTED
+LEAD-010	Lead	Analytics	No Analytics Access	Check navigation	Analytics NOT visible	NOT TESTED
+ASSOC-001	Associate	Login	Login as Associate	Login with Associate credentials	Dashboard visible	NOT TESTED
+ASSOC-002	Associate	Dashboard	View Dashboard	Check dashboard	Basic statistics visible	NOT TESTED
+ASSOC-003	Associate	Tickets	View Assigned Tickets Only	Navigate to My Tickets	Only tickets ASSIGNED TO ME visible	NOT TESTED
+ASSOC-004	Associate	Tickets	Cannot See All Tickets	Try to view All Tickets	Limited visibility, cannot see unassigned	NOT TESTED
+ASSOC-005	Associate	Tickets	Create Ticket	New Ticket → Submit	Ticket created	NOT TESTED
+ASSOC-006	Associate	Tickets	Edit Own Ticket	Edit assigned ticket	Ticket updated	NOT TESTED
+ASSOC-007	Associate	Tickets	Cannot Edit Others	Try to edit unassigned ticket	Cannot access/edit	NOT TESTED
+ASSOC-008	Associate	Users	No User Management	Check navigation	User Management NOT visible	NOT TESTED
+ASSOC-009	Associate	Roles	No Roles Access	Check navigation	Roles NOT visible	NOT TESTED
+ASSOC-010	Associate	Vendors	No Vendor Access	Check navigation	Vendors NOT visible/accessible	NOT TESTED
+ASSOC-011	Associate	Analytics	No Analytics Access	Check navigation	Analytics NOT visible	NOT TESTED
+ASSOC-012	Associate	Labs	No Labs Menu	Check navigation	Labs dropdown NOT visible at all	NOT TESTED

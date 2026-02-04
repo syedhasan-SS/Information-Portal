@@ -1,0 +1,53 @@
+Test ID	Feature	Test Case	Test Steps	Expected Result	Status	Notes
+P2-TKT-001	Tickets	Ticket List View	Navigate to All Tickets	List displayed with pagination	NOT TESTED
+P2-TKT-002	Tickets	Ticket Detail View	Click any ticket	Full detail page opens	NOT TESTED
+P2-TKT-003	Tickets	Filter by Status	All Tickets → Filter by "Open"	Only open tickets shown	NOT TESTED
+P2-TKT-004	Tickets	Filter by Priority	Filter by "High" priority	Only high priority tickets	NOT TESTED
+P2-TKT-005	Tickets	Filter by Department	Filter by specific department	Department tickets only	NOT TESTED
+P2-TKT-006	Tickets	Search Tickets	Enter keyword → Press Enter	Matching tickets shown	NOT TESTED
+P2-TKT-007	Tickets	Update Status	Change status → Save	Status updated	NOT TESTED
+P2-TKT-008	Tickets	Add Comment	Ticket detail → Add comment → Submit	Comment appears in timeline	NOT TESTED
+P2-TKT-009	Tickets	File Attachment	Attach file → Submit	File uploaded successfully	NOT TESTED
+P2-TKT-010	Tickets	Reassign Ticket	Change assignee → Save	Ticket reassigned	NOT TESTED
+P2-USR-001	Users	User List View	Labs → User Management	User list with details	NOT TESTED
+P2-USR-002	Users	Create User	Add User → Fill all fields → Submit	User created, appears in list	NOT TESTED
+P2-USR-003	Users	Duplicate Email	Create user with existing email	Error: email already exists	NOT TESTED
+P2-USR-004	Users	Edit User Role	Change role → Save	Role updated	NOT TESTED
+P2-USR-005	Users	Multi-Role Assignment	Assign multiple roles → Save	Multiple roles assigned	NOT TESTED
+P2-USR-006	Users	Change Department	Assign new dept → Save	Department updated, visibility changes	NOT TESTED
+P2-USR-007	Users	Deactivate User	Toggle isActive to OFF → Save	User cannot login	NOT TESTED
+P2-USR-008	Users	Filter by Role	Filter by role	Filtered results	NOT TESTED
+P2-USR-009	Users	Filter by Department	Filter by dept	Department users only	NOT TESTED
+P2-ROLE-001	Roles	View System Roles	Roles → System Roles tab	7 roles listed	NOT TESTED
+P2-ROLE-002	Roles	View Custom Roles	Roles → Custom Roles tab	Custom roles (if any)	NOT TESTED
+P2-ROLE-003	Roles	View Permissions	Roles → Permissions tab	Permissions grouped by category	NOT TESTED
+P2-ROLE-004	Roles	View Hardcoded Defaults	Roles → Hardcoded Defaults tab	Fallback permissions shown	NOT TESTED
+P2-ROLE-005	Roles	Edit System Role Perms	Edit → Change perms → Save	Permissions updated	NOT TESTED
+P2-ROLE-006	Roles	System Role Name Locked	Try to edit system role name	Name field disabled	NOT TESTED
+P2-ROLE-007	Roles	Create Custom Role	Create Role → Fill → Save	New role created	NOT TESTED
+P2-ROLE-008	Roles	Edit Custom Role	Edit → Modify → Save	Changes saved	NOT TESTED
+P2-ROLE-009	Roles	Delete Custom Role	Delete → Confirm	Role deleted	NOT TESTED
+P2-ROLE-010	Roles	Cannot Delete System	Check system role	No delete option available	NOT TESTED
+P2-ROLE-011	Permissions	Create Permission	Create → Fill → Save	Permission created	NOT TESTED
+P2-ROLE-012	Permissions	New Category	Create Permission → "Create new category"	New category created	NOT TESTED
+P2-ROLE-013	Permissions	Edit Permission	Edit → Modify → Save	Changes saved	NOT TESTED
+P2-ROLE-014	Permissions	System Perm Locked	Try to edit system permission name	Name/category disabled	NOT TESTED
+P2-ROLE-015	Permissions	Delete Custom Perm	Delete → Confirm	Permission deleted	NOT TESTED
+P2-ROLE-016	Permissions	Cannot Delete System Perm	Check system permission	No delete option	NOT TESTED
+P2-VND-001	Vendors	View Vendor List	Navigate to Vendors	Vendor list displayed	NOT TESTED
+P2-VND-002	Vendors	Create Vendor	Add Vendor → Fill → Save	Vendor created	NOT TESTED
+P2-VND-003	Vendors	Duplicate Handle	Use existing handle	Error: handle exists	NOT TESTED
+P2-VND-004	Vendors	Edit Vendor	Edit → Modify → Save	Changes saved	NOT TESTED
+P2-VND-005	Vendors	View Vendor Profile	Click vendor	Profile page opens	NOT TESTED
+P2-VND-006	Vendors	Vendor Tickets	Vendor profile → Tickets tab	All related tickets shown	NOT TESTED
+P2-VND-007	Vendors	Search Vendor	Search by vendor handle	Matching vendors shown	NOT TESTED
+P2-VND-008	Vendors	Delete Vendor	Delete → Confirm (Owner only)	Vendor deleted	NOT TESTED
+P2-ANA-001	Analytics	View Dashboard	Navigate to Analytics	Charts and metrics visible	NOT TESTED
+P2-ANA-002	Analytics	Filter Date Range	Select date range	Filtered data	NOT TESTED
+P2-ANA-003	Analytics	Filter Department	Select department	Dept analytics	NOT TESTED
+P2-ANA-004	Analytics	Access Control	Login as Agent → Try Analytics	Access denied	NOT TESTED
+P2-NTF-001	Notifications	Bell Badge	Check notification bell	Badge shows unread count	NOT TESTED
+P2-NTF-002	Notifications	View List	Click bell	List of notifications	NOT TESTED
+P2-NTF-003	Notifications	Mark Read	Click notification	Marked as read	NOT TESTED
+P2-NTF-004	Notifications	Ticket Assigned	Assign ticket to user	User gets notification	NOT TESTED
+P2-NTF-005	Notifications	Comment Mention	@mention user in comment	User gets notification	NOT TESTED

@@ -1,642 +1,490 @@
-# User Acceptance Test Cases - Information Portal
+# Information Portal - User Acceptance Test Cases
 
-## Document Information
-- **Version:** 1.0
-- **Last Updated:** 2026-02-02
-- **Author:** System Documentation
-
----
-
-## Table of Contents
-1. [Authentication & Authorization](#1-authentication--authorization)
-2. [Dashboard](#2-dashboard)
-3. [Ticket Management](#3-ticket-management)
-4. [User Management](#4-user-management)
-5. [Vendor Management](#5-vendor-management)
-6. [Roles & Permissions Management](#6-roles--permissions-management)
-7. [Analytics](#7-analytics)
-8. [Ticket Configuration](#8-ticket-configuration)
-9. [Navigation & UI](#9-navigation--ui)
+> **Document Version:** 2.0
+> **Last Updated:** February 2026
+> **Status:** Ready for Testing
 
 ---
 
-## 1. Authentication & Authorization
+## Quick Navigation
 
-### UAT-AUTH-001: User Login
-| Field | Value |
-|-------|-------|
-| **Test ID** | UAT-AUTH-001 |
-| **Title** | Verify user can login with valid credentials |
-| **Preconditions** | User account exists in the system |
-| **Test Steps** | 1. Navigate to login page (/)<br>2. Enter valid email<br>3. Click Login/Submit |
-| **Expected Result** | User is redirected to /dashboard |
-| **Priority** | High |
-
-### UAT-AUTH-002: Invalid Login Attempt
-| Field | Value |
-|-------|-------|
-| **Test ID** | UAT-AUTH-002 |
-| **Title** | Verify system rejects invalid credentials |
-| **Preconditions** | None |
-| **Test Steps** | 1. Navigate to login page<br>2. Enter invalid/non-existent email<br>3. Click Login |
-| **Expected Result** | Error message displayed, user remains on login page |
-| **Priority** | High |
-
-### UAT-AUTH-003: Session Persistence
-| Field | Value |
-|-------|-------|
-| **Test ID** | UAT-AUTH-003 |
-| **Title** | Verify user session persists across page refresh |
-| **Preconditions** | User is logged in |
-| **Test Steps** | 1. Login successfully<br>2. Refresh the browser<br>3. Verify still logged in |
-| **Expected Result** | User remains authenticated after refresh |
-| **Priority** | Medium |
-
-### UAT-AUTH-004: Logout Functionality
-| Field | Value |
-|-------|-------|
-| **Test ID** | UAT-AUTH-004 |
-| **Title** | Verify user can logout successfully |
-| **Preconditions** | User is logged in |
-| **Test Steps** | 1. Click on profile dropdown<br>2. Click Logout |
-| **Expected Result** | User is logged out and redirected to login page |
-| **Priority** | High |
-
-### UAT-AUTH-005: Protected Route Access
-| Field | Value |
-|-------|-------|
-| **Test ID** | UAT-AUTH-005 |
-| **Title** | Verify unauthenticated users cannot access protected routes |
-| **Preconditions** | User is not logged in |
-| **Test Steps** | 1. Clear browser session<br>2. Try to access /dashboard directly |
-| **Expected Result** | User is redirected to login page |
-| **Priority** | High |
-
-### UAT-AUTH-006: Role-Based Access Control
-| Field | Value |
-|-------|-------|
-| **Test ID** | UAT-AUTH-006 |
-| **Title** | Verify users can only access pages they have permission for |
-| **Preconditions** | User logged in as Agent (limited permissions) |
-| **Test Steps** | 1. Login as Agent<br>2. Try to access /users page<br>3. Try to access /roles page |
-| **Expected Result** | Access denied or page not accessible for restricted routes |
-| **Priority** | High |
+| Section | Description |
+|---------|-------------|
+| [1. Role-Based Testing](#1-role-based-testing) | Tests organized by user role |
+| [2. Department-Based Testing](#2-department-based-testing) | Tests specific to each department |
+| [3. Feature Testing](#3-feature-testing) | Tests by feature/module |
+| [4. Permission Matrix](#4-permission-matrix) | Permission verification grid |
+| [5. Test Execution Tracker](#5-test-execution-tracker) | Progress tracking |
 
 ---
 
-## 2. Dashboard
+# 1. Role-Based Testing
 
-### UAT-DASH-001: Dashboard Load
-| Field | Value |
-|-------|-------|
-| **Test ID** | UAT-DASH-001 |
-| **Title** | Verify dashboard loads with all components |
-| **Preconditions** | User is logged in |
-| **Test Steps** | 1. Navigate to /dashboard<br>2. Wait for page to load |
-| **Expected Result** | Dashboard displays: ticket statistics, recent tickets, priority breakdown, navigation |
-| **Priority** | High |
+## 1.1 Owner Role Testing
 
-### UAT-DASH-002: Ticket Statistics Display
-| Field | Value |
-|-------|-------|
-| **Test ID** | UAT-DASH-002 |
-| **Title** | Verify ticket statistics are accurate |
-| **Preconditions** | User is logged in with view:tickets permission |
-| **Test Steps** | 1. Navigate to dashboard<br>2. View ticket counts (Open, In Progress, Resolved, etc.) |
-| **Expected Result** | Statistics match actual ticket counts in the system |
-| **Priority** | Medium |
+> **Role Description:** Full system access with all permissions
+> **Expected Permissions:** 24 (all permissions)
 
-### UAT-DASH-003: Navigation Links
-| Field | Value |
-|-------|-------|
-| **Test ID** | UAT-DASH-003 |
-| **Title** | Verify all navigation links work correctly |
-| **Preconditions** | User logged in with appropriate permissions |
-| **Test Steps** | 1. Click "All Tickets"<br>2. Click "My Tickets"<br>3. Click "Vendors"<br>4. Click "Analytics"<br>5. Click "Labs" dropdown items |
-| **Expected Result** | Each link navigates to the correct page |
-| **Priority** | High |
+### Test Scenarios
 
-### UAT-DASH-004: Labs Dropdown Visibility
-| Field | Value |
-|-------|-------|
-| **Test ID** | UAT-DASH-004 |
-| **Title** | Verify Labs dropdown shows based on permissions |
-| **Preconditions** | None |
-| **Test Steps** | 1. Login as Owner - verify Labs dropdown visible with all items<br>2. Login as Agent - verify Labs dropdown not visible or limited |
-| **Expected Result** | Labs dropdown visibility matches user permissions |
-| **Priority** | Medium |
-
-### UAT-DASH-005: Labs Dropdown Items
-| Field | Value |
-|-------|-------|
-| **Test ID** | UAT-DASH-005 |
-| **Title** | Verify Labs dropdown contains correct items |
-| **Preconditions** | User logged in with view:config, view:users, view:roles permissions |
-| **Test Steps** | 1. Click Labs dropdown<br>2. Verify items: Ticket Manager, User Management, Roles Management |
-| **Expected Result** | All three items visible and clickable |
-| **Priority** | Medium |
+| ID | Scenario | Steps | Expected Result | Status |
+|----|----------|-------|-----------------|--------|
+| OWN-001 | Access Dashboard | Login as Owner → Navigate to Dashboard | Full dashboard with all statistics visible | ⬜ |
+| OWN-002 | View All Tickets | Navigate to All Tickets page | Can see tickets from ALL departments | ⬜ |
+| OWN-003 | Create Ticket | Click New Ticket → Fill form → Submit | Ticket created successfully | ⬜ |
+| OWN-004 | Delete Ticket | Open ticket → Click Delete | Ticket deleted (Owner only) | ⬜ |
+| OWN-005 | Access User Management | Labs → User Management | Can view, create, edit, delete users | ⬜ |
+| OWN-006 | Access Roles Management | Labs → Roles Management | Can manage all roles and permissions | ⬜ |
+| OWN-007 | Delete System Role | Try to delete "Admin" role | Should be blocked (system role) | ⬜ |
+| OWN-008 | Create Custom Role | Create Role → Add permissions | Custom role created successfully | ⬜ |
+| OWN-009 | Delete Custom Role | Delete a custom role | Custom role deleted | ⬜ |
+| OWN-010 | Create Permission | Permissions tab → Create Permission | Permission created and available | ⬜ |
+| OWN-011 | Access Analytics | Navigate to Analytics | Full analytics dashboard visible | ⬜ |
+| OWN-012 | Access Ticket Config | Labs → Ticket Manager | Can configure categories, departments | ⬜ |
+| OWN-013 | Manage Vendors | Navigate to Vendors | Full CRUD on vendors | ⬜ |
 
 ---
 
-## 3. Ticket Management
+## 1.2 Admin Role Testing
 
-### UAT-TKT-001: View All Tickets
-| Field | Value |
-|-------|-------|
-| **Test ID** | UAT-TKT-001 |
-| **Title** | Verify user can view all tickets |
-| **Preconditions** | User has view:all_tickets or view:department_tickets permission |
-| **Test Steps** | 1. Navigate to /tickets<br>2. View ticket list |
-| **Expected Result** | Ticket list displays with columns: ID, Title, Status, Priority, Assignee, etc. |
-| **Priority** | High |
+> **Role Description:** Administrative access (no delete users/roles)
+> **Expected Permissions:** 21 permissions
 
-### UAT-TKT-002: Create New Ticket
-| Field | Value |
-|-------|-------|
-| **Test ID** | UAT-TKT-002 |
-| **Title** | Verify authorized user can create a new ticket |
-| **Preconditions** | User has create:tickets permission and is in Seller Support or Customer Support |
-| **Test Steps** | 1. Click "New Ticket" button<br>2. Fill required fields (Title, Department, Category, etc.)<br>3. Submit |
-| **Expected Result** | Ticket created successfully, appears in ticket list |
-| **Priority** | High |
+### Test Scenarios
 
-### UAT-TKT-003: Create Ticket - Seller Support
-| Field | Value |
-|-------|-------|
-| **Test ID** | UAT-TKT-003 |
-| **Title** | Verify Seller Support agent sees vendorHandle field |
-| **Preconditions** | User is Agent in Seller Support sub-department |
-| **Test Steps** | 1. Click New Ticket<br>2. Check for vendorHandle field |
-| **Expected Result** | vendorHandle field is visible and required |
-| **Priority** | Medium |
-
-### UAT-TKT-004: Create Ticket - Customer Support
-| Field | Value |
-|-------|-------|
-| **Test ID** | UAT-TKT-004 |
-| **Title** | Verify Customer Support agent sees customer field |
-| **Preconditions** | User is Agent in Customer Support |
-| **Test Steps** | 1. Click New Ticket<br>2. Check for customer field |
-| **Expected Result** | Customer field is visible and required |
-| **Priority** | Medium |
-
-### UAT-TKT-005: Create Ticket - Restricted for Other Agents
-| Field | Value |
-|-------|-------|
-| **Test ID** | UAT-TKT-005 |
-| **Title** | Verify agents outside Seller/Customer Support cannot create tickets |
-| **Preconditions** | User is Agent in a different department |
-| **Test Steps** | 1. Login as Agent in Tech department<br>2. Check if "New Ticket" button is visible |
-| **Expected Result** | New Ticket button is not visible or disabled |
-| **Priority** | High |
-
-### UAT-TKT-006: View Ticket Details
-| Field | Value |
-|-------|-------|
-| **Test ID** | UAT-TKT-006 |
-| **Title** | Verify user can view ticket details |
-| **Preconditions** | Ticket exists in system |
-| **Test Steps** | 1. Navigate to /tickets<br>2. Click on a ticket row |
-| **Expected Result** | Ticket detail page opens showing all ticket information |
-| **Priority** | High |
-
-### UAT-TKT-007: Edit Ticket
-| Field | Value |
-|-------|-------|
-| **Test ID** | UAT-TKT-007 |
-| **Title** | Verify user can edit ticket details |
-| **Preconditions** | User has edit:tickets permission |
-| **Test Steps** | 1. Open ticket details<br>2. Edit fields (status, priority, assignee)<br>3. Save changes |
-| **Expected Result** | Changes saved successfully, reflected in ticket list |
-| **Priority** | High |
-
-### UAT-TKT-008: Add Comment to Ticket
-| Field | Value |
-|-------|-------|
-| **Test ID** | UAT-TKT-008 |
-| **Title** | Verify user can add comments to a ticket |
-| **Preconditions** | Ticket exists, user has access |
-| **Test Steps** | 1. Open ticket details<br>2. Type comment in comment box<br>3. Submit comment |
-| **Expected Result** | Comment added and displayed in ticket history |
-| **Priority** | Medium |
-
-### UAT-TKT-009: Filter Tickets by Department
-| Field | Value |
-|-------|-------|
-| **Test ID** | UAT-TKT-009 |
-| **Title** | Verify ticket filtering by department works |
-| **Preconditions** | Multiple tickets exist across departments |
-| **Test Steps** | 1. Navigate to /tickets<br>2. Select department filter<br>3. Apply filter |
-| **Expected Result** | Only tickets from selected department displayed |
-| **Priority** | Medium |
-
-### UAT-TKT-010: My Tickets View
-| Field | Value |
-|-------|-------|
-| **Test ID** | UAT-TKT-010 |
-| **Title** | Verify My Tickets shows only user's assigned tickets |
-| **Preconditions** | User has tickets assigned to them |
-| **Test Steps** | 1. Navigate to /my-tickets |
-| **Expected Result** | Only tickets assigned to current user are displayed |
-| **Priority** | High |
+| ID | Scenario | Steps | Expected Result | Status |
+|----|----------|-------|-----------------|--------|
+| ADM-001 | Access Dashboard | Login as Admin | Full dashboard visible | ⬜ |
+| ADM-002 | View All Tickets | Navigate to All Tickets | Can see all tickets | ⬜ |
+| ADM-003 | Create/Edit Users | User Management → Add/Edit | Can create and edit users | ⬜ |
+| ADM-004 | Delete User Blocked | Try to delete a user | Should NOT have delete option | ⬜ |
+| ADM-005 | Edit System Role Permissions | Edit "Agent" role permissions | Can modify permissions | ⬜ |
+| ADM-006 | Delete Role Blocked | Try to delete any role | Should NOT have delete option | ⬜ |
+| ADM-007 | Create Custom Role | Create new custom role | Role created successfully | ⬜ |
+| ADM-008 | Access Analytics | Navigate to Analytics | Full access | ⬜ |
+| ADM-009 | Manage Vendors | Vendors page | Can create, edit (not delete) | ⬜ |
 
 ---
 
-## 4. User Management
+## 1.3 Head Role Testing
 
-### UAT-USR-001: View Users List
-| Field | Value |
-|-------|-------|
-| **Test ID** | UAT-USR-001 |
-| **Title** | Verify admin can view all users |
-| **Preconditions** | User has view:users permission |
-| **Test Steps** | 1. Navigate to /users (via Labs > User Management) |
-| **Expected Result** | User list displays with columns: Name, Email, Role, Department, Status |
-| **Priority** | High |
+> **Role Description:** Department leadership access
+> **Expected Permissions:** 9 permissions (department scoped)
 
-### UAT-USR-002: Create New User
-| Field | Value |
-|-------|-------|
-| **Test ID** | UAT-USR-002 |
-| **Title** | Verify admin can create a new user |
-| **Preconditions** | User has create:users permission |
-| **Test Steps** | 1. Click "Add User"<br>2. Fill required fields<br>3. Select role and department<br>4. Submit |
-| **Expected Result** | User created, appears in user list |
-| **Priority** | High |
+### Test Scenarios
 
-### UAT-USR-003: Edit User
-| Field | Value |
-|-------|-------|
-| **Test ID** | UAT-USR-003 |
-| **Title** | Verify admin can edit user details |
-| **Preconditions** | User has edit:users permission |
-| **Test Steps** | 1. Click Edit on a user<br>2. Modify role/department<br>3. Save |
-| **Expected Result** | Changes saved and reflected |
-| **Priority** | High |
-
-### UAT-USR-004: Deactivate User
-| Field | Value |
-|-------|-------|
-| **Test ID** | UAT-USR-004 |
-| **Title** | Verify admin can deactivate a user |
-| **Preconditions** | User has edit:users permission |
-| **Test Steps** | 1. Edit user<br>2. Set isActive to false<br>3. Save |
-| **Expected Result** | User deactivated, cannot login |
-| **Priority** | Medium |
-
-### UAT-USR-005: Multi-Role Assignment
-| Field | Value |
-|-------|-------|
-| **Test ID** | UAT-USR-005 |
-| **Title** | Verify user can be assigned multiple roles |
-| **Preconditions** | Multi-role support enabled |
-| **Test Steps** | 1. Edit user<br>2. Assign multiple roles (e.g., Manager + Lead)<br>3. Save |
-| **Expected Result** | User has combined permissions from all assigned roles |
-| **Priority** | Medium |
+| ID | Scenario | Steps | Expected Result | Status |
+|----|----------|-------|-----------------|--------|
+| HEAD-001 | View Department Tickets | Navigate to Tickets | Only sees own department tickets | ⬜ |
+| HEAD-002 | View Department Users | User Management | Only sees users in own department | ⬜ |
+| HEAD-003 | Create Ticket | Create new ticket | Ticket assigned to own department | ⬜ |
+| HEAD-004 | Edit Ticket | Edit any department ticket | Can edit tickets in department | ⬜ |
+| HEAD-005 | Cannot Delete Ticket | Check ticket actions | Delete option NOT available | ⬜ |
+| HEAD-006 | Cannot Access Roles | Try to access /roles | Access denied or not visible | ⬜ |
+| HEAD-007 | Cannot Access Config | Try to access /ticket-config | Access denied or not visible | ⬜ |
+| HEAD-008 | View Analytics | Navigate to Analytics | Analytics visible | ⬜ |
+| HEAD-009 | View Vendors (Read Only) | Navigate to Vendors | Can view, cannot create/edit | ⬜ |
 
 ---
 
-## 5. Vendor Management
+## 1.4 Manager Role Testing
 
-### UAT-VND-001: View Vendors List
-| Field | Value |
-|-------|-------|
-| **Test ID** | UAT-VND-001 |
-| **Title** | Verify user can view vendors list |
-| **Preconditions** | User has view:vendors permission |
-| **Test Steps** | 1. Navigate to /vendors |
-| **Expected Result** | Vendor list displays with handle, name, email |
-| **Priority** | High |
+> **Role Description:** Team management access
+> **Expected Permissions:** 6 permissions
 
-### UAT-VND-002: Create Vendor
-| Field | Value |
-|-------|-------|
-| **Test ID** | UAT-VND-002 |
-| **Title** | Verify user can create a new vendor |
-| **Preconditions** | User has create:vendors permission |
-| **Test Steps** | 1. Click "Add Vendor"<br>2. Enter handle, name, email<br>3. Submit |
-| **Expected Result** | Vendor created successfully |
-| **Priority** | Medium |
+### Test Scenarios
 
-### UAT-VND-003: View Vendor Profile
-| Field | Value |
-|-------|-------|
-| **Test ID** | UAT-VND-003 |
-| **Title** | Verify vendor profile page displays correctly |
-| **Preconditions** | Vendor exists |
-| **Test Steps** | 1. Click on vendor in list |
-| **Expected Result** | Vendor profile shows details and associated tickets |
-| **Priority** | Medium |
-
-### UAT-VND-004: Vendor Search/Lookup
-| Field | Value |
-|-------|-------|
-| **Test ID** | UAT-VND-004 |
-| **Title** | Verify vendor can be searched by handle |
-| **Preconditions** | Vendors exist in system |
-| **Test Steps** | 1. In ticket creation, type vendor handle<br>2. Verify autocomplete/search works |
-| **Expected Result** | Matching vendors appear in suggestions |
-| **Priority** | Medium |
+| ID | Scenario | Steps | Expected Result | Status |
+|----|----------|-------|-----------------|--------|
+| MGR-001 | View Department Tickets | Navigate to Tickets | Only department tickets visible | ⬜ |
+| MGR-002 | View Department Users | Check user visibility | Only department users visible | ⬜ |
+| MGR-003 | Create Ticket | Create new ticket | Can create tickets | ⬜ |
+| MGR-004 | Edit Ticket | Edit department ticket | Can edit | ⬜ |
+| MGR-005 | No Analytics Access | Check Analytics nav | Analytics NOT visible | ⬜ |
+| MGR-006 | No User Management | Check Labs dropdown | User Management NOT visible | ⬜ |
 
 ---
 
-## 6. Roles & Permissions Management
+## 1.5 Lead Role Testing
 
-### UAT-ROLE-001: View Roles Page
-| Field | Value |
-|-------|-------|
-| **Test ID** | UAT-ROLE-001 |
-| **Title** | Verify Roles page loads with all tabs |
-| **Preconditions** | User has view:roles permission |
-| **Test Steps** | 1. Navigate to Labs > Roles Management<br>2. Verify page loads |
-| **Expected Result** | Page shows tabs: System Roles, Custom Roles, Permissions, Hardcoded Defaults |
-| **Priority** | High |
+> **Role Description:** Team lead access
+> **Expected Permissions:** 6 permissions
 
-### UAT-ROLE-002: View System Roles
-| Field | Value |
-|-------|-------|
-| **Test ID** | UAT-ROLE-002 |
-| **Title** | Verify System Roles tab displays all system roles |
-| **Preconditions** | On Roles page |
-| **Test Steps** | 1. Click "System Roles" tab |
-| **Expected Result** | Shows: Owner, Admin, Head, Manager, Lead, Associate, Agent with their permissions count |
-| **Priority** | High |
+### Test Scenarios
 
-### UAT-ROLE-003: Edit System Role Permissions
-| Field | Value |
-|-------|-------|
-| **Test ID** | UAT-ROLE-003 |
-| **Title** | Verify admin can edit permissions for system role |
-| **Preconditions** | User has edit:roles permission |
-| **Test Steps** | 1. Click Actions > Edit Permissions on a system role<br>2. Add/remove permissions<br>3. Save |
-| **Expected Result** | Permissions updated, role name remains unchanged |
-| **Priority** | High |
-
-### UAT-ROLE-004: Create Custom Role
-| Field | Value |
-|-------|-------|
-| **Test ID** | UAT-ROLE-004 |
-| **Title** | Verify admin can create a custom role |
-| **Preconditions** | User has create:roles permission |
-| **Test Steps** | 1. Click "Create Role"<br>2. Enter name, display name, description<br>3. Select permissions<br>4. Save |
-| **Expected Result** | Custom role created, appears in Custom Roles tab |
-| **Priority** | High |
-
-### UAT-ROLE-005: Edit Custom Role
-| Field | Value |
-|-------|-------|
-| **Test ID** | UAT-ROLE-005 |
-| **Title** | Verify admin can edit custom role |
-| **Preconditions** | Custom role exists |
-| **Test Steps** | 1. Click Edit on custom role<br>2. Modify name/permissions<br>3. Save |
-| **Expected Result** | Changes saved successfully |
-| **Priority** | Medium |
-
-### UAT-ROLE-006: Delete Custom Role
-| Field | Value |
-|-------|-------|
-| **Test ID** | UAT-ROLE-006 |
-| **Title** | Verify admin can delete custom role |
-| **Preconditions** | Custom role exists, user has delete:roles permission |
-| **Test Steps** | 1. Click Delete on custom role<br>2. Confirm deletion |
-| **Expected Result** | Role deleted, removed from list |
-| **Priority** | Medium |
-
-### UAT-ROLE-007: Cannot Delete System Role
-| Field | Value |
-|-------|-------|
-| **Test ID** | UAT-ROLE-007 |
-| **Title** | Verify system roles cannot be deleted |
-| **Preconditions** | On System Roles tab |
-| **Test Steps** | 1. Check actions menu for system role |
-| **Expected Result** | Delete option not available for system roles |
-| **Priority** | High |
-
-### UAT-ROLE-008: View Permissions Tab
-| Field | Value |
-|-------|-------|
-| **Test ID** | UAT-ROLE-008 |
-| **Title** | Verify Permissions tab displays all permissions by category |
-| **Preconditions** | On Roles page |
-| **Test Steps** | 1. Click "Permissions" tab |
-| **Expected Result** | Permissions grouped by category: General, Tickets, Users, Vendors, Analytics, Settings |
-| **Priority** | Medium |
-
-### UAT-ROLE-009: Create Permission
-| Field | Value |
-|-------|-------|
-| **Test ID** | UAT-ROLE-009 |
-| **Title** | Verify admin can create a new permission |
-| **Preconditions** | User has create:roles permission |
-| **Test Steps** | 1. Click "Create Permission" on Permissions tab<br>2. Enter name (e.g., view:reports)<br>3. Enter display name<br>4. Select category from dropdown<br>5. Add description<br>6. Save |
-| **Expected Result** | Permission created, appears in appropriate category |
-| **Priority** | High |
-
-### UAT-ROLE-010: Create Permission - New Category
-| Field | Value |
-|-------|-------|
-| **Test ID** | UAT-ROLE-010 |
-| **Title** | Verify user can create permission with new category |
-| **Preconditions** | On Create Permission dialog |
-| **Test Steps** | 1. Click Category dropdown<br>2. Select "Create new category"<br>3. Enter new category name<br>4. Complete and save |
-| **Expected Result** | Permission created with new category, new category appears in list |
-| **Priority** | Medium |
-
-### UAT-ROLE-011: Edit Permission
-| Field | Value |
-|-------|-------|
-| **Test ID** | UAT-ROLE-011 |
-| **Title** | Verify admin can edit permission |
-| **Preconditions** | Permission exists |
-| **Test Steps** | 1. Click Edit on permission<br>2. Modify display name/description<br>3. Save |
-| **Expected Result** | Changes saved (system permission: only displayName and description editable) |
-| **Priority** | Medium |
-
-### UAT-ROLE-012: Delete Custom Permission
-| Field | Value |
-|-------|-------|
-| **Test ID** | UAT-ROLE-012 |
-| **Title** | Verify admin can delete custom permission |
-| **Preconditions** | Custom permission exists |
-| **Test Steps** | 1. Click Delete on custom permission<br>2. Confirm deletion |
-| **Expected Result** | Permission deleted, removed from all roles that had it |
-| **Priority** | Medium |
-
-### UAT-ROLE-013: Cannot Delete System Permission
-| Field | Value |
-|-------|-------|
-| **Test ID** | UAT-ROLE-013 |
-| **Title** | Verify system permissions cannot be deleted |
-| **Preconditions** | On Permissions tab |
-| **Test Steps** | 1. Check actions menu for system permission |
-| **Expected Result** | Delete option not available for system permissions |
-| **Priority** | High |
-
-### UAT-ROLE-014: Hardcoded Defaults Tab
-| Field | Value |
-|-------|-------|
-| **Test ID** | UAT-ROLE-014 |
-| **Title** | Verify Hardcoded Defaults tab shows fallback permissions |
-| **Preconditions** | On Roles page |
-| **Test Steps** | 1. Click "Hardcoded Defaults" tab |
-| **Expected Result** | Shows all roles with their default permissions from code |
-| **Priority** | Low |
-
-### UAT-ROLE-015: Seed Defaults
-| Field | Value |
-|-------|-------|
-| **Test ID** | UAT-ROLE-015 |
-| **Title** | Verify Seed Defaults populates database |
-| **Preconditions** | Database permissions/roles tables are empty |
-| **Test Steps** | 1. Click "Seed Defaults" button<br>2. Wait for completion |
-| **Expected Result** | System roles and permissions created in database |
-| **Priority** | Medium |
-
-### UAT-ROLE-016: Category Dropdown Behavior
-| Field | Value |
-|-------|-------|
-| **Test ID** | UAT-ROLE-016 |
-| **Title** | Verify category dropdown works correctly |
-| **Preconditions** | On Create Permission dialog |
-| **Test Steps** | 1. Click Category dropdown<br>2. Select a category<br>3. Click dropdown again and select different category |
-| **Expected Result** | Dropdown works smoothly, no Ctrl+Z undo issues |
-| **Priority** | Medium |
+| ID | Scenario | Steps | Expected Result | Status |
+|----|----------|-------|-----------------|--------|
+| LEAD-001 | View Team Tickets | Navigate to Tickets | Only team tickets visible | ⬜ |
+| LEAD-002 | Create Ticket | Create new ticket | Can create tickets | ⬜ |
+| LEAD-003 | Edit Ticket | Edit team ticket | Can edit | ⬜ |
+| LEAD-004 | No Department View | Check ticket scope | Cannot see other teams | ⬜ |
+| LEAD-005 | No User Management | Check navigation | User Management NOT visible | ⬜ |
 
 ---
 
-## 7. Analytics
+## 1.6 Associate Role Testing
 
-### UAT-ANA-001: View Analytics Page
-| Field | Value |
-|-------|-------|
-| **Test ID** | UAT-ANA-001 |
-| **Title** | Verify Analytics page loads |
-| **Preconditions** | User has view:analytics permission |
-| **Test Steps** | 1. Navigate to /analytics |
-| **Expected Result** | Analytics dashboard displays charts and metrics |
-| **Priority** | Medium |
+> **Role Description:** Standard employee access
+> **Expected Permissions:** 5 permissions
 
-### UAT-ANA-002: Access Denied Without Permission
-| Field | Value |
-|-------|-------|
-| **Test ID** | UAT-ANA-002 |
-| **Title** | Verify users without permission cannot access analytics |
-| **Preconditions** | User does not have view:analytics permission |
-| **Test Steps** | 1. Try to navigate to /analytics |
-| **Expected Result** | Access denied or redirected |
-| **Priority** | Medium |
+### Test Scenarios
+
+| ID | Scenario | Steps | Expected Result | Status |
+|----|----------|-------|-----------------|--------|
+| ASSOC-001 | View Assigned Tickets | Navigate to My Tickets | Only assigned tickets visible | ⬜ |
+| ASSOC-002 | Create Ticket | Create new ticket | Can create tickets | ⬜ |
+| ASSOC-003 | Edit Own Ticket | Edit assigned ticket | Can edit | ⬜ |
+| ASSOC-004 | Cannot See Others | Check All Tickets | Limited visibility | ⬜ |
+| ASSOC-005 | No Admin Features | Check Labs | Labs NOT visible | ⬜ |
 
 ---
 
-## 8. Ticket Configuration
+## 1.7 Agent Role Testing
 
-### UAT-CFG-001: View Ticket Config Page
-| Field | Value |
-|-------|-------|
-| **Test ID** | UAT-CFG-001 |
-| **Title** | Verify Ticket Config page loads |
-| **Preconditions** | User has view:config permission |
-| **Test Steps** | 1. Navigate to Labs > Ticket Manager |
-| **Expected Result** | Configuration page displays categories, issue types, etc. |
-| **Priority** | Medium |
+> **Role Description:** Support agent access (department-scoped)
+> **Expected Permissions:** 6 permissions + department restrictions
 
-### UAT-CFG-002: Manage Categories
-| Field | Value |
-|-------|-------|
-| **Test ID** | UAT-CFG-002 |
-| **Title** | Verify admin can manage ticket categories |
-| **Preconditions** | User has edit:config permission |
-| **Test Steps** | 1. Add new category<br>2. Edit existing category<br>3. Delete category |
-| **Expected Result** | CRUD operations work correctly |
-| **Priority** | Medium |
+### Test Scenarios
 
-### UAT-CFG-003: Manage Departments
-| Field | Value |
-|-------|-------|
-| **Test ID** | UAT-CFG-003 |
-| **Title** | Verify admin can manage departments |
-| **Preconditions** | User has edit:config permission |
-| **Test Steps** | 1. View departments<br>2. Add sub-department<br>3. Edit department |
-| **Expected Result** | Department hierarchy managed correctly |
-| **Priority** | Medium |
+| ID | Scenario | Steps | Expected Result | Status |
+|----|----------|-------|-----------------|--------|
+| AGT-001 | View Department Tickets | Navigate to Tickets | All department tickets visible | ⬜ |
+| AGT-002 | View My Tickets | Navigate to My Tickets | Assigned tickets visible | ⬜ |
+| AGT-003 | Edit Ticket | Edit department ticket | Can edit | ⬜ |
+| AGT-004 | No Admin Access | Check Labs dropdown | Labs NOT visible | ⬜ |
+| AGT-005 | No Analytics | Check Analytics | Analytics NOT visible | ⬜ |
 
----
+### Agent - Seller Support Specific
 
-## 9. Navigation & UI
+| ID | Scenario | Steps | Expected Result | Status |
+|----|----------|-------|-----------------|--------|
+| AGT-SS-001 | Can Create Ticket | Check New Ticket button | Button visible and functional | ⬜ |
+| AGT-SS-002 | Vendor Handle Required | Create ticket form | vendorHandle field visible & required | ⬜ |
+| AGT-SS-003 | Vendor Autocomplete | Type vendor handle | Suggestions appear | ⬜ |
 
-### UAT-NAV-001: Responsive Design
-| Field | Value |
-|-------|-------|
-| **Test ID** | UAT-NAV-001 |
-| **Title** | Verify UI is responsive on different screen sizes |
-| **Preconditions** | None |
-| **Test Steps** | 1. View on desktop (1920px)<br>2. View on tablet (768px)<br>3. View on mobile (375px) |
-| **Expected Result** | UI adapts appropriately to screen size |
-| **Priority** | Medium |
+### Agent - Customer Support Specific
 
-### UAT-NAV-002: Notifications Bell
-| Field | Value |
-|-------|-------|
-| **Test ID** | UAT-NAV-002 |
-| **Title** | Verify notifications bell shows unread count |
-| **Preconditions** | User has unread notifications |
-| **Test Steps** | 1. Check notifications bell in header |
-| **Expected Result** | Badge shows unread count, clicking opens notifications |
-| **Priority** | Medium |
+| ID | Scenario | Steps | Expected Result | Status |
+|----|----------|-------|-----------------|--------|
+| AGT-CS-001 | Can Create Ticket | Check New Ticket button | Button visible and functional | ⬜ |
+| AGT-CS-002 | Customer Field Required | Create ticket form | customer field visible & required | ⬜ |
 
-### UAT-NAV-003: Profile Dropdown
-| Field | Value |
-|-------|-------|
-| **Test ID** | UAT-NAV-003 |
-| **Title** | Verify profile dropdown functionality |
-| **Preconditions** | User is logged in |
-| **Test Steps** | 1. Click on profile avatar<br>2. Verify options: Profile, Logout |
-| **Expected Result** | Dropdown shows user info and options |
-| **Priority** | Medium |
+### Agent - Other Departments
 
-### UAT-NAV-004: Back Button
-| Field | Value |
-|-------|-------|
-| **Test ID** | UAT-NAV-004 |
-| **Title** | Verify Back button navigation works |
-| **Preconditions** | User is on a sub-page (e.g., /roles) |
-| **Test Steps** | 1. Click Back button in header |
-| **Expected Result** | User returns to dashboard |
-| **Priority** | Low |
-
-### UAT-NAV-005: Toast Notifications
-| Field | Value |
-|-------|-------|
-| **Test ID** | UAT-NAV-005 |
-| **Title** | Verify toast notifications appear for actions |
-| **Preconditions** | None |
-| **Test Steps** | 1. Create a ticket<br>2. Create a permission<br>3. Delete an item |
-| **Expected Result** | Success/Error toasts appear and auto-dismiss |
-| **Priority** | Low |
+| ID | Scenario | Steps | Expected Result | Status |
+|----|----------|-------|-----------------|--------|
+| AGT-OTH-001 | Cannot Create Ticket | Check New Ticket button | Button NOT visible | ⬜ |
+| AGT-OTH-002 | Can View Only | Check permissions | View and edit only | ⬜ |
 
 ---
 
-## Test Execution Summary
+# 2. Department-Based Testing
 
-| Module | Total Tests | Passed | Failed | Blocked |
-|--------|------------|--------|--------|---------|
-| Authentication | 6 | | | |
-| Dashboard | 5 | | | |
-| Ticket Management | 10 | | | |
-| User Management | 5 | | | |
-| Vendor Management | 4 | | | |
-| Roles & Permissions | 16 | | | |
-| Analytics | 2 | | | |
-| Ticket Configuration | 3 | | | |
-| Navigation & UI | 5 | | | |
-| **TOTAL** | **56** | | | |
+## 2.1 Finance Department
+
+| ID | Scenario | User Role | Steps | Expected Result | Status |
+|----|----------|-----------|-------|-----------------|--------|
+| FIN-001 | View Finance Tickets | Finance Head | All Tickets → Filter by Finance | Only Finance tickets shown | ⬜ |
+| FIN-002 | Assign to Finance | Admin | Create ticket → Assign to Finance | Ticket visible to Finance team | ⬜ |
+| FIN-003 | Finance Agent View | Finance Agent | Login → Dashboard | Finance statistics only | ⬜ |
+| FIN-004 | Cross-dept Visibility | Finance Manager | Check other dept tickets | Cannot see other departments | ⬜ |
+
+## 2.2 Operations Department
+
+| ID | Scenario | User Role | Steps | Expected Result | Status |
+|----|----------|-----------|-------|-----------------|--------|
+| OPS-001 | View Ops Tickets | Ops Head | All Tickets → Filter by Operations | Only Ops tickets shown | ⬜ |
+| OPS-002 | Ops Agent Access | Ops Agent | Login → My Tickets | Assigned Ops tickets | ⬜ |
+| OPS-003 | Ops Dashboard Stats | Ops Manager | Dashboard | Ops-specific statistics | ⬜ |
+
+## 2.3 Marketplace Department
+
+| ID | Scenario | User Role | Steps | Expected Result | Status |
+|----|----------|-----------|-------|-----------------|--------|
+| MKT-001 | View Marketplace Tickets | MKT Head | All Tickets | Marketplace tickets only | ⬜ |
+| MKT-002 | Product Listing Issues | MKT Agent | Create ticket for listing | Proper category available | ⬜ |
+
+## 2.4 Tech Department
+
+| ID | Scenario | User Role | Steps | Expected Result | Status |
+|----|----------|-----------|-------|-----------------|--------|
+| TECH-001 | View Tech Tickets | Tech Head | All Tickets | Tech tickets only | ⬜ |
+| TECH-002 | Bug Reports | Tech Agent | View bug tickets | Technical category tickets | ⬜ |
+| TECH-003 | Platform Issues | Tech Lead | Filter by issue type | Platform issues visible | ⬜ |
+
+## 2.5 CX Department (Seller Support & Customer Support)
+
+### Seller Support Sub-Department
+
+| ID | Scenario | User Role | Steps | Expected Result | Status |
+|----|----------|-----------|-------|-----------------|--------|
+| SS-001 | Create Seller Ticket | SS Agent | New Ticket with vendorHandle | Ticket created with vendor | ⬜ |
+| SS-002 | Vendor Lookup | SS Agent | Search vendor by handle | Vendor details shown | ⬜ |
+| SS-003 | View Vendor Profile | SS Agent | Click vendor link | Vendor profile page opens | ⬜ |
+| SS-004 | Vendor Ticket History | SS Agent | Vendor profile → Tickets | All vendor tickets listed | ⬜ |
+
+### Customer Support Sub-Department
+
+| ID | Scenario | User Role | Steps | Expected Result | Status |
+|----|----------|-----------|-------|-----------------|--------|
+| CS-001 | Create Customer Ticket | CS Agent | New Ticket with customer | Ticket created with customer info | ⬜ |
+| CS-002 | Customer Field | CS Agent | Create ticket form | Customer field visible | ⬜ |
+
+## 2.6 Supply Department
+
+| ID | Scenario | User Role | Steps | Expected Result | Status |
+|----|----------|-----------|-------|-----------------|--------|
+| SUP-001 | View Supply Tickets | Supply Head | All Tickets | Supply chain tickets | ⬜ |
+| SUP-002 | Inventory Issues | Supply Agent | Filter by category | Inventory tickets shown | ⬜ |
+
+## 2.7 Growth Department
+
+| ID | Scenario | User Role | Steps | Expected Result | Status |
+|----|----------|-----------|-------|-----------------|--------|
+| GRW-001 | View Growth Tickets | Growth Head | All Tickets | Growth/expansion tickets | ⬜ |
+| GRW-002 | Business Dev Issues | Growth Manager | Create BD ticket | Proper categories available | ⬜ |
 
 ---
 
-## Sign-off
+# 3. Feature Testing
+
+## 3.1 Authentication & Session
+
+| ID | Feature | Test Case | Steps | Expected | Status |
+|----|---------|-----------|-------|----------|--------|
+| AUTH-001 | Login | Valid credentials | Enter email → Submit | Redirect to dashboard | ⬜ |
+| AUTH-002 | Login | Invalid credentials | Enter wrong email | Error message shown | ⬜ |
+| AUTH-003 | Session | Persistence | Login → Refresh page | Stay logged in | ⬜ |
+| AUTH-004 | Session | Timeout | Leave idle → Return | Session valid or re-login | ⬜ |
+| AUTH-005 | Logout | Clean logout | Click Logout | Redirect to login, session cleared | ⬜ |
+| AUTH-006 | Protected Routes | Direct URL access | Access /dashboard without login | Redirect to login | ⬜ |
+
+## 3.2 Ticket Management
+
+| ID | Feature | Test Case | Steps | Expected | Status |
+|----|---------|-----------|-------|----------|--------|
+| TKT-001 | Create | Basic creation | Fill required fields → Submit | Ticket created with ID | ⬜ |
+| TKT-002 | Create | With attachment | Add file → Submit | File uploaded successfully | ⬜ |
+| TKT-003 | View | Ticket list | Navigate to All Tickets | List with pagination | ⬜ |
+| TKT-004 | View | Ticket detail | Click on ticket | Full details shown | ⬜ |
+| TKT-005 | Edit | Update status | Change status → Save | Status updated | ⬜ |
+| TKT-006 | Edit | Reassign | Change assignee → Save | New assignee notified | ⬜ |
+| TKT-007 | Filter | By status | Select status filter | Filtered results | ⬜ |
+| TKT-008 | Filter | By priority | Select priority filter | Filtered results | ⬜ |
+| TKT-009 | Filter | By department | Select department | Dept tickets only | ⬜ |
+| TKT-010 | Search | By keyword | Enter search term | Matching tickets | ⬜ |
+| TKT-011 | Comment | Add comment | Type comment → Submit | Comment added to ticket | ⬜ |
+| TKT-012 | Comment | @mention | Type @username | User notified | ⬜ |
+
+## 3.3 User Management
+
+| ID | Feature | Test Case | Steps | Expected | Status |
+|----|---------|-----------|-------|----------|--------|
+| USR-001 | Create | New user | Fill form → Submit | User created, email sent | ⬜ |
+| USR-002 | Create | Duplicate email | Use existing email | Error: duplicate | ⬜ |
+| USR-003 | Edit | Update role | Change role → Save | Role updated | ⬜ |
+| USR-004 | Edit | Multi-role | Assign multiple roles | Combined permissions | ⬜ |
+| USR-005 | Edit | Change department | Assign new dept | Ticket visibility changes | ⬜ |
+| USR-006 | Deactivate | Set inactive | Toggle isActive | User cannot login | ⬜ |
+| USR-007 | Delete | Remove user | Delete user | User removed | ⬜ |
+| USR-008 | View | User list | Navigate to Users | Paginated list | ⬜ |
+| USR-009 | Filter | By role | Filter by role | Filtered users | ⬜ |
+| USR-010 | Filter | By department | Filter by dept | Dept users only | ⬜ |
+
+## 3.4 Roles & Permissions Management
+
+| ID | Feature | Test Case | Steps | Expected | Status |
+|----|---------|-----------|-------|----------|--------|
+| ROLE-001 | View | System roles tab | Click System Roles | 7 system roles listed | ⬜ |
+| ROLE-002 | View | Custom roles tab | Click Custom Roles | Custom roles (if any) | ⬜ |
+| ROLE-003 | View | Permissions tab | Click Permissions | Grouped by category | ⬜ |
+| ROLE-004 | View | Hardcoded defaults | Click Hardcoded Defaults | Fallback permissions shown | ⬜ |
+| ROLE-005 | Edit | System role perms | Edit → Change perms → Save | Permissions updated | ⬜ |
+| ROLE-006 | Edit | System role name | Try to change name | Name field disabled | ⬜ |
+| ROLE-007 | Create | Custom role | Create Role → Fill → Save | New role available | ⬜ |
+| ROLE-008 | Edit | Custom role | Edit → Modify → Save | Changes saved | ⬜ |
+| ROLE-009 | Delete | Custom role | Delete → Confirm | Role removed | ⬜ |
+| ROLE-010 | Delete | System role | Try to delete | No delete option | ⬜ |
+| ROLE-011 | Create | Permission | Create Permission | New permission created | ⬜ |
+| ROLE-012 | Create | Permission + new category | Select "Create new category" | Category created | ⬜ |
+| ROLE-013 | Edit | Permission | Edit → Modify → Save | Changes saved | ⬜ |
+| ROLE-014 | Edit | System permission | Try to edit name | Name/category disabled | ⬜ |
+| ROLE-015 | Delete | Custom permission | Delete → Confirm | Permission removed | ⬜ |
+| ROLE-016 | Delete | System permission | Try to delete | No delete option | ⬜ |
+| ROLE-017 | Seed | Seed defaults | Click Seed Defaults | DB populated | ⬜ |
+
+## 3.5 Vendor Management
+
+| ID | Feature | Test Case | Steps | Expected | Status |
+|----|---------|-----------|-------|----------|--------|
+| VND-001 | View | Vendor list | Navigate to Vendors | All vendors listed | ⬜ |
+| VND-002 | Create | New vendor | Add Vendor → Fill → Save | Vendor created | ⬜ |
+| VND-003 | Create | Duplicate handle | Use existing handle | Error: duplicate | ⬜ |
+| VND-004 | Edit | Update vendor | Edit → Modify → Save | Changes saved | ⬜ |
+| VND-005 | View | Vendor profile | Click vendor | Profile page opens | ⬜ |
+| VND-006 | View | Vendor tickets | Vendor profile → Tickets | Related tickets shown | ⬜ |
+| VND-007 | Search | By handle | Type in search | Matching vendors | ⬜ |
+| VND-008 | Delete | Remove vendor | Delete vendor | Vendor removed | ⬜ |
+
+## 3.6 Analytics
+
+| ID | Feature | Test Case | Steps | Expected | Status |
+|----|---------|-----------|-------|----------|--------|
+| ANA-001 | View | Dashboard | Navigate to Analytics | Charts and metrics | ⬜ |
+| ANA-002 | Filter | Date range | Select date range | Filtered data | ⬜ |
+| ANA-003 | Filter | By department | Select department | Dept analytics | ⬜ |
+| ANA-004 | Access | Without permission | Login as Agent → Try Analytics | Access denied | ⬜ |
+
+## 3.7 Notifications
+
+| ID | Feature | Test Case | Steps | Expected | Status |
+|----|---------|-----------|-------|----------|--------|
+| NTF-001 | Bell | Unread count | Check notification bell | Badge shows count | ⬜ |
+| NTF-002 | View | Notification list | Click bell | List of notifications | ⬜ |
+| NTF-003 | Mark | As read | Click notification | Marked as read | ⬜ |
+| NTF-004 | Trigger | Ticket assigned | Assign ticket to user | User gets notification | ⬜ |
+| NTF-005 | Trigger | Comment mention | @mention user | User gets notification | ⬜ |
+| NTF-006 | Trigger | Ticket resolved | Resolve ticket | Creator notified | ⬜ |
+
+## 3.8 Navigation & UI
+
+| ID | Feature | Test Case | Steps | Expected | Status |
+|----|---------|-----------|-------|----------|--------|
+| NAV-001 | Labs | Dropdown visible | Check nav (with perms) | Labs dropdown visible | ⬜ |
+| NAV-002 | Labs | Items based on perms | Check dropdown items | Only permitted items | ⬜ |
+| NAV-003 | Responsive | Mobile view | Resize to mobile | Navigation adapts | ⬜ |
+| NAV-004 | Responsive | Tablet view | Resize to tablet | Layout adjusts | ⬜ |
+| NAV-005 | Profile | Dropdown | Click avatar | Profile menu opens | ⬜ |
+| NAV-006 | Back | Navigation | Click Back button | Returns to dashboard | ⬜ |
+| NAV-007 | Toast | Success message | Complete action | Toast appears | ⬜ |
+| NAV-008 | Toast | Error message | Cause error | Error toast appears | ⬜ |
+
+---
+
+# 4. Permission Matrix
+
+## 4.1 Role vs Permission Grid
+
+| Permission | Owner | Admin | Head | Manager | Lead | Associate | Agent |
+|------------|:-----:|:-----:|:----:|:-------:|:----:|:---------:|:-----:|
+| view:dashboard | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
+| view:tickets | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
+| create:tickets | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ⚠️* |
+| edit:tickets | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
+| delete:tickets | ✅ | ✅ | ❌ | ❌ | ❌ | ❌ | ❌ |
+| view:all_tickets | ✅ | ✅ | ❌ | ❌ | ❌ | ❌ | ❌ |
+| view:department_tickets | ❌ | ❌ | ✅ | ✅ | ❌ | ❌ | ✅ |
+| view:team_tickets | ❌ | ❌ | ❌ | ❌ | ✅ | ❌ | ❌ |
+| view:assigned_tickets | ❌ | ❌ | ❌ | ❌ | ❌ | ✅ | ✅ |
+| view:users | ✅ | ✅ | ✅ | ❌ | ❌ | ❌ | ❌ |
+| create:users | ✅ | ✅ | ❌ | ❌ | ❌ | ❌ | ❌ |
+| edit:users | ✅ | ✅ | ❌ | ❌ | ❌ | ❌ | ❌ |
+| delete:users | ✅ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ |
+| view:vendors | ✅ | ✅ | ✅ | ✅ | ✅ | ❌ | ❌ |
+| create:vendors | ✅ | ✅ | ❌ | ❌ | ❌ | ❌ | ❌ |
+| edit:vendors | ✅ | ✅ | ❌ | ❌ | ❌ | ❌ | ❌ |
+| delete:vendors | ✅ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ |
+| view:analytics | ✅ | ✅ | ✅ | ❌ | ❌ | ❌ | ❌ |
+| view:config | ✅ | ✅ | ❌ | ❌ | ❌ | ❌ | ❌ |
+| edit:config | ✅ | ✅ | ❌ | ❌ | ❌ | ❌ | ❌ |
+| view:roles | ✅ | ✅ | ❌ | ❌ | ❌ | ❌ | ❌ |
+| create:roles | ✅ | ✅ | ❌ | ❌ | ❌ | ❌ | ❌ |
+| edit:roles | ✅ | ✅ | ❌ | ❌ | ❌ | ❌ | ❌ |
+| delete:roles | ✅ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ |
+
+> **⚠️* Agent create:tickets:** Only Seller Support and Customer Support agents can create tickets. Other department agents cannot.
+
+## 4.2 Permission Verification Tests
+
+| ID | Test | How to Verify | Status |
+|----|------|---------------|--------|
+| PERM-001 | Owner has all permissions | Login as Owner, verify all features accessible | ⬜ |
+| PERM-002 | Admin cannot delete | Login as Admin, verify no delete options for users/roles | ⬜ |
+| PERM-003 | Head sees department only | Login as Head, verify ticket visibility limited | ⬜ |
+| PERM-004 | Manager no analytics | Login as Manager, verify Analytics not in nav | ⬜ |
+| PERM-005 | Lead sees team only | Login as Lead, verify team-scoped view | ⬜ |
+| PERM-006 | Associate assigned only | Login as Associate, verify My Tickets scope | ⬜ |
+| PERM-007 | Agent dept scoped | Login as Agent, verify department scope | ⬜ |
+| PERM-008 | SS Agent can create | Login as Seller Support Agent, verify New Ticket | ⬜ |
+| PERM-009 | CS Agent can create | Login as Customer Support Agent, verify New Ticket | ⬜ |
+| PERM-010 | Other Agent no create | Login as Tech Agent, verify no New Ticket | ⬜ |
+
+---
+
+# 5. Test Execution Tracker
+
+## 5.1 Summary Dashboard
+
+| Category | Total | Passed | Failed | Blocked | Not Run |
+|----------|:-----:|:------:|:------:|:-------:|:-------:|
+| Role-Based (Owner) | 13 | | | | |
+| Role-Based (Admin) | 9 | | | | |
+| Role-Based (Head) | 9 | | | | |
+| Role-Based (Manager) | 6 | | | | |
+| Role-Based (Lead) | 5 | | | | |
+| Role-Based (Associate) | 5 | | | | |
+| Role-Based (Agent) | 12 | | | | |
+| Department Tests | 18 | | | | |
+| Feature - Auth | 6 | | | | |
+| Feature - Tickets | 12 | | | | |
+| Feature - Users | 10 | | | | |
+| Feature - Roles | 17 | | | | |
+| Feature - Vendors | 8 | | | | |
+| Feature - Analytics | 4 | | | | |
+| Feature - Notifications | 6 | | | | |
+| Feature - Navigation | 8 | | | | |
+| Permission Verification | 10 | | | | |
+| **TOTAL** | **158** | | | | |
+
+## 5.2 Test Execution Log
+
+| Date | Tester | Tests Executed | Pass | Fail | Notes |
+|------|--------|----------------|------|------|-------|
+| | | | | | |
+| | | | | | |
+| | | | | | |
+
+## 5.3 Defects Found
+
+| ID | Test Case | Description | Severity | Status |
+|----|-----------|-------------|----------|--------|
+| | | | | |
+| | | | | |
+
+---
+
+# 6. Sign-Off
+
+## 6.1 Test Completion Sign-Off
 
 | Role | Name | Signature | Date |
 |------|------|-----------|------|
 | QA Lead | | | |
 | Product Owner | | | |
 | Development Lead | | | |
+| Business Analyst | | | |
+
+## 6.2 UAT Acceptance Criteria
+
+- [ ] All critical test cases passed
+- [ ] No severity 1 (Critical) defects open
+- [ ] No severity 2 (High) defects open that block core functionality
+- [ ] All role-based access controls verified
+- [ ] All department restrictions verified
+- [ ] Performance acceptable under normal load
+
+---
+
+## Legend
+
+| Symbol | Meaning |
+|--------|---------|
+| ⬜ | Not Tested |
+| ✅ | Passed |
+| ❌ | Failed |
+| ⏸️ | Blocked |
+| ⚠️ | Conditional |
+
+---
+
+*Document generated for Information Portal UAT*

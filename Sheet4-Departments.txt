@@ -1,0 +1,16 @@
+Test ID	Department	Test Scenario	User Role	Test Steps	Expected Result	Status	Notes
+P3-FIN-001	Finance	Finance Tickets Only	Finance Head	All Tickets → Check visibility	Only Finance tickets visible	NOT TESTED
+P3-FIN-002	Finance	Assign to Finance	Admin	Create ticket → Assign Finance	Visible to Finance team	NOT TESTED
+P3-FIN-003	Finance	Finance Dashboard	Finance Agent	Login → View dashboard	Finance stats only	NOT TESTED
+P3-FIN-004	Finance	Cross-Dept Block	Finance Manager	Check other dept tickets	Cannot see other depts	NOT TESTED
+P3-OPS-001	Operations	Ops Tickets Only	Ops Head	All Tickets	Only Ops tickets visible	NOT TESTED
+P3-OPS-002	Operations	Ops Agent Access	Ops Agent	My Tickets	Assigned Ops tickets only	NOT TESTED
+P3-OPS-003	Operations	Ops Dashboard	Ops Manager	Dashboard	Ops-specific stats	NOT TESTED
+P3-TECH-001	Tech	Tech Tickets Only	Tech Head	All Tickets	Tech tickets only	NOT TESTED
+P3-TECH-002	Tech	Bug Reports	Tech Agent	View technical tickets	Tech category visible	NOT TESTED
+P3-MKT-001	Marketplace	Marketplace Tickets	MKT Head	All Tickets	Marketplace tickets only	NOT TESTED
+P3-MKT-002	Marketplace	Product Listing	MKT Agent	Create ticket for listing	Proper category available	NOT TESTED
+P3-SUP-001	Supply	Supply Tickets	Supply Head	All Tickets	Supply chain tickets	NOT TESTED
+P3-SUP-002	Supply	Inventory Issues	Supply Agent	Filter by category	Inventory tickets shown	NOT TESTED
+P3-GRW-001	Growth	Growth Tickets	Growth Head	All Tickets	Growth/expansion tickets	NOT TESTED
+P3-GRW-002	Growth	Business Dev	Growth Manager	Create BD ticket	Proper categories available	NOT TESTED

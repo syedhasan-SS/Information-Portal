@@ -1,0 +1,36 @@
+ADMIN ROLE - UAT TEST CASES
+
+Test ID	Feature	Test Scenario	Test Steps	Expected Result	Status	Notes
+ADM-001	Login	Login as Admin	Go to login → Enter admin credentials → Submit	Redirect to dashboard with admin view	NOT TESTED
+ADM-002	Dashboard	View Dashboard	Check dashboard after login	Dashboard visible with statistics	NOT TESTED
+ADM-003	Tickets	View All Tickets	Navigate to All Tickets	Can see tickets from ALL departments	NOT TESTED
+ADM-004	Tickets	Create Ticket	New Ticket → Fill form → Submit	Ticket created successfully	NOT TESTED
+ADM-005	Tickets	Edit Ticket	Open ticket → Edit → Save	Ticket updated successfully	NOT TESTED
+ADM-006	Tickets	Delete Ticket	Open ticket → Check options	CAN delete tickets (Admin has delete:tickets)	NOT TESTED
+ADM-007	Tickets	Filter Tickets	Apply filters	Filtered results shown	NOT TESTED
+ADM-008	Tickets	Add Comment	Add comment to ticket	Comment added successfully	NOT TESTED
+ADM-009	Users	Access User Management	Labs → User Management	User management page opens	NOT TESTED
+ADM-010	Users	View All Users	User Management page	Can see all users	NOT TESTED
+ADM-011	Users	Create User	Add User → Fill form → Submit	User created successfully	NOT TESTED
+ADM-012	Users	Edit User	Edit user → Modify → Save	User updated successfully	NOT TESTED
+ADM-013	Users	Delete User BLOCKED	Try to delete user → Check options	NO delete button/option (Admin CANNOT delete users)	NOT TESTED
+ADM-014	Users	Assign Roles	Edit user → Assign role → Save	Role assigned successfully	NOT TESTED
+ADM-015	Users	Change Department	Edit user → Change dept → Save	Department updated	NOT TESTED
+ADM-016	Roles	Access Roles Management	Labs → Roles Management	Roles page opens	NOT TESTED
+ADM-017	Roles	View System Roles	System Roles tab	7 system roles visible	NOT TESTED
+ADM-018	Roles	View Custom Roles	Custom Roles tab	Custom roles visible	NOT TESTED
+ADM-019	Roles	Edit System Role Permissions	Edit system role → Change permissions → Save	Permissions updated	NOT TESTED
+ADM-020	Roles	Create Custom Role	Create Role → Fill → Save	Custom role created	NOT TESTED
+ADM-021	Roles	Edit Custom Role	Edit custom role → Modify → Save	Changes saved	NOT TESTED
+ADM-022	Roles	Delete Role BLOCKED	Try to delete any role	NO delete button (Admin CANNOT delete roles)	NOT TESTED
+ADM-023	Permissions	View Permissions	Permissions tab	Permissions visible	NOT TESTED
+ADM-024	Permissions	Create Permission	Create Permission → Fill → Save	Permission created	NOT TESTED
+ADM-025	Permissions	Edit Permission	Edit permission → Save	Changes saved	NOT TESTED
+ADM-026	Vendors	Access Vendors	Navigate to Vendors	Vendor list visible	NOT TESTED
+ADM-027	Vendors	Create Vendor	Add Vendor → Fill → Save	Vendor created	NOT TESTED
+ADM-028	Vendors	Edit Vendor	Edit vendor → Save	Vendor updated	NOT TESTED
+ADM-029	Vendors	Delete Vendor BLOCKED	Try to delete vendor	NO delete button (Admin CANNOT delete vendors)	NOT TESTED
+ADM-030	Analytics	Access Analytics	Click Analytics	Analytics dashboard opens	NOT TESTED
+ADM-031	Analytics	View Analytics	Analytics page	Charts and metrics visible	NOT TESTED
+ADM-032	Config	Access Ticket Config	Labs → Ticket Manager	Config page opens	NOT TESTED
+ADM-033	Config	Edit Configuration	Modify config → Save	Configuration updated	NOT TESTED

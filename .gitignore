@@ -10,6 +10,11 @@ vite.config.ts.*
 .env.local
 .env.*.local
 
+# GCP / BigQuery credentials (never commit)
+service-account*.json
+*-credentials*.json
+*-key.json
+
 # IDE and editor files
 .vscode/
 .idea/

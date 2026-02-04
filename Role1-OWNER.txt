@@ -1,0 +1,53 @@
+OWNER ROLE - UAT TEST CASES
+
+Test ID	Feature	Test Scenario	Test Steps	Expected Result	Status	Notes
+OWN-001	Login	Login as Owner	Go to login → Enter owner credentials → Submit	Redirect to dashboard with full statistics	NOT TESTED
+OWN-002	Dashboard	View Full Dashboard	Check dashboard after login	All statistics visible (all departments, all tickets)	NOT TESTED
+OWN-003	Tickets	View All Tickets	Navigate to All Tickets	Can see tickets from ALL departments	NOT TESTED
+OWN-004	Tickets	Create Ticket	New Ticket → Fill form → Submit	Ticket created with ID	NOT TESTED
+OWN-005	Tickets	Edit Ticket	Open ticket → Edit → Change status → Save	Status updated successfully	NOT TESTED
+OWN-006	Tickets	Delete Ticket	Open ticket → Delete → Confirm	Ticket deleted (ONLY Owner can delete)	NOT TESTED
+OWN-007	Tickets	Filter Tickets	Apply filters (status, priority, dept)	Filtered results shown	NOT TESTED
+OWN-008	Tickets	Search Tickets	Enter keyword → Search	Matching tickets shown	NOT TESTED
+OWN-009	Tickets	Add Comment	Ticket detail → Add comment → Submit	Comment added to timeline	NOT TESTED
+OWN-010	Tickets	Reassign Ticket	Edit ticket → Change assignee → Save	Ticket reassigned successfully	NOT TESTED
+OWN-011	Users	Access User Management	Labs → User Management	User list page opens	NOT TESTED
+OWN-012	Users	View All Users	User Management page	Can see ALL users from all departments	NOT TESTED
+OWN-013	Users	Create User	Add User → Fill form (name, email, role, dept) → Submit	User created successfully	NOT TESTED
+OWN-014	Users	Edit User	Edit user → Change role/dept → Save	User updated successfully	NOT TESTED
+OWN-015	Users	Delete User	Delete user → Confirm	User deleted (ONLY Owner can delete users)	NOT TESTED
+OWN-016	Users	Assign Multiple Roles	Edit user → Assign 2+ roles → Save	Multiple roles assigned	NOT TESTED
+OWN-017	Users	Deactivate User	Edit user → Toggle isActive OFF → Save	User deactivated, cannot login	NOT TESTED
+OWN-018	Roles	Access Roles Management	Labs → Roles Management	Roles page opens with 4 tabs	NOT TESTED
+OWN-019	Roles	View System Roles	System Roles tab	See 7 system roles (Owner, Admin, Head, Manager, Lead, Associate, Agent)	NOT TESTED
+OWN-020	Roles	View Custom Roles	Custom Roles tab	Custom roles displayed (if any exist)	NOT TESTED
+OWN-021	Roles	Edit System Role Permissions	System Roles → Edit → Change permissions → Save	Permissions updated successfully	NOT TESTED
+OWN-022	Roles	System Role Name Locked	Try to edit system role name	Name field is disabled/locked	NOT TESTED
+OWN-023	Roles	Create Custom Role	Custom Roles → Create Role → Fill → Save	New custom role created	NOT TESTED
+OWN-024	Roles	Edit Custom Role	Custom Roles → Edit → Modify → Save	Changes saved successfully	NOT TESTED
+OWN-025	Roles	Delete Custom Role	Custom Roles → Delete → Confirm	Custom role deleted	NOT TESTED
+OWN-026	Roles	Cannot Delete System Role	System Roles → Check options	No delete button/option for system roles	NOT TESTED
+OWN-027	Permissions	View Permissions	Permissions tab	Permissions grouped by category	NOT TESTED
+OWN-028	Permissions	Create Permission	Create Permission → Fill → Save	New permission created	NOT TESTED
+OWN-029	Permissions	Create New Category	Create Permission → "Create new category" → Enter name	New category created and available	NOT TESTED
+OWN-030	Permissions	Edit Permission	Edit permission → Modify description → Save	Changes saved	NOT TESTED
+OWN-031	Permissions	System Permission Locked	Try to edit system permission name/category	Name and category fields disabled	NOT TESTED
+OWN-032	Permissions	Delete Custom Permission	Delete custom permission → Confirm	Permission deleted	NOT TESTED
+OWN-033	Permissions	Cannot Delete System Perm	Check system permission options	No delete button available	NOT TESTED
+OWN-034	Permissions	View Hardcoded Defaults	Hardcoded Defaults tab	Fallback permissions displayed	NOT TESTED
+OWN-035	Permissions	Seed Defaults	Click Seed Defaults button	Database populated with default roles/permissions	NOT TESTED
+OWN-036	Vendors	Access Vendors	Navigate to Vendors	Vendor list page opens	NOT TESTED
+OWN-037	Vendors	View All Vendors	Vendors page	All vendors displayed	NOT TESTED
+OWN-038	Vendors	Create Vendor	Add Vendor → Fill form → Save	Vendor created successfully	NOT TESTED
+OWN-039	Vendors	Edit Vendor	Edit vendor → Modify → Save	Changes saved	NOT TESTED
+OWN-040	Vendors	Delete Vendor	Delete vendor → Confirm	Vendor deleted (ONLY Owner can delete)	NOT TESTED
+OWN-041	Vendors	View Vendor Profile	Click vendor from list	Vendor profile page opens	NOT TESTED
+OWN-042	Vendors	Vendor Tickets	Vendor profile → Tickets tab	All related tickets shown	NOT TESTED
+OWN-043	Vendors	Search Vendor	Search by vendor handle	Matching vendors displayed	NOT TESTED
+OWN-044	Analytics	Access Analytics	Click Analytics in navigation	Analytics dashboard opens	NOT TESTED
+OWN-045	Analytics	View Analytics	Analytics page	Charts and metrics visible	NOT TESTED
+OWN-046	Analytics	Filter by Date	Select date range	Filtered analytics data	NOT TESTED
+OWN-047	Analytics	Filter by Department	Select department	Department-specific analytics	NOT TESTED
+OWN-048	Config	Access Ticket Config	Labs → Ticket Manager	Ticket config page opens	NOT TESTED
+OWN-049	Config	Configure Categories	Manage ticket categories	Categories updated	NOT TESTED
+OWN-050	Config	Configure Departments	Manage departments	Departments updated	NOT TESTED

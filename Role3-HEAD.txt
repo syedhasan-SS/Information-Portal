@@ -1,0 +1,25 @@
+HEAD ROLE - UAT TEST CASES
+
+Test ID	Feature	Test Scenario	Test Steps	Expected Result	Status	Notes
+HEAD-001	Login	Login as Head	Login with Head credentials (any department)	Redirect to dashboard	NOT TESTED
+HEAD-002	Dashboard	View Dashboard	Check dashboard	Dashboard shows ONLY own department statistics	NOT TESTED
+HEAD-003	Tickets	View Department Tickets	Navigate to All Tickets	Only OWN department tickets visible	NOT TESTED
+HEAD-004	Tickets	Cross-Dept Visibility Check	Try to see other department tickets	CANNOT see other departments	NOT TESTED
+HEAD-005	Tickets	Create Ticket	New Ticket → Fill → Submit	Ticket created, auto-assigned to own department	NOT TESTED
+HEAD-006	Tickets	Edit Ticket	Edit department ticket → Save	Ticket updated successfully	NOT TESTED
+HEAD-007	Tickets	Delete Ticket BLOCKED	Check ticket options	NO delete button (Head CANNOT delete)	NOT TESTED
+HEAD-008	Tickets	Filter by Status	Apply status filter	Filtered department tickets	NOT TESTED
+HEAD-009	Tickets	Search Tickets	Search within tickets	Search limited to department	NOT TESTED
+HEAD-010	Tickets	Add Comment	Add comment to ticket	Comment added successfully	NOT TESTED
+HEAD-011	Users	User Visibility	User Management (if accessible)	Only OWN department users visible	NOT TESTED
+HEAD-012	Users	Cannot Create Users	Check user management	Cannot create/edit users (no permission)	NOT TESTED
+HEAD-013	Roles	Cannot Access Roles	Try Labs → Roles Management	Roles NOT accessible or Access denied	NOT TESTED
+HEAD-014	Roles	Direct URL Test	Try to access /roles directly	Redirect or Access denied	NOT TESTED
+HEAD-015	Vendors	View Vendors (Read Only)	Navigate to Vendors	Can VIEW vendors only	NOT TESTED
+HEAD-016	Vendors	Cannot Create Vendor	Check vendor page	No "Add Vendor" button	NOT TESTED
+HEAD-017	Vendors	Cannot Edit Vendor	Try to edit vendor	No edit option available	NOT TESTED
+HEAD-018	Vendors	Cannot Delete Vendor	Check vendor options	No delete option	NOT TESTED
+HEAD-019	Analytics	Access Analytics	Click Analytics	Analytics dashboard opens	NOT TESTED
+HEAD-020	Analytics	Department Analytics	View analytics	Analytics shows ONLY own department data	NOT TESTED
+HEAD-021	Config	Cannot Access Config	Try Labs → Ticket Manager	Ticket Config NOT accessible	NOT TESTED
+HEAD-022	Navigation	Labs Dropdown	Check Labs menu	Limited items based on permissions	NOT TESTED

@@ -2462,7 +2462,10 @@ Information,Tech,Product Listings,Product Information,Category Query,Product cat
               <AlertDescription>
                 <div className="font-semibold mb-1">CSV Format:</div>
                 <div className="text-sm text-muted-foreground">
-                  Columns: Issue Type, L1, L2, L3, L4, Description, Active, SLA Response Hours, SLA Resolution Hours
+                  Columns: Issue Type, L1, L2, L3, L4, Description, Department Type (optional), Active, SLA Response Hours, SLA Resolution Hours
+                </div>
+                <div className="text-xs text-muted-foreground mt-1">
+                  Note: L4 and Department Type are optional. Department Type defaults to "All" if not specified.
                 </div>
               </AlertDescription>
             </Alert>

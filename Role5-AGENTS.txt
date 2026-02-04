@@ -1,0 +1,52 @@
+AGENT ROLE - ALL DEPARTMENTS - UAT TEST CASES
+
+Test ID	Department	Feature	Test Scenario	Test Steps	Expected Result	Status	Notes
+AGT-SS-001	Seller Support	Login	Login as SS Agent	Login with Seller Support Agent credentials	Dashboard shows Seller Support dept only	NOT TESTED
+AGT-SS-002	Seller Support	Dashboard	View Dashboard	Check dashboard	Only Seller Support statistics	NOT TESTED
+AGT-SS-003	Seller Support	Tickets	View Department Tickets	Navigate to All Tickets	Only Seller Support tickets visible	NOT TESTED
+AGT-SS-004	Seller Support	Tickets	Cross-Dept Block	Check other departments	CANNOT see other dept tickets	NOT TESTED
+AGT-SS-005	Seller Support	Tickets	Can Create Ticket	Check New Ticket button	Button IS visible (SS can create)	NOT TESTED
+AGT-SS-006	Seller Support	Tickets	Create Ticket with Vendor	New Ticket → Enter vendorHandle → Submit	Ticket created with vendor linked	NOT TESTED
+AGT-SS-007	Seller Support	Tickets	Vendor Handle Required	Create ticket form	vendorHandle field visible and required	NOT TESTED
+AGT-SS-008	Seller Support	Tickets	Vendor Autocomplete	Start typing vendor handle	Suggestions appear	NOT TESTED
+AGT-SS-009	Seller Support	Tickets	Edit Ticket	Edit SS ticket → Save	Ticket updated	NOT TESTED
+AGT-SS-010	Seller Support	Tickets	Cannot Delete	Check ticket options	No delete button	NOT TESTED
+AGT-SS-011	Seller Support	Users	No User Management	Check Labs menu	User Management NOT visible	NOT TESTED
+AGT-SS-012	Seller Support	Roles	No Roles Access	Check Labs menu	Roles NOT visible	NOT TESTED
+AGT-SS-013	Seller Support	Vendors	No Vendor Access	Check navigation	Vendors NOT visible	NOT TESTED
+AGT-SS-014	Seller Support	Analytics	No Analytics Access	Check navigation	Analytics NOT visible	NOT TESTED
+AGT-SS-015	Seller Support	Labs	No Labs Menu	Check navigation	Labs dropdown NOT visible	NOT TESTED
+AGT-CS-001	Customer Support	Login	Login as CS Agent	Login with Customer Support Agent	Dashboard shows Customer Support only	NOT TESTED
+AGT-CS-002	Customer Support	Tickets	View Department Tickets	Navigate to tickets	Only Customer Support tickets	NOT TESTED
+AGT-CS-003	Customer Support	Tickets	Can Create Ticket	Check New Ticket button	Button IS visible (CS can create)	NOT TESTED
+AGT-CS-004	Customer Support	Tickets	Create with Customer Field	New Ticket → Enter customer → Submit	Ticket created with customer info	NOT TESTED
+AGT-CS-005	Customer Support	Tickets	Customer Field Visible	Create ticket form	Customer field visible and required	NOT TESTED
+AGT-CS-006	Customer Support	Tickets	Edit Ticket	Edit CS ticket	Ticket updated	NOT TESTED
+AGT-CS-007	Customer Support	Access	No Admin Features	Check navigation	No Labs, Analytics, Vendors, Config	NOT TESTED
+AGT-TECH-001	Tech	Login	Login as Tech Agent	Login with Tech dept Agent	Dashboard shows Tech dept only	NOT TESTED
+AGT-TECH-002	Tech	Tickets	View Department Tickets	Navigate to tickets	Only Tech tickets visible	NOT TESTED
+AGT-TECH-003	Tech	Tickets	Cannot Create Ticket	Check New Ticket button	Button NOT visible (Tech agents cannot create)	NOT TESTED
+AGT-TECH-004	Tech	Tickets	Can View Only	Check permissions	Can view and edit, cannot create	NOT TESTED
+AGT-TECH-005	Tech	Tickets	Edit Ticket	Edit Tech ticket	Ticket updated successfully	NOT TESTED
+AGT-TECH-006	Tech	Tickets	Cannot Delete	Check options	No delete button	NOT TESTED
+AGT-TECH-007	Tech	Access	No Admin Features	Check navigation	No Labs, Analytics, Vendors, Config	NOT TESTED
+AGT-FIN-001	Finance	Login	Login as Finance Agent	Login with Finance Agent	Dashboard shows Finance only	NOT TESTED
+AGT-FIN-002	Finance	Tickets	View Department Tickets	Navigate to tickets	Only Finance tickets	NOT TESTED
+AGT-FIN-003	Finance	Tickets	Cannot Create Ticket	Check New Ticket button	Button NOT visible	NOT TESTED
+AGT-FIN-004	Finance	Tickets	Can Edit	Edit Finance ticket	Ticket updated	NOT TESTED
+AGT-FIN-005	Finance	Access	Limited Access	Check navigation	Only basic ticket features	NOT TESTED
+AGT-OPS-001	Operations	Login	Login as Ops Agent	Login with Operations Agent	Dashboard shows Operations only	NOT TESTED
+AGT-OPS-002	Operations	Tickets	View Department Tickets	Navigate to tickets	Only Operations tickets	NOT TESTED
+AGT-OPS-003	Operations	Tickets	Cannot Create Ticket	Check New Ticket button	Button NOT visible	NOT TESTED
+AGT-OPS-004	Operations	Tickets	Can Edit	Edit Ops ticket	Ticket updated	NOT TESTED
+AGT-OPS-005	Operations	Access	Limited Access	Check navigation	Only basic ticket features	NOT TESTED
+AGT-MKT-001	Marketplace	Login	Login as Marketplace Agent	Login with Marketplace Agent	Dashboard shows Marketplace only	NOT TESTED
+AGT-MKT-002	Marketplace	Tickets	View Department Tickets	Navigate to tickets	Only Marketplace tickets	NOT TESTED
+AGT-MKT-003	Marketplace	Tickets	Cannot Create Ticket	Check New Ticket button	Button NOT visible	NOT TESTED
+AGT-MKT-004	Marketplace	Tickets	Can Edit	Edit Marketplace ticket	Ticket updated	NOT TESTED
+AGT-SUP-001	Supply	Login	Login as Supply Agent	Login with Supply Agent	Dashboard shows Supply only	NOT TESTED
+AGT-SUP-002	Supply	Tickets	Cannot Create Ticket	Check New Ticket button	Button NOT visible	NOT TESTED
+AGT-SUP-003	Supply	Tickets	Can Edit	Edit Supply ticket	Ticket updated	NOT TESTED
+AGT-GRW-001	Growth	Login	Login as Growth Agent	Login with Growth Agent	Dashboard shows Growth only	NOT TESTED
+AGT-GRW-002	Growth	Tickets	Cannot Create Ticket	Check New Ticket button	Button NOT visible	NOT TESTED
+AGT-GRW-003	Growth	Tickets	Can Edit	Edit Growth ticket	Ticket updated	NOT TESTED

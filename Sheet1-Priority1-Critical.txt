@@ -1,0 +1,47 @@
+Test ID	Category	Test Scenario	User Role	Test Steps	Expected Result	Status	Notes
+P1-AUTH-001	Authentication	Login with Owner	Owner	1. Go to login page | 2. Enter owner credentials | 3. Click Login	Redirect to dashboard with full statistics	NOT TESTED
+P1-AUTH-002	Authentication	Login with Admin	Admin	1. Enter admin credentials | 2. Click Login	Redirect to dashboard with admin view	NOT TESTED
+P1-AUTH-003	Authentication	Login with Agent	Agent	1. Enter agent credentials | 2. Click Login	Redirect to dashboard with limited view	NOT TESTED
+P1-AUTH-004	Authentication	Invalid login	Any	1. Enter wrong email/password | 2. Click Login	Error message shown	NOT TESTED
+P1-AUTH-005	Authentication	Logout	Any	1. Click profile menu | 2. Click Logout	Redirect to login page	NOT TESTED
+P1-OWN-001	Owner	View Dashboard	Owner	1. Login as Owner | 2. Check dashboard	All statistics visible	NOT TESTED
+P1-OWN-002	Owner	View All Tickets	Owner	1. Navigate to All Tickets	Can see tickets from ALL departments	NOT TESTED
+P1-OWN-003	Owner	Create Ticket	Owner	1. Click New Ticket | 2. Fill form | 3. Submit	Ticket created with ID	NOT TESTED
+P1-OWN-004	Owner	Edit Ticket	Owner	1. Open ticket | 2. Edit | 3. Change status | 4. Save	Status updated successfully	NOT TESTED
+P1-OWN-005	Owner	Delete Ticket	Owner	1. Open ticket | 2. Click Delete | 3. Confirm	Ticket deleted	NOT TESTED
+P1-OWN-006	Owner	Access User Management	Owner	1. Labs dropdown | 2. User Management	User list page opens	NOT TESTED
+P1-OWN-007	Owner	Create User	Owner	1. Add User | 2. Fill form | 3. Submit	User created successfully	NOT TESTED
+P1-OWN-008	Owner	Access Roles	Owner	1. Labs | 2. Roles Management	Roles page opens	NOT TESTED
+P1-OWN-009	Owner	View System Roles	Owner	1. System Roles tab	See 7 system roles	NOT TESTED
+P1-OWN-010	Owner	Create Permission	Owner	1. Permissions tab | 2. Create Permission | 3. Save	Permission created	NOT TESTED
+P1-OWN-011	Owner	Access Analytics	Owner	1. Click Analytics	Analytics dashboard visible	NOT TESTED
+P1-OWN-012	Owner	Access Vendors	Owner	1. Click Vendors	Vendor list visible	NOT TESTED
+P1-ADM-001	Admin	View Dashboard	Admin	1. Login as Admin	Dashboard visible	NOT TESTED
+P1-ADM-002	Admin	View All Tickets	Admin	1. Navigate to All Tickets	Can see all tickets	NOT TESTED
+P1-ADM-003	Admin	Create User	Admin	1. User Management | 2. Add User	Can create user	NOT TESTED
+P1-ADM-004	Admin	Edit User	Admin	1. User Management | 2. Edit user	Can edit user details	NOT TESTED
+P1-ADM-005	Admin	Delete User BLOCKED	Admin	1. Try to delete user	NO delete button visible	NOT TESTED
+P1-ADM-006	Admin	Access Roles	Admin	1. Labs | 2. Roles	Can access roles page	NOT TESTED
+P1-ADM-007	Admin	Edit Role Permissions	Admin	1. Edit role | 2. Change permissions	Can modify permissions	NOT TESTED
+P1-ADM-008	Admin	Delete Role BLOCKED	Admin	1. Try to delete role	NO delete button visible	NOT TESTED
+P1-ADM-009	Admin	Delete Vendor BLOCKED	Admin	1. Vendors | 2. Try to delete	NO delete option	NOT TESTED
+P1-SS-001	Seller Support	Login	SS Agent	1. Login with SS Agent credentials	Dashboard shows Seller Support only	NOT TESTED
+P1-SS-002	Seller Support	View Department Tickets	SS Agent	1. Navigate to All Tickets	Only Seller Support tickets visible	NOT TESTED
+P1-SS-003	Seller Support	Can Create Ticket	SS Agent	1. Check for New Ticket button	Button IS visible	NOT TESTED
+P1-SS-004	Seller Support	Create with Vendor	SS Agent	1. New Ticket | 2. Enter vendorHandle | 3. Submit	Ticket created with vendor	NOT TESTED
+P1-SS-005	Seller Support	Vendor Autocomplete	SS Agent	1. Start typing vendor handle	Suggestions appear	NOT TESTED
+P1-SS-006	Seller Support	Cannot Access Labs	SS Agent	1. Check navigation	Labs NOT visible	NOT TESTED
+P1-SS-007	Seller Support	Cannot Access Analytics	SS Agent	1. Check navigation	Analytics NOT visible	NOT TESTED
+P1-AGT-001	Other Agents	Login as Tech Agent	Tech Agent	1. Login	Dashboard shows Tech dept only	NOT TESTED
+P1-AGT-002	Other Agents	View Department Tickets	Tech Agent	1. Navigate to tickets	Only Tech tickets visible	NOT TESTED
+P1-AGT-003	Other Agents	Cannot Create Ticket	Tech Agent	1. Check navigation	New Ticket button NOT visible	NOT TESTED
+P1-AGT-004	Other Agents	Can Edit Tickets	Tech Agent	1. Open ticket | 2. Edit	Can edit department tickets	NOT TESTED
+P1-AGT-005	Other Agents	Cannot Delete	Tech Agent	1. Check ticket options	No delete option	NOT TESTED
+P1-HEAD-001	Head	Department Scope	Head	1. View All Tickets	Only own department tickets	NOT TESTED
+P1-HEAD-002	Head	Cannot Delete	Head	1. Check ticket actions	Delete NOT available	NOT TESTED
+P1-HEAD-003	Head	Cannot Access Roles	Head	1. Try /roles	Access denied	NOT TESTED
+P1-MGR-001	Manager	Department Only	Manager	1. View tickets	Only department tickets	NOT TESTED
+P1-MGR-002	Manager	No Analytics	Manager	1. Check navigation	Analytics NOT visible	NOT TESTED
+P1-LEAD-001	Lead	Team Scope	Lead	1. View tickets	Only team tickets	NOT TESTED
+P1-ASSOC-001	Associate	Assigned Only	Associate	1. View My Tickets	Only assigned tickets	NOT TESTED
+P1-ASSOC-002	Associate	No Labs	Associate	1. Check navigation	Labs NOT visible	NOT TESTED

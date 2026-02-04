@@ -1,0 +1,31 @@
+Test ID	Role	Test Scenario	Test Steps	Expected Result	Status	Notes
+P2-HEAD-001	Head	Login	Login with Head credentials (any dept)	Dashboard visible	NOT TESTED
+P2-HEAD-002	Head	Department Scope	View All Tickets	Only own department tickets visible	NOT TESTED
+P2-HEAD-003	Head	User Visibility	User Management	Only department users shown	NOT TESTED
+P2-HEAD-004	Head	Create Ticket	New Ticket → Submit	Ticket auto-assigned to own dept	NOT TESTED
+P2-HEAD-005	Head	Edit Tickets	Edit any dept ticket	Can edit successfully	NOT TESTED
+P2-HEAD-006	Head	Cannot Delete	Check ticket actions	Delete option NOT available	NOT TESTED
+P2-HEAD-007	Head	Cannot Access Roles	Try to access /roles	Access denied or not visible	NOT TESTED
+P2-HEAD-008	Head	View Analytics	Click Analytics	Analytics visible	NOT TESTED
+P2-HEAD-009	Head	Vendors Read-Only	Navigate to Vendors	Can view, cannot create/edit/delete	NOT TESTED
+P2-MGR-001	Manager	Login	Login with Manager credentials	Dashboard visible	NOT TESTED
+P2-MGR-002	Manager	Department Tickets	View tickets	Only department tickets visible	NOT TESTED
+P2-MGR-003	Manager	Create Ticket	New Ticket → Submit	Can create tickets	NOT TESTED
+P2-MGR-004	Manager	Edit Ticket	Edit dept ticket	Can edit	NOT TESTED
+P2-MGR-005	Manager	No Analytics	Check navigation	Analytics NOT visible	NOT TESTED
+P2-MGR-006	Manager	No User Management	Check Labs dropdown	User Management NOT visible	NOT TESTED
+P2-LEAD-001	Lead	Login	Login with Lead credentials	Dashboard visible	NOT TESTED
+P2-LEAD-002	Lead	Team Scope Only	View tickets	Only team tickets visible (not full dept)	NOT TESTED
+P2-LEAD-003	Lead	Create Ticket	New Ticket → Submit	Can create	NOT TESTED
+P2-LEAD-004	Lead	Edit Team Ticket	Edit ticket	Can edit	NOT TESTED
+P2-LEAD-005	Lead	No User Management	Check Labs	User Management NOT visible	NOT TESTED
+P2-ASSOC-001	Associate	Login	Login with Associate credentials	Dashboard visible	NOT TESTED
+P2-ASSOC-002	Associate	Assigned Tickets Only	View My Tickets	Only tickets assigned to me	NOT TESTED
+P2-ASSOC-003	Associate	Create Ticket	New Ticket → Submit	Can create	NOT TESTED
+P2-ASSOC-004	Associate	Edit Own Ticket	Edit assigned ticket	Can edit	NOT TESTED
+P2-ASSOC-005	Associate	Limited Visibility	Try to view All Tickets	Limited scope	NOT TESTED
+P2-ASSOC-006	Associate	No Admin Features	Check navigation	Labs NOT visible	NOT TESTED
+P2-CUST-001	Customer Support	Login	Login as CS Agent	Dashboard shows Customer Support only	NOT TESTED
+P2-CUST-002	Customer Support	Can Create Ticket	Check New Ticket button	Button IS visible	NOT TESTED
+P2-CUST-003	Customer Support	Customer Field	Create ticket form	Customer field visible and required	NOT TESTED
+P2-CUST-004	Customer Support	Department Scope	View tickets	Only Customer Support tickets	NOT TESTED
