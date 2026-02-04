@@ -668,22 +668,37 @@ export default function MyTicketsPage() {
                           className="w-full justify-between font-normal"
                           data-testid="select-vendor"
                         >
-                          {newTicket.vendorHandle || "Select or type vendor handle..."}
+                          {newTicket.vendorHandle ?
+                            vendors?.find(v => v.handle === newTicket.vendorHandle)?.name || newTicket.vendorHandle
+                            : "Select or search vendor..."}
                           <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
                         </Button>
                       </PopoverTrigger>
-                      <PopoverContent className="w-full p-0" align="start">
+                      <PopoverContent className="w-[400px] p-0" align="start">
                         <Command shouldFilter={false}>
                           <CommandInput
-                            placeholder="Search vendor handle or name..."
+                            placeholder="Search vendor by name or handle..."
                             value={vendorSearchValue}
                             onValueChange={setVendorSearchValue}
                           />
-                          <CommandList>
+                          <CommandList className="max-h-[300px] overflow-y-auto">
                             <CommandEmpty>
-                              <p className="text-sm text-muted-foreground p-2">
-                                No vendor found. You can type manually in the field below.
-                              </p>
+                              <div className="p-4 text-center">
+                                <p className="text-sm text-muted-foreground mb-2">
+                                  No vendor found matching "{vendorSearchValue}"
+                                </p>
+                                <Button
+                                  variant="outline"
+                                  size="sm"
+                                  onClick={() => {
+                                    setNewTicket({ ...newTicket, vendorHandle: vendorSearchValue });
+                                    setVendorComboOpen(false);
+                                    setVendorSearchValue("");
+                                  }}
+                                >
+                                  Use "{vendorSearchValue}" anyway
+                                </Button>
+                              </div>
                             </CommandEmpty>
                             <CommandGroup>
                               {vendors
@@ -695,6 +710,7 @@ export default function MyTicketsPage() {
                                     v.name.toLowerCase().includes(search)
                                   );
                                 })
+                                .slice(0, 100)
                                 .map((v) => (
                                   <CommandItem
                                     key={v.handle}
@@ -711,7 +727,10 @@ export default function MyTicketsPage() {
                                         newTicket.vendorHandle === v.handle ? "opacity-100" : "opacity-0"
                                       )}
                                     />
-                                    {v.handle} - {v.name}
+                                    <div className="flex flex-col">
+                                      <span className="font-medium">{v.name}</span>
+                                      <span className="text-xs text-muted-foreground">{v.handle}</span>
+                                    </div>
                                   </CommandItem>
                                 ))}
                             </CommandGroup>
@@ -719,12 +738,6 @@ export default function MyTicketsPage() {
                         </Command>
                       </PopoverContent>
                     </Popover>
-                    <Input
-                      value={newTicket.vendorHandle}
-                      onChange={(e) => setNewTicket({ ...newTicket, vendorHandle: e.target.value })}
-                      placeholder="Or type vendor handle manually"
-                      className="text-sm"
-                    />
                   </div>
                 );
               }
