@@ -484,7 +484,11 @@ export default function AnalyticsPage() {
                         mode="single"
                         selected={customDateEnd}
                         onSelect={setCustomDateEnd}
-                        disabled={(date) => date > new Date() || (customDateStart && date < customDateStart)}
+                        disabled={(date) => {
+                          if (date > new Date()) return true;
+                          if (customDateStart && date < customDateStart) return true;
+                          return false;
+                        }}
                       />
                     </div>
                     <Button

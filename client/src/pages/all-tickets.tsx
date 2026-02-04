@@ -59,7 +59,7 @@ const PRIORITIES = ["Critical", "High", "Medium", "Low"] as const;
 const ISSUE_TYPES = ["Complaint", "Request", "Information"] as const;
 const SLA_STATUSES = ["on_track", "at_risk", "breached"] as const;
 
-type SortField = "ticketNumber" | "subject" | "vendorHandle" | "department" | "status" | "priorityTier" | "createdAt";
+type SortField = "ticketNumber" | "subject" | "vendorHandle" | "department" | "issueType" | "status" | "priorityTier" | "createdAt" | "updatedAt";
 type SortDirection = "asc" | "desc";
 
 /**
@@ -166,7 +166,7 @@ export default function AllTicketsPage() {
       const query = searchQuery.toLowerCase();
       if (
         !ticket.subject.toLowerCase().includes(query) &&
-        !ticket.vendorHandle.toLowerCase().includes(query) &&
+        !(ticket.vendorHandle || "").toLowerCase().includes(query) &&
         !(ticket.ticketNumber || "").toLowerCase().includes(query)
       ) {
         return false;
@@ -210,8 +210,8 @@ export default function AllTicketsPage() {
         bVal = b.subject;
         break;
       case "vendorHandle":
-        aVal = a.vendorHandle;
-        bVal = b.vendorHandle;
+        aVal = a.vendorHandle || "";
+        bVal = b.vendorHandle || "";
         break;
       case "department":
         aVal = a.department;
@@ -564,18 +564,18 @@ export default function AllTicketsPage() {
                         <TableCell>{getPriorityBadge(ticket.priorityTier)}</TableCell>
                         <TableCell>{getStatusBadge(ticket.status)}</TableCell>
                         <TableCell className="text-sm">
-                          {ticket.assignedAgentId ? (
+                          {ticket.assigneeId ? (
                             <span className="text-muted-foreground">
-                              {ticket.assignedAgentId.slice(0, 8)}
+                              {ticket.assigneeId.slice(0, 8)}
                             </span>
                           ) : (
                             <span className="text-muted-foreground italic">Unassigned</span>
                           )}
                         </TableCell>
                         <TableCell className="text-sm">
-                          {ticket.slaDueDate ? (
-                            <span className={new Date(ticket.slaDueDate) < new Date() ? 'text-red-600 font-medium' : 'text-muted-foreground'}>
-                              {new Date(ticket.slaDueDate).toLocaleDateString()}
+                          {ticket.slaResolveTarget ? (
+                            <span className={new Date(ticket.slaResolveTarget) < new Date() ? 'text-red-600 font-medium' : 'text-muted-foreground'}>
+                              {new Date(ticket.slaResolveTarget).toLocaleDateString()}
                             </span>
                           ) : (
                             <span className="text-muted-foreground italic">No SLA</span>
@@ -590,7 +590,7 @@ export default function AllTicketsPage() {
                           {new Date(ticket.updatedAt).toLocaleDateString()}
                         </TableCell>
                         <TableCell className="text-sm text-muted-foreground">
-                          {ticket.source || 'Portal'}
+                          Portal
                         </TableCell>
                         <TableCell className="text-right">
                           <Button
