@@ -1,0 +1,126 @@
+{
+  "name": "Vendor Metrics to Google Sheets Dashboard",
+  "nodes": [
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "cronExpression",
+              "expression": "0 8 * * *"
+            }
+          ]
+        }
+      },
+      "name": "Schedule Daily 8 AM",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1,
+      "position": [250, 300]
+    },
+    {
+      "parameters": {
+        "url": "https://your-portal.vercel.app/api/vendors",
+        "options": {}
+      },
+      "name": "Fetch All Vendors",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 3,
+      "position": [450, 300]
+    },
+    {
+      "parameters": {
+        "operation": "clear",
+        "sheetName": "Vendor Metrics",
+        "documentId": "your-google-sheet-id",
+        "options": {}
+      },
+      "name": "Clear Sheet",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 3,
+      "position": [650, 300]
+    },
+    {
+      "parameters": {
+        "operation": "append",
+        "sheetName": "Vendor Metrics",
+        "documentId": "your-google-sheet-id",
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "Vendor Handle": "={{$json.handle}}",
+            "Vendor Name": "={{$json.name}}",
+            "GMV Tier": "={{$json.gmvTier}}",
+            "GMV 90 Day": "={{$json.gmv90Day}}",
+            "KAM": "={{$json.kam}}",
+            "Zone": "={{$json.zone}}",
+            "Region": "={{$json.region}}",
+            "Persona": "={{$json.persona}}",
+            "Last Updated": "={{$now}}"
+          }
+        },
+        "options": {}
+      },
+      "name": "Append to Sheet",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 3,
+      "position": [850, 300]
+    },
+    {
+      "parameters": {
+        "channel": "#reports",
+        "text": "📊 Daily Vendor Metrics Dashboard Updated\n\nTotal Vendors: {{$json.length}}\nTimestamp: {{$now}}\n\nView Dashboard: https://docs.google.com/spreadsheets/d/your-google-sheet-id",
+        "otherOptions": {}
+      },
+      "name": "Notify Completion",
+      "type": "n8n-nodes-base.slack",
+      "typeVersion": 1,
+      "position": [1050, 300]
+    }
+  ],
+  "connections": {
+    "Schedule Daily 8 AM": {
+      "main": [
+        [
+          {
+            "node": "Fetch All Vendors",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Fetch All Vendors": {
+      "main": [
+        [
+          {
+            "node": "Clear Sheet",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Clear Sheet": {
+      "main": [
+        [
+          {
+            "node": "Append to Sheet",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Append to Sheet": {
+      "main": [
+        [
+          {
+            "node": "Notify Completion",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  }
+}

@@ -1,0 +1,112 @@
+{
+  "name": "Scheduled Vendor Sync from BigQuery",
+  "nodes": [
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "hours",
+              "hoursInterval": 6
+            }
+          ]
+        }
+      },
+      "name": "Schedule Every 6 Hours",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1,
+      "position": [250, 300]
+    },
+    {
+      "parameters": {
+        "url": "https://your-portal.vercel.app/api/automation/bigquery/sync-all",
+        "method": "POST",
+        "options": {}
+      },
+      "name": "Trigger Full BigQuery Sync",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 3,
+      "position": [450, 300]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "boolean": [
+            {
+              "value1": "={{$json.success}}",
+              "value2": true
+            }
+          ]
+        }
+      },
+      "name": "Check if Successful",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 1,
+      "position": [650, 300]
+    },
+    {
+      "parameters": {
+        "channel": "#alerts",
+        "text": "✅ BigQuery sync completed successfully!\n\nVendors imported: {{$json.results.imported}}\nVendors updated: {{$json.results.updated}}\nErrors: {{$json.results.errors}}",
+        "otherOptions": {}
+      },
+      "name": "Send Success to Slack",
+      "type": "n8n-nodes-base.slack",
+      "typeVersion": 1,
+      "position": [850, 200]
+    },
+    {
+      "parameters": {
+        "channel": "#alerts",
+        "text": "❌ BigQuery sync FAILED!\n\nError: {{$json.error}}\nTime: {{$now}}",
+        "otherOptions": {}
+      },
+      "name": "Send Error to Slack",
+      "type": "n8n-nodes-base.slack",
+      "typeVersion": 1,
+      "position": [850, 400]
+    }
+  ],
+  "connections": {
+    "Schedule Every 6 Hours": {
+      "main": [
+        [
+          {
+            "node": "Trigger Full BigQuery Sync",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Trigger Full BigQuery Sync": {
+      "main": [
+        [
+          {
+            "node": "Check if Successful",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Check if Successful": {
+      "main": [
+        [
+          {
+            "node": "Send Success to Slack",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Send Error to Slack",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  }
+}

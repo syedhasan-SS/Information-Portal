@@ -1,0 +1,128 @@
+{
+  "name": "High Priority Ticket Alert",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "ticket-created",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "name": "Webhook - Ticket Created",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 1,
+      "position": [250, 300],
+      "webhookId": "your-webhook-id-here"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "string": [
+            {
+              "value1": "={{$json.data.priorityTier}}",
+              "operation": "equals",
+              "value2": "Critical"
+            }
+          ]
+        }
+      },
+      "name": "Is Critical Priority?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 1,
+      "position": [450, 300]
+    },
+    {
+      "parameters": {
+        "channel": "#urgent-tickets",
+        "text": "🚨 CRITICAL PRIORITY TICKET\n\nTicket #{{$json.data.ticketNumber}}\nVendor: {{$json.data.vendorHandle}}\nSubject: {{$json.data.subject}}\nPriority: {{$json.data.priorityBadge}}\n\nView: https://your-portal.vercel.app/tickets/{{$json.data.id}}",
+        "otherOptions": {}
+      },
+      "name": "Alert on Slack",
+      "type": "n8n-nodes-base.slack",
+      "typeVersion": 1,
+      "position": [650, 200]
+    },
+    {
+      "parameters": {
+        "fromEmail": "alerts@your-domain.com",
+        "toEmail": "manager@your-domain.com",
+        "subject": "🚨 Critical Ticket: {{$json.data.ticketNumber}}",
+        "text": "A critical priority ticket has been created:\n\nTicket: {{$json.data.ticketNumber}}\nVendor: {{$json.data.vendorHandle}}\nSubject: {{$json.data.subject}}\nPriority: {{$json.data.priorityBadge}}\nPriority Score: {{$json.data.priorityScore}}\n\nView ticket: https://your-portal.vercel.app/tickets/{{$json.data.id}}",
+        "options": {}
+      },
+      "name": "Email Manager",
+      "type": "n8n-nodes-base.emailSend",
+      "typeVersion": 2,
+      "position": [650, 400]
+    },
+    {
+      "parameters": {
+        "content": "=✅ Webhook received",
+        "respondWith": "json",
+        "options": {}
+      },
+      "name": "Respond to Webhook",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1,
+      "position": [850, 300]
+    }
+  ],
+  "connections": {
+    "Webhook - Ticket Created": {
+      "main": [
+        [
+          {
+            "node": "Is Critical Priority?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Is Critical Priority?": {
+      "main": [
+        [
+          {
+            "node": "Alert on Slack",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Email Manager",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Respond to Webhook",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Alert on Slack": {
+      "main": [
+        [
+          {
+            "node": "Respond to Webhook",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Email Manager": {
+      "main": [
+        [
+          {
+            "node": "Respond to Webhook",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  }
+}
