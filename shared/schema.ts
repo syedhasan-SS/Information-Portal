@@ -227,9 +227,11 @@ export const insertTicketSchema = createInsertSchema(tickets).omit({
   // Server-generated fields that should be optional on creation
   ticketNumber: true,
   priorityScore: true,
+  priorityTier: true,
   priorityBadge: true,
   priorityBreakdown: true,
   ownerTeam: true,
+  categoryId: true,
   categorySnapshot: true,
   slaSnapshot: true,
   prioritySnapshot: true,
