@@ -2517,6 +2517,7 @@ export default function TicketConfigPage() {
                         <TableHead>L3</TableHead>
                         <TableHead>L4</TableHead>
                         <TableHead>Description</TableHead>
+                        <TableHead>Department</TableHead>
                         <TableHead>Active</TableHead>
                         <TableHead>SLA (hrs)</TableHead>
                       </TableRow>
@@ -2534,6 +2535,9 @@ export default function TicketConfigPage() {
                           <TableCell>{config.l4}</TableCell>
                           <TableCell className="max-w-xs truncate" title={config.description}>
                             {config.description}
+                          </TableCell>
+                          <TableCell>
+                            <Badge variant="outline">{config.departmentType}</Badge>
                           </TableCell>
                           <TableCell>
                             <Badge variant={config.isActive ? "default" : "secondary"}>
