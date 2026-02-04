@@ -173,8 +173,8 @@ const DEFAULT_ROLES = [
       "assign:tickets", "resolve:tickets",
       // Users
       "view:users", "create:users", "edit:users", "delete:users", "manage:users", "assign:roles",
-      // Roles (view only, can't edit)
-      "view:roles",
+      // Roles
+      "view:roles", "create:roles", "edit:roles", "manage:permissions",
       // Departments
       "view:departments", "create:departments", "edit:departments", "delete:departments", "manage:departments",
       // Settings

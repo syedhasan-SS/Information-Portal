@@ -50,7 +50,10 @@ export default function OrgHierarchyPage() {
 
     return (
       <div className="relative">
-        <Card className={`p-4 mb-2 ${level > 0 ? 'ml-8' : ''} hover:bg-accent/5 transition-colors`}>
+        <Card
+          className={`p-4 mb-2 ${level > 0 ? 'ml-8' : ''} hover:bg-accent/5 transition-colors cursor-pointer`}
+          onClick={() => setLocation(`/users?edit=${user.id}`)}
+        >
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-3">
               <Avatar className="h-10 w-10">
@@ -89,7 +92,10 @@ export default function OrgHierarchyPage() {
               <Button
                 variant="ghost"
                 size="sm"
-                onClick={() => setLocation(`/users?edit=${user.id}`)}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  setLocation(`/users?edit=${user.id}`);
+                }}
                 className="hover:bg-primary/10"
               >
                 Edit User
