@@ -128,6 +128,11 @@ export class DatabaseStorage implements IStorage {
     return results[0];
   }
 
+  async getCategoryByPath(path: string): Promise<Category | undefined> {
+    const results = await db.select().from(categories).where(eq(categories.path, path)).limit(1);
+    return results[0];
+  }
+
   async createCategory(category: InsertCategory): Promise<Category> {
     const results = await db.insert(categories).values(category).returning();
     return results[0];

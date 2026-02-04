@@ -226,9 +226,18 @@ export async function registerRoutes(
 
       console.log('✅ Ticket validation passed');
 
-      // Clean up empty strings to null for optional fields
-      if (parsed.data.categoryId === '') {
-        parsed.data.categoryId = null as any; // Temporarily set to null for uncategorized tickets
+      // Use default "Uncategorized" category if none selected
+      if (!parsed.data.categoryId || parsed.data.categoryId === '') {
+        // Find or use the default uncategorized category
+        const defaultCategory = await storage.getCategoryByPath('General / Uncategorized / Other');
+        if (defaultCategory) {
+          parsed.data.categoryId = defaultCategory.id;
+          console.log('📋 Using default category:', defaultCategory.path);
+        } else {
+          return res.status(400).json({
+            error: 'Please select a category for this ticket. If no specific category applies, contact an administrator to set up default categories.'
+          });
+        }
       }
 
       // Validate vendorHandle exists if provided (for Seller Support)
