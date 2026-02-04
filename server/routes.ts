@@ -1819,8 +1819,8 @@ export async function registerRoutes(
       const config = req.body;
 
       // Basic validation
-      if (!config.issueType || !config.l1 || !config.l2 || !config.l3 || !config.l4) {
-        return res.status(400).json({ error: "Missing required fields" });
+      if (!config.issueType || !config.l1 || !config.l2 || !config.l3) {
+        return res.status(400).json({ error: "Missing required fields (issueType, l1, l2, l3 are required; l4 is optional)" });
       }
       if (!['Complaint', 'Request', 'Information'].includes(config.issueType)) {
         return res.status(400).json({ error: "Invalid issue type" });
@@ -1879,7 +1879,7 @@ export async function registerRoutes(
       // Create L4 category
       const l4Category = await storage.createCategoryHierarchy({
         level: 4,
-        name: config.l4,
+        name: config.l4 || "",
         parentId: l3Category.id,
         description: config.description || null,
         departmentType: config.departmentType || "All",
@@ -1897,8 +1897,12 @@ export async function registerRoutes(
       });
 
       // Create SLA configuration (needs a name)
+      const slaName = config.l4
+        ? `${config.l1} > ${config.l2} > ${config.l3} > ${config.l4}`
+        : `${config.l1} > ${config.l2} > ${config.l3}`;
+
       const slaConfig = await storage.createSlaConfiguration({
-        name: `${config.l1} > ${config.l2} > ${config.l3} > ${config.l4}`,
+        name: slaName,
         issueTypeId: issueType.id,
         l1CategoryId: l1Category.id,
         l2CategoryId: l2Category.id,
@@ -1945,9 +1949,9 @@ export async function registerRoutes(
       // Validate each config
       for (let i = 0; i < configs.length; i++) {
         const config = configs[i];
-        if (!config.issueType || !config.l1 || !config.l2 || !config.l3 || !config.l4) {
+        if (!config.issueType || !config.l1 || !config.l2 || !config.l3) {
           return res.status(400).json({
-            error: `Configuration at index ${i} is missing required fields`
+            error: `Configuration at index ${i} is missing required fields (issueType, l1, l2, l3 are required)`
           });
         }
         if (!['Complaint', 'Request', 'Information'].includes(config.issueType)) {
@@ -2016,7 +2020,7 @@ export async function registerRoutes(
         // Create L4 category (always create new to avoid conflicts)
         const l4Category = await storage.createCategoryHierarchy({
           level: 4,
-          name: config.l4,
+          name: config.l4 || "",
           parentId: l3Category.id,
           description: config.description || null,
           departmentType: config.departmentType || "All",
@@ -2034,8 +2038,12 @@ export async function registerRoutes(
         });
 
         // Create SLA configuration
+        const slaName = config.l4
+          ? `${config.l1} > ${config.l2} > ${config.l3} > ${config.l4}`
+          : `${config.l1} > ${config.l2} > ${config.l3}`;
+
         const slaConfig = await storage.createSlaConfiguration({
-          name: `${config.l1} > ${config.l2} > ${config.l3} > ${config.l4}`,
+          name: slaName,
           issueTypeId: issueType.id,
           l1CategoryId: l1Category.id,
           l2CategoryId: l2Category.id,
