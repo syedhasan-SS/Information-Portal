@@ -700,13 +700,13 @@ export default function TicketConfigPage() {
 
         // Validation
         if (!['Complaint', 'Request', 'Information'].includes(config.issueType)) {
-          errors.push(`Row ${i}: Invalid issue type "${config.issueType}"`);
+          errors.push(`Row ${i}: Invalid issue type "${config.issueType}" (must be Complaint, Request, or Information)`);
         }
-        if (!config.l1 || !config.l2 || !config.l3 || !config.l4) {
-          errors.push(`Row ${i}: Missing required category fields`);
+        if (!config.l1 || !config.l2 || !config.l3) {
+          errors.push(`Row ${i}: Missing required category fields (l1, l2, l3 are required; l4 is optional)`);
         }
         if (!config.slaResolutionHours || isNaN(config.slaResolutionHours)) {
-          errors.push(`Row ${i}: Invalid or missing SLA resolution hours`);
+          errors.push(`Row ${i}: Invalid or missing SLA resolution hours (must be a number)`);
         }
 
         if (errors.length === 0 || errors.filter(e => e.startsWith(`Row ${i}:`)).length === 0) {
