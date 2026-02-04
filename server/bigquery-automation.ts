@@ -3,6 +3,7 @@ import { db } from './db';
 import { vendors, tickets, categories } from '@shared/schema';
 import { eq, sql } from 'drizzle-orm';
 import { triggerN8nWorkflow } from './n8n-integration';
+import { syncVendorsFromBigQuery as comprehensiveSync } from './scheduled-vendor-sync';
 
 /**
  * BigQuery Automation Module
@@ -64,104 +65,37 @@ function getBigQueryClient(): BigQuery | null {
 }
 
 /**
- * Sync vendors from BigQuery to database
- * Returns: { imported: number, updated: number, errors: number }
+ * Sync vendors from BigQuery to database using comprehensive query
+ * Returns: { imported: number, updated: number, errors: number, total?: number }
+ *
+ * This now uses the comprehensive sync that includes:
+ * - Signup data from fleek_vendor_app.sign_up
+ * - Order statistics from fleek_hub.order_line_details
+ * - Geo flags (Zone/Non Zone)
+ * - Average ratings from fleek_customer_app.product_detail_page_viewed
+ * - Shop names from aurora_postgres_public.vendors
  */
 export async function syncVendorsFromBigQuery(): Promise<{
   imported: number;
   updated: number;
   errors: number;
+  total?: number;
 }> {
-  console.log('[BigQuery Automation] Starting vendor sync...');
-
-  const client = getBigQueryClient();
-  if (!client) {
-    throw new Error('BigQuery client not configured');
-  }
-
-  const projectId = process.env.BIGQUERY_PROJECT_ID;
-  let imported = 0;
-  let updated = 0;
-  let errors = 0;
+  console.log('[BigQuery Automation] Starting comprehensive vendor sync...');
 
   try {
-    const query = `
-      SELECT
-        handle,
-        name,
-        email,
-        phone,
-        gmv_tier,
-        gmv_90_day,
-        kam,
-        zone,
-        region,
-        country,
-        geo,
-        persona
-      FROM \`${projectId}.aurora_postgres_public.vendors\`
-      WHERE handle IS NOT NULL
-      ORDER BY handle
-    `;
-
-    const [rows] = await client.query({
-      query,
-      location: process.env.BIGQUERY_LOCATION || 'US',
-    });
-
-    console.log(`[BigQuery Automation] Found ${rows.length} vendors in BigQuery`);
-
-    for (const row of rows as BigQueryVendorData[]) {
-      try {
-        const existing = await db.select()
-          .from(vendors)
-          .where(eq(vendors.handle, row.handle))
-          .limit(1);
-
-        const vendorData = {
-          handle: row.handle,
-          name: row.name,
-          email: row.email || null,
-          phone: row.phone || null,
-          gmvTier: row.gmv_tier as any || null,
-          gmv90Day: row.gmv_90_day || null,
-          kam: row.kam || null,
-          zone: row.zone || null,
-          region: row.region || null,
-          country: row.country || null,
-          geo: row.geo || null,
-          persona: row.persona || null,
-        };
-
-        if (existing.length > 0) {
-          await db.update(vendors)
-            .set({
-              ...vendorData,
-              updatedAt: new Date(),
-            })
-            .where(eq(vendors.handle, row.handle));
-          updated++;
-        } else {
-          await db.insert(vendors).values(vendorData);
-          imported++;
-        }
-      } catch (error: any) {
-        console.error(`[BigQuery Automation] Error processing vendor ${row.handle}:`, error.message);
-        errors++;
-      }
-    }
-
-    console.log(`[BigQuery Automation] Vendor sync complete: ${imported} imported, ${updated} updated, ${errors} errors`);
+    // Use the comprehensive sync function that fetches ALL vendor data
+    const result = await comprehensiveSync();
 
     // Trigger n8n workflow with results
     await triggerN8nWorkflow('vendor.sync.complete', {
-      imported,
-      updated,
-      errors,
-      totalProcessed: rows.length,
+      imported: result.imported,
+      updated: result.updated,
+      errors: result.errors,
+      totalProcessed: result.total || 0,
     });
 
-    return { imported, updated, errors };
+    return result;
   } catch (error: any) {
     console.error('[BigQuery Automation] Vendor sync failed:', error.message);
     throw error;
