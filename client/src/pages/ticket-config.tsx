@@ -644,6 +644,34 @@ export default function TicketConfigPage() {
     }
   };
 
+  // Helper function to parse CSV line properly (handles quoted fields)
+  const parseCsvLine = (line: string): string[] => {
+    const result: string[] = [];
+    let current = '';
+    let inQuotes = false;
+
+    // Remove leading/trailing quotes if the entire line is quoted
+    const trimmedLine = line.trim();
+    const actualLine = (trimmedLine.startsWith('"') && trimmedLine.endsWith('"'))
+      ? trimmedLine.slice(1, -1)
+      : trimmedLine;
+
+    for (let i = 0; i < actualLine.length; i++) {
+      const char = actualLine[i];
+
+      if (char === '"') {
+        inQuotes = !inQuotes;
+      } else if (char === ',' && !inQuotes) {
+        result.push(current.trim());
+        current = '';
+      } else {
+        current += char;
+      }
+    }
+    result.push(current.trim());
+    return result;
+  };
+
   const parseCsvFile = (file: File) => {
     const reader = new FileReader();
     reader.onload = (e) => {
@@ -659,8 +687,8 @@ export default function TicketConfigPage() {
         return;
       }
 
-      // Parse header
-      const headers = lines[0].split(',').map(h => h.trim().toLowerCase());
+      // Parse header using proper CSV parsing
+      const headers = parseCsvLine(lines[0]).map(h => h.trim().toLowerCase());
       const requiredHeaders = ['issue type', 'l1', 'l2', 'l3', 'l4', 'description', 'active', 'sla resolution hours'];
 
       const missingHeaders = requiredHeaders.filter(h => !headers.includes(h));
@@ -678,7 +706,7 @@ export default function TicketConfigPage() {
       const errors: string[] = [];
 
       for (let i = 1; i < lines.length; i++) {
-        const values = lines[i].split(',').map(v => v.trim());
+        const values = parseCsvLine(lines[i]);
         const row: any = {};
 
         headers.forEach((header, index) => {
