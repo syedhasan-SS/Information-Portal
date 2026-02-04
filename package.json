@@ -9,7 +9,13 @@
     "start": "NODE_ENV=production node dist/index.cjs",
     "check": "tsc",
     "db:push": "drizzle-kit push",
-    "import:vendors": "tsx import-vendors-from-bigquery.ts"
+    "import:vendors": "tsx import-vendors-from-bigquery.ts",
+    "setup:bigquery": "./setup-bigquery.sh",
+    "setup:n8n": "tsx configure-n8n.ts",
+    "setup:complete": "./setup-complete.sh",
+    "test:automation": "./test-automation.sh",
+    "sync:vendors": "curl -X POST http://localhost:5000/api/automation/bigquery/sync-vendors",
+    "sync:all": "curl -X POST http://localhost:5000/api/automation/bigquery/sync-all"
   },
   "dependencies": {
     "@google-cloud/bigquery": "^8.1.1",
@@ -43,6 +49,7 @@
     "@radix-ui/react-toggle-group": "^1.1.11",
     "@radix-ui/react-tooltip": "^1.2.8",
     "@tanstack/react-query": "^5.60.5",
+    "axios": "^1.13.4",
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
     "cmdk": "^1.1.1",
