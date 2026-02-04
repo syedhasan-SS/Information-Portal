@@ -689,7 +689,18 @@ export default function TicketConfigPage() {
 
       // Parse header using proper CSV parsing
       const headers = parseCsvLine(lines[0]).map(h => h.trim().toLowerCase());
-      const requiredHeaders = ['issue type', 'l1', 'l2', 'l3', 'l4', 'description', 'active', 'sla resolution hours'];
+      const requiredHeaders = ['issue type', 'l1', 'l2', 'l3', 'description', 'active'];
+
+      // SLA column can be either 'sla (hrs)' or 'sla resolution hours'
+      const hasSlaColumn = headers.includes('sla (hrs)') || headers.includes('sla resolution hours');
+      if (!hasSlaColumn) {
+        toast({
+          title: "Invalid CSV Format",
+          description: "Missing required SLA column (must have 'SLA (hrs)' or 'SLA Resolution Hours')",
+          variant: "destructive"
+        });
+        return;
+      }
 
       const missingHeaders = requiredHeaders.filter(h => !headers.includes(h));
       if (missingHeaders.length > 0) {
@@ -714,17 +725,20 @@ export default function TicketConfigPage() {
         });
 
         // Validate and transform
+        // Handle SLA - can be single 'sla (hrs)' or separate response/resolution hours
+        const slaValue = row['sla (hrs)'] || row['sla resolution hours'];
+
         const config: any = {
           issueType: row['issue type'],
           l1: row['l1'],
           l2: row['l2'],
           l3: row['l3'],
-          l4: row['l4'],
+          l4: row['l4'] || '', // L4 is optional
           description: row['description'],
           departmentType: row['department type'] || row['department'] || 'All', // Default to 'All' if not specified
           isActive: row['active']?.toLowerCase() === 'true' || row['active']?.toLowerCase() === 'yes',
           slaResponseHours: row['sla response hours'] ? parseInt(row['sla response hours']) : null,
-          slaResolutionHours: parseInt(row['sla resolution hours']),
+          slaResolutionHours: parseInt(slaValue),
         };
 
         // Validation
@@ -797,10 +811,10 @@ export default function TicketConfigPage() {
   };
 
   const downloadCsvTemplate = () => {
-    const template = `Issue Type,L1,L2,L3,L4,Description,Active,SLA Response Hours,SLA Resolution Hours
-Complaint,Finance,Payment,Payment Not Processed,Commission Issue,Payment related complaint,true,24,48
-Request,Operations,Order Management,Order Modification,Cancel Request,Order cancellation request,true,12,24
-Information,Tech,Product Listings,Product Information,Category Query,Product category information,true,,8`;
+    const template = `No.,Issue Type,L1,L2,L3,L4,Description,Active,SLA (hrs)
+1,Complaint,Finance,Payment,Payment Not Processed,Commission Issue,Payment related complaint,true,48
+2,Request,Operations,Order Management,Order Modification,Cancel Request,Order cancellation request,true,24
+3,Information,Tech,Product Listings,Product Information,,Product category information,true,8`;
 
     const blob = new Blob([template], { type: 'text/csv' });
     const url = window.URL.createObjectURL(blob);
@@ -2462,10 +2476,10 @@ Information,Tech,Product Listings,Product Information,Category Query,Product cat
               <AlertDescription>
                 <div className="font-semibold mb-1">CSV Format:</div>
                 <div className="text-sm text-muted-foreground">
-                  Columns: Issue Type, L1, L2, L3, L4, Description, Department Type (optional), Active, SLA Response Hours, SLA Resolution Hours
+                  Columns: No., Issue Type, L1, L2, L3, L4, Description, Active, SLA (hrs)
                 </div>
                 <div className="text-xs text-muted-foreground mt-1">
-                  Note: L4 and Department Type are optional. Department Type defaults to "All" if not specified.
+                  Note: No., L4, and Department Type columns are optional. Department Type defaults to "All" if not specified.
                 </div>
               </AlertDescription>
             </Alert>
