@@ -60,6 +60,7 @@ export default function VendorsPage() {
   });
 
   const ticketsByVendor = tickets?.reduce((acc, ticket) => {
+    if (!ticket.vendorHandle) return acc;
     if (!acc[ticket.vendorHandle]) {
       acc[ticket.vendorHandle] = { total: 0, open: 0 };
     }

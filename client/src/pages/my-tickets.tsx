@@ -592,7 +592,7 @@ export default function MyTicketsPage() {
                         {new Date(ticket.updatedAt).toLocaleDateString()}
                       </TableCell>
                       <TableCell className="text-sm text-muted-foreground">
-                        {ticket.source || 'Portal'}
+                        Portal
                       </TableCell>
                       <TableCell className="text-right">
                         <Button

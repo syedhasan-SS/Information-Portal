@@ -453,9 +453,9 @@ export default function TicketDetailPage() {
                   <label className="text-xs font-medium text-muted-foreground">Case Creator</label>
                   <div className="mt-1 flex items-center gap-2">
                     <div className="flex h-6 w-6 items-center justify-center rounded-full bg-accent text-accent-foreground font-semibold text-xs">
-                      {userMap[ticket.createdBy]?.name.charAt(0).toUpperCase() || "?"}
+                      {ticket.createdById && userMap[ticket.createdById]?.name.charAt(0).toUpperCase() || "?"}
                     </div>
-                    <span className="text-sm">{userMap[ticket.createdBy]?.name || "Unknown"}</span>
+                    <span className="text-sm">{ticket.createdById && userMap[ticket.createdById]?.name || "Unknown"}</span>
                   </div>
                 </div>
 
