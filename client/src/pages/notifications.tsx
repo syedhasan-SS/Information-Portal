@@ -66,6 +66,7 @@ export default function NotificationsPage() {
     mutationFn: markAsRead,
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["notifications", userId] });
+      queryClient.invalidateQueries({ queryKey: ["unreadNotifications", userId] });
     },
   });
 
@@ -73,6 +74,7 @@ export default function NotificationsPage() {
     mutationFn: () => markAllAsRead(userId),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["notifications", userId] });
+      queryClient.invalidateQueries({ queryKey: ["unreadNotifications", userId] });
     },
   });
 
@@ -80,6 +82,7 @@ export default function NotificationsPage() {
     mutationFn: deleteNotification,
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["notifications", userId] });
+      queryClient.invalidateQueries({ queryKey: ["unreadNotifications", userId] });
     },
   });
 
@@ -114,7 +117,7 @@ export default function NotificationsPage() {
       markAsReadMutation.mutate(notification.id);
     }
     if (notification.ticketId) {
-      setLocation(`/tickets/${notification.ticketId}`);
+      setLocation(`/tickets/${notification.ticketId}?from=notifications`);
     }
   };
 

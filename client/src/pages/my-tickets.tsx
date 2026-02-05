@@ -287,19 +287,22 @@ export default function MyTicketsPage() {
   }, [newTicket.categoryId]);
 
   // Helper function to check if a field should be visible
-  // Priority: 1) Category override, 2) User department type default
+  // Priority: 1) Category override (if category selected), 2) User department type default
   const isFieldVisible = (fieldName: string): boolean => {
-    // If we have resolved fields (category selected), check for explicit overrides
+    // If we have resolved fields (category selected), ONLY use those
+    // This ensures category-specific field visibility is respected
     if (resolvedFields.length > 0) {
       const field = resolvedFields.find(f => f.fieldName === fieldName);
       if (field) {
-        // Category has an explicit override for this field
+        // Category has field configuration - use its effective visibility
         return field.effectiveVisibility === "visible";
       }
-      // No category override - fall through to department-based default
+      // Field not in resolved fields for this category - hide it by default
+      // This prevents fields irrelevant to the category from showing
+      return false;
     }
 
-    // Default visibility based on user's department type
+    // No category selected yet - default visibility based on user's department type
     const baseField = sortedVisibleFields.find((f: any) => f.fieldName === fieldName);
     if (!baseField) return false; // Field not found
 
@@ -408,10 +411,9 @@ export default function MyTicketsPage() {
     },
   });
 
-  // Note: In production, filter by current logged-in user ID
-  // For now, showing all tickets with createdById/assigneeId set
-  const createdTickets = tickets?.filter((t) => t.createdById) || [];
-  const assignedTickets = tickets?.filter((t) => t.assigneeId) || [];
+  // Filter tickets by current logged-in user
+  const createdTickets = tickets?.filter((t) => t.createdById === user?.id) || [];
+  const assignedTickets = tickets?.filter((t) => t.assigneeId === user?.id) || [];
 
   const displayedTickets = activeTab === "created" ? createdTickets : assignedTickets;
 
@@ -598,7 +600,7 @@ export default function MyTicketsPage() {
                         <Button
                           variant="ghost"
                           size="sm"
-                          onClick={() => setLocation(`/tickets/${ticket.id}`)}
+                          onClick={() => setLocation(`/tickets/${ticket.id}?from=my-tickets`)}
                           data-testid={`button-view-${ticket.id}`}
                         >
                           View

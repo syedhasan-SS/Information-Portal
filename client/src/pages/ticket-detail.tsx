@@ -124,10 +124,38 @@ function getCategoryDisplay(ticket: Ticket, categoryMap: Record<string, Category
 }
 
 export default function TicketDetailPage() {
-  const [, setLocation] = useLocation();
+  const [location, setLocation] = useLocation();
   const { id } = useParams<{ id: string }>();
   const [newComment, setNewComment] = useState("");
   const [activeTab, setActiveTab] = useState<"comments" | "activity">("comments");
+
+  // Get the referrer from query params
+  const urlParams = new URLSearchParams(window.location.search);
+  const from = urlParams.get('from') || 'all-tickets';
+
+  const getBackPath = () => {
+    switch (from) {
+      case 'my-tickets':
+        return '/my-tickets';
+      case 'notifications':
+        return '/notifications';
+      case 'all-tickets':
+      default:
+        return '/tickets';
+    }
+  };
+
+  const getBackLabel = () => {
+    switch (from) {
+      case 'my-tickets':
+        return 'My Tickets';
+      case 'notifications':
+        return 'Notifications';
+      case 'all-tickets':
+      default:
+        return 'All Tickets';
+    }
+  };
   
   const queryClient = useQueryClient();
 
@@ -247,11 +275,11 @@ export default function TicketDetailPage() {
               <Button
                 variant="ghost"
                 size="sm"
-                onClick={() => setLocation("/tickets")}
+                onClick={() => setLocation(getBackPath())}
                 data-testid="button-back"
               >
                 <ArrowLeft className="h-4 w-4" />
-                All Tickets
+                {getBackLabel()}
               </Button>
               <div>
                 <div className="flex items-center gap-2">

@@ -596,7 +596,7 @@ export default function AllTicketsPage() {
                           <Button
                             variant="ghost"
                             size="sm"
-                            onClick={() => setLocation(`/tickets/${ticket.id}`)}
+                            onClick={() => setLocation(`/tickets/${ticket.id}?from=all-tickets`)}
                             data-testid={`button-view-${ticket.id}`}
                           >
                             View

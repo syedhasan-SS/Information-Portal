@@ -55,7 +55,7 @@ type CategoryConfig = {
   l1: string; // Department
   l2: string; // Sub Department
   l3: string; // Category
-  l4: string; // Sub-Category/Problem Area
+  l4: string | null; // Sub-Category/Problem Area (optional)
   description: string;
   departmentType: "Seller Support" | "Customer Support" | "All";
   isActive: boolean;
@@ -2429,7 +2429,6 @@ export default function TicketConfigPage() {
                 !wizardData.l1 ||
                 !wizardData.l2 ||
                 !wizardData.l3 ||
-                !wizardData.l4 ||
                 !wizardData.slaResolutionHours ||
                 createConfigMutation.isPending ||
                 updateConfigMutation.isPending
