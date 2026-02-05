@@ -396,6 +396,13 @@ export default function MyTicketsPage() {
         ? ticketData.fleekOrderIds.split(',').map(id => id.trim()).filter(id => id.length > 0)
         : [];
 
+      console.log('📝 Creating ticket with data:', {
+        categoryId: ticketData.categoryId,
+        department: ticketData.department,
+        issueType: ticketData.issueType,
+        subject: ticketData.subject,
+      });
+
       const res = await fetch("/api/tickets", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -908,6 +915,7 @@ export default function MyTicketsPage() {
                                     key={c.id}
                                     value={c.id}
                                     onSelect={() => {
+                                      console.log('✅ Category selected:', { id: c.id, path: c.path, l1: c.l1, l2: c.l2, l3: c.l3, l4: c.l4 });
                                       setNewTicket({ ...newTicket, categoryId: c.id });
                                       setCategoryComboOpen(false);
                                       setCategorySearchValue("");

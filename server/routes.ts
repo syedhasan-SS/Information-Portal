@@ -225,9 +225,11 @@ export async function registerRoutes(
       }
 
       console.log('✅ Ticket validation passed');
+      console.log('📋 Received categoryId:', parsed.data.categoryId, 'Type:', typeof parsed.data.categoryId);
 
       // Use default "Uncategorized" category if none selected
       if (!parsed.data.categoryId || parsed.data.categoryId === '') {
+        console.log('⚠️ CategoryId is empty, using default category');
         // Find or use the default uncategorized category
         const defaultCategory = await storage.getCategoryByPath('General / Uncategorized / Other');
         if (defaultCategory) {
