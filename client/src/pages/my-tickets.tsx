@@ -105,6 +105,12 @@ async function getVendors(): Promise<Vendor[]> {
   return res.json();
 }
 
+async function getUsers() {
+  const res = await fetch("/api/users");
+  if (!res.ok) throw new Error("Failed to fetch users");
+  return res.json();
+}
+
 const DEPARTMENTS = ["Finance", "Operations", "Marketplace", "Tech", "Experience", "CX"] as const;
 const ISSUE_TYPES = ["Complaint", "Request", "Information"] as const;
 
@@ -168,6 +174,11 @@ export default function MyTicketsPage() {
   const { data: vendors } = useQuery({
     queryKey: ["vendors"],
     queryFn: getVendors,
+  });
+
+  const { data: users } = useQuery({
+    queryKey: ["users"],
+    queryFn: getUsers,
   });
 
   // Fetch all field configurations for display order
@@ -570,7 +581,7 @@ export default function MyTicketsPage() {
                       <TableCell className="text-sm">
                         {ticket.assigneeId ? (
                           <span className="text-muted-foreground">
-                            {ticket.assigneeId.slice(0, 8)}
+                            {users?.find(u => u.id === ticket.assigneeId)?.name || ticket.assigneeId.slice(0, 8)}
                           </span>
                         ) : (
                           <span className="text-muted-foreground italic">Unassigned</span>

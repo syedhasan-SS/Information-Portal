@@ -156,6 +156,9 @@ export default function DashboardPage() {
       return u.department === user.department;
     }
 
+    // Agents see themselves in the pending tickets section
+    if (u.id === user.id) return true;
+
     return false;
   });
 

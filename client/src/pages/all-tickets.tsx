@@ -54,6 +54,12 @@ async function getDepartments(): Promise<(Department & { subDepartments: SubDepa
   return res.json();
 }
 
+async function getUsers() {
+  const res = await fetch("/api/users");
+  if (!res.ok) throw new Error("Failed to fetch users");
+  return res.json();
+}
+
 const STATUSES = ["New", "Open", "Pending", "Solved", "Closed"] as const;
 const PRIORITIES = ["Critical", "High", "Medium", "Low"] as const;
 const ISSUE_TYPES = ["Complaint", "Request", "Information"] as const;
@@ -108,6 +114,11 @@ export default function AllTicketsPage() {
   const { data: categories } = useQuery({
     queryKey: ["categories"],
     queryFn: getCategories,
+  });
+
+  const { data: users } = useQuery({
+    queryKey: ["users"],
+    queryFn: getUsers,
   });
 
   const { data: departmentsData } = useQuery({
@@ -566,7 +577,7 @@ export default function AllTicketsPage() {
                         <TableCell className="text-sm">
                           {ticket.assigneeId ? (
                             <span className="text-muted-foreground">
-                              {ticket.assigneeId.slice(0, 8)}
+                              {users?.find(u => u.id === ticket.assigneeId)?.name || ticket.assigneeId.slice(0, 8)}
                             </span>
                           ) : (
                             <span className="text-muted-foreground italic">Unassigned</span>
