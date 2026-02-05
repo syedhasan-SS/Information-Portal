@@ -12,6 +12,14 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 import { cn } from "@/lib/utils";
 import {
   ArrowLeft,
@@ -26,6 +34,7 @@ import {
   Loader2,
   Send,
   ExternalLink,
+  Save,
 } from "lucide-react";
 import type { Ticket, Comment, Category, User as UserType } from "@shared/schema";
 
@@ -128,6 +137,8 @@ export default function TicketDetailPage() {
   const { id } = useParams<{ id: string }>();
   const [newComment, setNewComment] = useState("");
   const [activeTab, setActiveTab] = useState<"comments" | "activity">("comments");
+  const [pendingChanges, setPendingChanges] = useState<Partial<Ticket>>({});
+  const [showConfirmDialog, setShowConfirmDialog] = useState(false);
 
   // Get the referrer from query params
   const urlParams = new URLSearchParams(window.location.search);
@@ -191,8 +202,46 @@ export default function TicketDetailPage() {
     mutationFn: (updates: Partial<Ticket>) => updateTicket(id!, updates),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["ticket", id] });
+      queryClient.invalidateQueries({ queryKey: ["tickets"] });
+      setPendingChanges({});
+      setShowConfirmDialog(false);
     },
   });
+
+  const handleSaveChanges = () => {
+    if (Object.keys(pendingChanges).length > 0) {
+      setShowConfirmDialog(true);
+    }
+  };
+
+  const confirmSaveChanges = () => {
+    updateMutation.mutate(pendingChanges);
+  };
+
+  const hasPendingChanges = Object.keys(pendingChanges).length > 0;
+
+  const getFieldLabel = (field: string): string => {
+    const labels: Record<string, string> = {
+      status: "Status",
+      assigneeId: "Assignee",
+      priorityTier: "Priority",
+      categoryId: "Category",
+    };
+    return labels[field] || field;
+  };
+
+  const getFieldDisplayValue = (field: string, value: any): string => {
+    if (field === "assigneeId") {
+      if (value === null) return "Unassigned";
+      const user = users?.find(u => u.id === value);
+      return user?.name || value;
+    }
+    if (field === "categoryId") {
+      const category = categoryMap[value];
+      return category ? `${category.l1} > ${category.l2} > ${category.l3}${category.l4 ? ` > ${category.l4}` : ''}` : value;
+    }
+    return String(value);
+  };
 
   const commentMutation = useMutation({
     mutationFn: (content: string) => addComment(id!, content),
@@ -423,8 +472,8 @@ export default function TicketDetailPage() {
                 <div>
                   <label className="text-xs font-medium text-muted-foreground">Status</label>
                   <Select
-                    value={ticket.status}
-                    onValueChange={(val) => updateMutation.mutate({ status: val as Ticket["status"] })}
+                    value={pendingChanges.status ?? ticket.status}
+                    onValueChange={(val) => setPendingChanges({ ...pendingChanges, status: val as Ticket["status"] })}
                   >
                     <SelectTrigger className="mt-1" data-testid="select-status">
                       <SelectValue />
@@ -440,8 +489,8 @@ export default function TicketDetailPage() {
                 <div>
                   <label className="text-xs font-medium text-muted-foreground">Assignee</label>
                   <Select
-                    value={ticket.assigneeId || "unassigned"}
-                    onValueChange={(val) => updateMutation.mutate({ assigneeId: val === "unassigned" ? null : val })}
+                    value={pendingChanges.assigneeId !== undefined ? (pendingChanges.assigneeId || "unassigned") : (ticket.assigneeId || "unassigned")}
+                    onValueChange={(val) => setPendingChanges({ ...pendingChanges, assigneeId: val === "unassigned" ? null : val })}
                   >
                     <SelectTrigger className="mt-1" data-testid="select-assignee">
                       <SelectValue placeholder="Unassigned" />
@@ -503,6 +552,19 @@ export default function TicketDetailPage() {
                   </div>
                 </div>
               </div>
+
+              {hasPendingChanges && (
+                <div className="mt-4 pt-4 border-t">
+                  <Button
+                    onClick={handleSaveChanges}
+                    disabled={updateMutation.isPending}
+                    className="w-full"
+                  >
+                    <Save className="mr-2 h-4 w-4" />
+                    Save Changes
+                  </Button>
+                </div>
+              )}
             </Card>
 
             <Card className="p-6">
@@ -619,6 +681,65 @@ export default function TicketDetailPage() {
           </div>
         </div>
       </main>
+
+      {/* Confirmation Dialog */}
+      <Dialog open={showConfirmDialog} onOpenChange={setShowConfirmDialog}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Confirm Changes</DialogTitle>
+            <DialogDescription>
+              Please review the changes you're about to make to this ticket.
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="space-y-3">
+            {Object.entries(pendingChanges).map(([field, newValue]) => {
+              const currentValue = ticket?.[field as keyof Ticket];
+              return (
+                <div key={field} className="rounded-lg border p-3">
+                  <p className="text-sm font-medium mb-2">{getFieldLabel(field)}</p>
+                  <div className="grid grid-cols-2 gap-4 text-sm">
+                    <div>
+                      <p className="text-muted-foreground text-xs mb-1">Current</p>
+                      <p className="font-medium">{getFieldDisplayValue(field, currentValue)}</p>
+                    </div>
+                    <div>
+                      <p className="text-muted-foreground text-xs mb-1">New</p>
+                      <p className="font-medium text-blue-600">{getFieldDisplayValue(field, newValue)}</p>
+                    </div>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+
+          <DialogFooter>
+            <Button
+              variant="outline"
+              onClick={() => setShowConfirmDialog(false)}
+              disabled={updateMutation.isPending}
+            >
+              Cancel
+            </Button>
+            <Button
+              onClick={confirmSaveChanges}
+              disabled={updateMutation.isPending}
+            >
+              {updateMutation.isPending ? (
+                <>
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                  Saving...
+                </>
+              ) : (
+                <>
+                  <CheckCircle className="mr-2 h-4 w-4" />
+                  Confirm & Save
+                </>
+              )}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

@@ -404,7 +404,7 @@ export default function MyTicketsPage() {
           customer: ticketData.customer || null,
           department: ticketData.department,
           issueType: ticketData.issueType,
-          categoryId: ticketData.categoryId,
+          categoryId: ticketData.categoryId || undefined,
           subject: ticketData.subject,
           description: ticketData.description,
           fleekOrderIds: fleekOrderIdsArray.length > 0 ? fleekOrderIdsArray : null,
