@@ -114,6 +114,26 @@ async function getUsers() {
 const DEPARTMENTS = ["Finance", "Operations", "Marketplace", "Tech", "Experience", "CX"] as const;
 const ISSUE_TYPES = ["Complaint", "Request", "Information"] as const;
 
+/**
+ * Gets category display path with snapshot fallback
+ * Priority: snapshot > live category > unknown
+ */
+function getCategoryDisplay(ticket: Ticket, categoryMap: Record<string, Category>): string {
+  // V1: Use snapshot (preferred for backward compatibility)
+  if (ticket.categorySnapshot?.path) {
+    return ticket.categorySnapshot.path;
+  }
+
+  // V0: Fallback to live reference for old tickets
+  const category = categoryMap[ticket.categoryId];
+  if (category) {
+    return `${category.l1} > ${category.l2} > ${category.l3}${category.l4 ? ` > ${category.l4}` : ''}`;
+  }
+
+  // Last resort: category was deleted and no snapshot exists
+  return 'Unknown Category (Deleted)';
+}
+
 export default function MyTicketsPage() {
   const [, setLocation] = useLocation();
   const { user, hasPermission } = useAuth();
@@ -556,7 +576,6 @@ export default function MyTicketsPage() {
                 </TableHeader>
                 <TableBody>
                   {displayedTickets.map((ticket) => {
-                    const category = categories?.find(c => c.id === ticket.categoryId);
                     const agingDays = Math.floor((new Date().getTime() - new Date(ticket.createdAt).getTime()) / (1000 * 60 * 60 * 24));
 
                     return (
@@ -571,7 +590,7 @@ export default function MyTicketsPage() {
                         <Badge variant="secondary">{ticket.department}</Badge>
                       </TableCell>
                       <TableCell className="text-sm">
-                        {category ? `${category.l1} > ${category.l2} > ${category.l3}${category.l4 ? ` > ${category.l4}` : ''}` : 'N/A'}
+                        {getCategoryDisplay(ticket, categoryMap)}
                       </TableCell>
                       <TableCell>
                         <Badge variant="outline">{ticket.issueType}</Badge>
