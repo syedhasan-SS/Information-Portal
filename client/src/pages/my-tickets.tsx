@@ -425,6 +425,7 @@ export default function MyTicketsPage() {
           },
           ownerTeam: ticketData.department,
           slaStatus: "on_track",
+          createdById: user?.id, // Track who created the ticket
         }),
       });
       if (!res.ok) throw new Error("Failed to create ticket");
