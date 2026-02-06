@@ -142,6 +142,7 @@ export default function TicketDetailPage() {
   const [activeTab, setActiveTab] = useState<"comments" | "activity">("comments");
   const [pendingChanges, setPendingChanges] = useState<Partial<Ticket>>({});
   const [showConfirmDialog, setShowConfirmDialog] = useState(false);
+  const [newTag, setNewTag] = useState("");
 
   // Get the referrer from query params
   const urlParams = new URLSearchParams(window.location.search);
@@ -234,6 +235,9 @@ export default function TicketDetailPage() {
       assigneeId: "Assignee",
       priorityTier: "Priority",
       categoryId: "Category",
+      department: "Department",
+      issueType: "Issue Type",
+      tags: "Tags",
     };
     return labels[field] || field;
   };
@@ -247,6 +251,9 @@ export default function TicketDetailPage() {
     if (field === "categoryId") {
       const category = categoryMap[value];
       return category ? `${category.l1} > ${category.l2} > ${category.l3}${category.l4 ? ` > ${category.l4}` : ''}` : value;
+    }
+    if (field === "tags") {
+      return Array.isArray(value) ? value.join(", ") : String(value);
     }
     return String(value);
   };
@@ -523,14 +530,42 @@ export default function TicketDetailPage() {
 
                 <div>
                   <label className="text-xs font-medium text-muted-foreground">Priority</label>
-                  <div className="mt-1">{getPriorityBadge(ticket.priorityTier)}</div>
+                  <Select
+                    value={pendingChanges.priorityTier ?? ticket.priorityTier}
+                    onValueChange={(val) => setPendingChanges({ ...pendingChanges, priorityTier: val as "Critical" | "High" | "Medium" | "Low" })}
+                  >
+                    <SelectTrigger className="mt-1" data-testid="select-priority">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="Critical">Critical</SelectItem>
+                      <SelectItem value="High">High</SelectItem>
+                      <SelectItem value="Medium">Medium</SelectItem>
+                      <SelectItem value="Low">Low</SelectItem>
+                    </SelectContent>
+                  </Select>
                 </div>
 
                 <div>
                   <label className="text-xs font-medium text-muted-foreground">Department</label>
-                  <div className="mt-1">
-                    <Badge variant="secondary">{ticket.department}</Badge>
-                  </div>
+                  <Select
+                    value={pendingChanges.department ?? ticket.department}
+                    onValueChange={(val) => setPendingChanges({ ...pendingChanges, department: val as "Finance" | "Operations" | "Marketplace" | "Tech" | "Supply" | "Growth" | "Experience" | "CX" })}
+                  >
+                    <SelectTrigger className="mt-1" data-testid="select-department">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="Finance">Finance</SelectItem>
+                      <SelectItem value="Operations">Operations</SelectItem>
+                      <SelectItem value="Marketplace">Marketplace</SelectItem>
+                      <SelectItem value="Tech">Tech</SelectItem>
+                      <SelectItem value="Supply">Supply</SelectItem>
+                      <SelectItem value="Growth">Growth</SelectItem>
+                      <SelectItem value="Experience">Experience</SelectItem>
+                      <SelectItem value="CX">CX</SelectItem>
+                    </SelectContent>
+                  </Select>
                 </div>
 
                 <div>
@@ -554,7 +589,19 @@ export default function TicketDetailPage() {
 
                 <div>
                   <label className="text-xs font-medium text-muted-foreground">Issue Type</label>
-                  <p className="mt-1 text-sm">{ticket.issueType}</p>
+                  <Select
+                    value={pendingChanges.issueType ?? ticket.issueType}
+                    onValueChange={(val) => setPendingChanges({ ...pendingChanges, issueType: val as "Complaint" | "Request" | "Information" })}
+                  >
+                    <SelectTrigger className="mt-1" data-testid="select-issue-type">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="Complaint">Complaint</SelectItem>
+                      <SelectItem value="Request">Request</SelectItem>
+                      <SelectItem value="Information">Information</SelectItem>
+                    </SelectContent>
+                  </Select>
                 </div>
 
                 <div>
@@ -569,17 +616,64 @@ export default function TicketDetailPage() {
 
                 <div>
                   <label className="text-xs font-medium text-muted-foreground">Tags</label>
-                  <div className="mt-1 flex flex-wrap gap-1">
-                    {ticket.tags && ticket.tags.length > 0 ? (
-                      ticket.tags.map((tag, index) => (
-                        <Badge key={index} variant="secondary" className="text-xs">
-                          <Tag className="mr-1 h-3 w-3" />
+                  <div className="mt-1 space-y-2">
+                    <div className="flex flex-wrap gap-1">
+                      {(pendingChanges.tags ?? ticket.tags)?.map((tag, index) => (
+                        <Badge key={index} variant="secondary" className="text-xs flex items-center gap-1">
+                          <Tag className="h-3 w-3" />
                           {tag}
+                          <button
+                            type="button"
+                            onClick={() => {
+                              const currentTags = pendingChanges.tags ?? ticket.tags ?? [];
+                              const newTags = currentTags.filter((_, i) => i !== index);
+                              setPendingChanges({ ...pendingChanges, tags: newTags });
+                            }}
+                            className="ml-1 hover:text-destructive"
+                          >
+                            <X className="h-3 w-3" />
+                          </button>
                         </Badge>
-                      ))
-                    ) : (
-                      <span className="text-sm text-muted-foreground">No tags</span>
-                    )}
+                      ))}
+                      {!(pendingChanges.tags ?? ticket.tags)?.length && (
+                        <span className="text-sm text-muted-foreground">No tags</span>
+                      )}
+                    </div>
+                    <div className="flex gap-2">
+                      <Input
+                        value={newTag}
+                        onChange={(e) => setNewTag(e.target.value)}
+                        onKeyDown={(e) => {
+                          if (e.key === "Enter" && newTag.trim()) {
+                            e.preventDefault();
+                            const currentTags = pendingChanges.tags ?? ticket.tags ?? [];
+                            if (!currentTags.includes(newTag.trim())) {
+                              setPendingChanges({ ...pendingChanges, tags: [...currentTags, newTag.trim()] });
+                              setNewTag("");
+                            }
+                          }
+                        }}
+                        placeholder="Add tag..."
+                        className="text-xs h-7"
+                      />
+                      <Button
+                        type="button"
+                        size="sm"
+                        variant="outline"
+                        onClick={() => {
+                          if (newTag.trim()) {
+                            const currentTags = pendingChanges.tags ?? ticket.tags ?? [];
+                            if (!currentTags.includes(newTag.trim())) {
+                              setPendingChanges({ ...pendingChanges, tags: [...currentTags, newTag.trim()] });
+                              setNewTag("");
+                            }
+                          }
+                        }}
+                        className="h-7 px-2"
+                      >
+                        <Plus className="h-3 w-3" />
+                      </Button>
+                    </div>
                   </div>
                 </div>
               </div>
