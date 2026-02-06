@@ -138,6 +138,7 @@ export default function MyTicketsPage() {
   const [, setLocation] = useLocation();
   const { user, hasPermission } = useAuth();
   const [activeTab, setActiveTab] = useState<"created" | "assigned">("created");
+  const [createdSubTab, setCreatedSubTab] = useState<"all" | "new" | "open" | "assigned" | "solved">("all");
   const [showNewTicketDialog, setShowNewTicketDialog] = useState(false);
   const [newTicket, setNewTicket] = useState({
     vendorHandle: "",
@@ -449,7 +450,30 @@ export default function MyTicketsPage() {
   const createdTickets = tickets?.filter((t) => t.createdById === user?.id) || [];
   const assignedTickets = tickets?.filter((t) => t.assigneeId === user?.id) || [];
 
-  const displayedTickets = activeTab === "created" ? createdTickets : assignedTickets;
+  // Sub-filter created tickets based on workflow status
+  const filteredCreatedTickets = useMemo(() => {
+    if (activeTab !== "created") return createdTickets;
+
+    switch (createdSubTab) {
+      case "new":
+        // New: Assigned to dept but not to a team member
+        return createdTickets.filter(t => t.status === "New" && !t.assigneeId);
+      case "open":
+        // Open: Claimed and assigned to someone
+        return createdTickets.filter(t => t.status === "Open" && t.assigneeId);
+      case "assigned":
+        // All assigned tickets regardless of status
+        return createdTickets.filter(t => t.assigneeId);
+      case "solved":
+        // All solved tickets
+        return createdTickets.filter(t => t.status === "Solved");
+      case "all":
+      default:
+        return createdTickets;
+    }
+  }, [createdTickets, createdSubTab, activeTab]);
+
+  const displayedTickets = activeTab === "created" ? filteredCreatedTickets : assignedTickets;
 
   const getSlaStatusBadge = (status?: string | null) => {
     switch (status) {
@@ -551,6 +575,65 @@ export default function MyTicketsPage() {
             <Badge variant="outline" className="ml-2">{assignedTickets.length}</Badge>
           </Button>
         </div>
+
+        {/* Sub-tabs for "Tickets I Created" */}
+        {activeTab === "created" && (
+          <div className="mb-4 flex gap-2 overflow-x-auto pb-2">
+            <Button
+              size="sm"
+              variant={createdSubTab === "all" ? "default" : "outline"}
+              onClick={() => setCreatedSubTab("all")}
+              className="whitespace-nowrap"
+            >
+              All Tickets
+              <Badge variant="secondary" className="ml-2 bg-background">{createdTickets.length}</Badge>
+            </Button>
+            <Button
+              size="sm"
+              variant={createdSubTab === "new" ? "default" : "outline"}
+              onClick={() => setCreatedSubTab("new")}
+              className="whitespace-nowrap"
+            >
+              New
+              <Badge variant="secondary" className="ml-2 bg-background">
+                {createdTickets.filter(t => t.status === "New" && !t.assigneeId).length}
+              </Badge>
+            </Button>
+            <Button
+              size="sm"
+              variant={createdSubTab === "open" ? "default" : "outline"}
+              onClick={() => setCreatedSubTab("open")}
+              className="whitespace-nowrap"
+            >
+              Open
+              <Badge variant="secondary" className="ml-2 bg-background">
+                {createdTickets.filter(t => t.status === "Open" && t.assigneeId).length}
+              </Badge>
+            </Button>
+            <Button
+              size="sm"
+              variant={createdSubTab === "assigned" ? "default" : "outline"}
+              onClick={() => setCreatedSubTab("assigned")}
+              className="whitespace-nowrap"
+            >
+              Assigned
+              <Badge variant="secondary" className="ml-2 bg-background">
+                {createdTickets.filter(t => t.assigneeId).length}
+              </Badge>
+            </Button>
+            <Button
+              size="sm"
+              variant={createdSubTab === "solved" ? "default" : "outline"}
+              onClick={() => setCreatedSubTab("solved")}
+              className="whitespace-nowrap"
+            >
+              Solved
+              <Badge variant="secondary" className="ml-2 bg-background">
+                {createdTickets.filter(t => t.status === "Solved").length}
+              </Badge>
+            </Button>
+          </div>
+        )}
 
         <Card>
           {isLoading ? (
