@@ -1244,6 +1244,15 @@ export default function TicketConfigPage() {
               </div>
             </div>
             <div className="flex gap-2">
+              <Button
+                onClick={() => setLocation("/routing-config")}
+                variant="outline"
+                size="sm"
+                className="border-accent text-accent hover:bg-accent/10"
+              >
+                <Settings className="h-4 w-4" />
+                Routing Rules
+              </Button>
               <Button onClick={downloadCsvTemplate} variant="outline" size="sm">
                 <FileText className="h-4 w-4" />
                 Download Template
