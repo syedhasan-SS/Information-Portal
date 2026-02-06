@@ -392,6 +392,31 @@ export async function registerRoutes(
         return res.status(404).json({ error: "Ticket not found" });
       }
 
+      // Check if category changed and apply routing rules
+      if (req.body.categoryId && req.body.categoryId !== oldTicket.categoryId) {
+        console.log('🔍 Category changed, checking routing rules for:', req.body.categoryId);
+        const routingRule = await storage.getCategoryRoutingRuleByCategoryId(req.body.categoryId);
+
+        if (routingRule && routingRule.isActive) {
+          console.log('✅ Found routing rule for new category');
+
+          // Apply department routing
+          if (routingRule.targetDepartment) {
+            req.body.department = routingRule.targetDepartment;
+            req.body.ownerTeam = routingRule.targetDepartment;
+            console.log('📍 Auto-routed to department:', routingRule.targetDepartment);
+          }
+
+          // Apply priority boost if configured
+          if (routingRule.priorityBoost && req.body.priorityScore) {
+            req.body.priorityScore += routingRule.priorityBoost;
+            console.log('⬆️ Priority boost applied:', routingRule.priorityBoost);
+          }
+        } else {
+          console.log('ℹ️ No active routing rule found for new category');
+        }
+      }
+
       const ticket = await storage.updateTicket(req.params.id, req.body);
       if (!ticket) {
         return res.status(404).json({ error: "Ticket not found" });
