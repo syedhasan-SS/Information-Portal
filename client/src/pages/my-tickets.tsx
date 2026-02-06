@@ -227,24 +227,19 @@ export default function MyTicketsPage() {
     return sortedVisibleFields.find((f: any) => f.fieldName === fieldName);
   };
 
-  // Use ticketConfigs from the new system, fallback to old categories
+  // Use categories from categories table - these have the correct IDs for ticket creation
   const availableCategories = useMemo(() => {
-    // Prefer new ticket configs system
-    if (ticketConfigs && ticketConfigs.length > 0) {
-      return ticketConfigs.filter(config => config.isActive).map(config => ({
-        id: config.id,
-        issueType: config.issueType,
-        l1: config.l1,
-        l2: config.l2,
-        l3: config.l3,
-        l4: config.l4,
-        path: `${config.issueType} > ${config.l1} > ${config.l2} > ${config.l3}${config.l4 ? ` > ${config.l4}` : ''}`,
-        issuePriorityPoints: 10, // Default, actual priority calculated separately
-      }));
-    }
-    // Fallback to old categories
-    return categories || [];
-  }, [ticketConfigs, categories]);
+    if (!categories) return [];
+
+    return categories.filter((cat) => {
+      // Filter by issue type if selected
+      if (newTicket.issueType && cat.issueType !== newTicket.issueType) {
+        return false;
+      }
+
+      return true;
+    });
+  }, [categories, newTicket.issueType]);
 
   const categoryMap = availableCategories.reduce((acc, cat) => {
     acc[cat.id] = cat;

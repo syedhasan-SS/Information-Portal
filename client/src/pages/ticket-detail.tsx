@@ -5,6 +5,7 @@ import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Textarea } from "@/components/ui/textarea";
+import { useAuth } from "@/hooks/use-auth";
 import {
   Select,
   SelectContent,
@@ -95,15 +96,16 @@ async function updateTicket(id: string, updates: Partial<Ticket>): Promise<Ticke
   return res.json();
 }
 
-async function addComment(ticketId: string, content: string): Promise<Comment> {
+async function addComment(ticketId: string, content: string, userId: string, userName: string): Promise<Comment> {
   const res = await fetch("/api/comments", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({
       ticketId,
-      author: "Current User",
+      author: userName,
       body: content,
       visibility: "Internal",
+      createdById: userId, // Pass user ID for notification filtering
     }),
   });
   if (!res.ok) throw new Error("Failed to add comment");
@@ -135,6 +137,7 @@ function getCategoryDisplay(ticket: Ticket, categoryMap: Record<string, Category
 export default function TicketDetailPage() {
   const [location, setLocation] = useLocation();
   const { id } = useParams<{ id: string }>();
+  const { user } = useAuth();
   const [newComment, setNewComment] = useState("");
   const [activeTab, setActiveTab] = useState<"comments" | "activity">("comments");
   const [pendingChanges, setPendingChanges] = useState<Partial<Ticket>>({});
@@ -215,7 +218,12 @@ export default function TicketDetailPage() {
   };
 
   const confirmSaveChanges = () => {
-    updateMutation.mutate(pendingChanges);
+    // Add current user ID to the update payload for notification filtering
+    const updatesWithUser = {
+      ...pendingChanges,
+      userId: user?.id, // Pass user ID for notification logic
+    };
+    updateMutation.mutate(updatesWithUser);
   };
 
   const hasPendingChanges = Object.keys(pendingChanges).length > 0;
@@ -244,7 +252,7 @@ export default function TicketDetailPage() {
   };
 
   const commentMutation = useMutation({
-    mutationFn: (content: string) => addComment(id!, content),
+    mutationFn: (content: string) => addComment(id!, content, user?.id!, user?.name || "Unknown User"),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["comments", id] });
       setNewComment("");
@@ -352,10 +360,19 @@ export default function TicketDetailPage() {
         <div className="grid gap-6 lg:grid-cols-3">
           <div className="lg:col-span-2 space-y-6">
             <Card className="p-6">
-              <h2 className="mb-4 text-lg font-semibold">Description</h2>
-              <p className="whitespace-pre-wrap text-sm text-muted-foreground">
-                {ticket.description}
-              </p>
+              <h2 className="mb-4 text-lg font-semibold">Ticket Details</h2>
+              <div className="space-y-4">
+                <div>
+                  <label className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Subject</label>
+                  <p className="mt-1 text-base font-medium">{ticket.subject}</p>
+                </div>
+                <div>
+                  <label className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Description</label>
+                  <p className="mt-1 whitespace-pre-wrap text-sm text-muted-foreground">
+                    {ticket.description}
+                  </p>
+                </div>
+              </div>
             </Card>
 
             <Card className="p-6">

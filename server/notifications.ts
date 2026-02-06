@@ -231,12 +231,18 @@ export async function notifyMentions(
 }
 
 /**
- * Get current user from session
- * TODO: Replace with actual auth implementation
+ * Get current user from request body or session
+ * Uses createdById from request body as fallback
  */
 export async function getCurrentUser(req: any): Promise<User | undefined> {
-  // For now, return undefined - this should be replaced with actual auth
-  // When auth is implemented, this would look something like:
+  // Try to get user ID from request body (for updates/comments)
+  const userId = req.body?.createdById || req.body?.userId;
+
+  if (userId) {
+    return await storage.getUserById(userId);
+  }
+
+  // Fallback to session (when auth is fully implemented)
   // return req.user as User;
   return undefined;
 }
