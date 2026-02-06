@@ -600,13 +600,56 @@ export const insertRolePermissionSchema = createInsertSchema(rolePermissions).om
   createdAt: true,
 });
 
+// Category Routing Rules Table
+export const categoryRoutingRules = pgTable("category_routing_rules", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  categoryId: varchar("category_id").notNull().references(() => categories.id, { onDelete: "cascade" }),
+
+  // Department routing
+  targetDepartment: text("target_department").notNull().$type<"Finance" | "Operations" | "Marketplace" | "Tech" | "Supply" | "Growth" | "Experience" | "CX">(),
+
+  // Auto-assignment configuration
+  autoAssignEnabled: boolean("auto_assign_enabled").notNull().default(false),
+  assignmentStrategy: text("assignment_strategy").$type<"round_robin" | "least_loaded" | "specific_agent">().default("round_robin"),
+
+  // Specific agent assignment (for specific_agent strategy)
+  assignedAgentId: varchar("assigned_agent_id").references(() => users.id, { onDelete: "set null" }),
+
+  // Priority boost
+  priorityBoost: integer("priority_boost").default(0), // Add points to priority score
+
+  // SLA override
+  slaResponseHoursOverride: integer("sla_response_hours_override"),
+  slaResolutionHoursOverride: integer("sla_resolution_hours_override"),
+
+  // Active status
+  isActive: boolean("is_active").notNull().default(true),
+
+  // Audit fields
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+  updatedAt: timestamp("updated_at").notNull().defaultNow(),
+  createdById: varchar("created_by_id").references(() => users.id, { onDelete: "set null" }),
+  updatedById: varchar("updated_by_id").references(() => users.id, { onDelete: "set null" }),
+}, (table) => ({
+  categoryIdIdx: index("routing_category_id_idx").on(table.categoryId),
+  targetDepartmentIdx: index("routing_target_department_idx").on(table.targetDepartment),
+}));
+
+export const insertCategoryRoutingRuleSchema = createInsertSchema(categoryRoutingRules).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+});
+
 export type InsertPermission = z.infer<typeof insertPermissionSchema>;
 export type InsertRole = z.infer<typeof insertRoleSchema>;
 export type InsertRolePermission = z.infer<typeof insertRolePermissionSchema>;
+export type InsertCategoryRoutingRule = z.infer<typeof insertCategoryRoutingRuleSchema>;
 
 export type Permission = typeof permissions.$inferSelect;
 export type Role = typeof roles.$inferSelect;
 export type RolePermission = typeof rolePermissions.$inferSelect;
+export type CategoryRoutingRule = typeof categoryRoutingRules.$inferSelect;
 
 export type Vendor = typeof vendors.$inferSelect;
 export type Category = typeof categories.$inferSelect;

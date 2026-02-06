@@ -21,6 +21,7 @@ import {
   permissions,
   roles,
   rolePermissions,
+  categoryRoutingRules,
   type Vendor,
   type Category,
   type Ticket,
@@ -41,6 +42,7 @@ import {
   type Permission,
   type Role,
   type RolePermission,
+  type CategoryRoutingRule,
   type InsertVendor,
   type InsertCategory,
   type InsertTicket,
@@ -59,6 +61,7 @@ import {
   type InsertPermission,
   type InsertRole,
   type InsertRolePermission,
+  type InsertCategoryRoutingRule,
 } from "@shared/schema";
 
 export interface IStorage {
@@ -100,6 +103,13 @@ export interface IStorage {
   // Category Hierarchy & SLA
   getAllCategoryHierarchies(): Promise<CategoryHierarchy[]>;
   getAllSlaConfigurations(): Promise<SlaConfiguration[]>;
+
+  // Category Routing Rules
+  getCategoryRoutingRules(): Promise<CategoryRoutingRule[]>;
+  getCategoryRoutingRuleByCategoryId(categoryId: string): Promise<CategoryRoutingRule | undefined>;
+  createCategoryRoutingRule(rule: InsertCategoryRoutingRule): Promise<CategoryRoutingRule>;
+  updateCategoryRoutingRule(id: string, updates: Partial<InsertCategoryRoutingRule>): Promise<CategoryRoutingRule | undefined>;
+  deleteCategoryRoutingRule(id: string): Promise<void>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -925,6 +935,43 @@ export class DatabaseStorage implements IStorage {
 
   async getAllSlaConfigurations(): Promise<SlaConfiguration[]> {
     return await db.select().from(slaConfigurations).where(eq(slaConfigurations.isActive, true));
+  }
+
+  // Category Routing Rules
+  async getCategoryRoutingRules(): Promise<CategoryRoutingRule[]> {
+    return await db.select()
+      .from(categoryRoutingRules)
+      .where(eq(categoryRoutingRules.isActive, true))
+      .orderBy(categoryRoutingRules.createdAt);
+  }
+
+  async getCategoryRoutingRuleByCategoryId(categoryId: string): Promise<CategoryRoutingRule | undefined> {
+    const results = await db.select()
+      .from(categoryRoutingRules)
+      .where(and(
+        eq(categoryRoutingRules.categoryId, categoryId),
+        eq(categoryRoutingRules.isActive, true)
+      ))
+      .limit(1);
+    return results[0];
+  }
+
+  async createCategoryRoutingRule(rule: InsertCategoryRoutingRule): Promise<CategoryRoutingRule> {
+    const results = await db.insert(categoryRoutingRules).values(rule).returning();
+    return results[0];
+  }
+
+  async updateCategoryRoutingRule(id: string, updates: Partial<InsertCategoryRoutingRule>): Promise<CategoryRoutingRule | undefined> {
+    const results = await db
+      .update(categoryRoutingRules)
+      .set({ ...updates, updatedAt: new Date() })
+      .where(eq(categoryRoutingRules.id, id))
+      .returning();
+    return results[0];
+  }
+
+  async deleteCategoryRoutingRule(id: string): Promise<void> {
+    await db.delete(categoryRoutingRules).where(eq(categoryRoutingRules.id, id));
   }
 
   // Analytics

@@ -255,6 +255,94 @@ export async function registerRoutes(
         console.log('✅ Vendor validated:', vendor.name);
       }
 
+      // Check for routing rules for this category
+      console.log('🔍 Checking routing rules for category:', parsed.data.categoryId);
+      const routingRule = await storage.getCategoryRoutingRuleByCategoryId(parsed.data.categoryId);
+
+      if (routingRule && routingRule.isActive) {
+        console.log('✅ Found routing rule:', routingRule);
+
+        // Apply department routing
+        if (routingRule.targetDepartment) {
+          parsed.data.department = routingRule.targetDepartment;
+          parsed.data.ownerTeam = routingRule.targetDepartment;
+          console.log('📍 Auto-routed to department:', routingRule.targetDepartment);
+        }
+
+        // Apply priority boost if configured
+        if (routingRule.priorityBoost && parsed.data.priorityScore) {
+          parsed.data.priorityScore += routingRule.priorityBoost;
+          console.log('⬆️ Priority boost applied:', routingRule.priorityBoost);
+        }
+
+        // Apply SLA overrides if configured
+        if (routingRule.slaResponseHoursOverride) {
+          // This will be used in snapshot capture
+          console.log('⏰ SLA response override:', routingRule.slaResponseHoursOverride);
+        }
+        if (routingRule.slaResolutionHoursOverride) {
+          console.log('⏰ SLA resolution override:', routingRule.slaResolutionHoursOverride);
+        }
+
+        // Auto-assignment logic
+        if (routingRule.autoAssignEnabled) {
+          console.log('🤖 Auto-assignment enabled, strategy:', routingRule.assignmentStrategy);
+
+          if (routingRule.assignmentStrategy === 'specific_agent' && routingRule.assignedAgentId) {
+            // Assign to specific agent
+            const agent = await storage.getUserById(routingRule.assignedAgentId);
+            if (agent && agent.isActive) {
+              parsed.data.assigneeId = agent.id;
+              parsed.data.status = 'Open'; // Change status to Open when assigned
+              console.log('👤 Auto-assigned to specific agent:', agent.name);
+            } else {
+              console.log('⚠️ Specific agent not found or inactive');
+            }
+          } else if (routingRule.assignmentStrategy === 'round_robin' || routingRule.assignmentStrategy === 'least_loaded') {
+            // Get all active agents in the target department
+            const allUsers = await storage.getUsers();
+            const departmentAgents = allUsers.filter(u =>
+              u.isActive &&
+              u.department === routingRule.targetDepartment &&
+              u.role === 'Agent'
+            );
+
+            if (departmentAgents.length > 0) {
+              if (routingRule.assignmentStrategy === 'round_robin') {
+                // Simple round-robin: pick first available agent
+                // TODO: Implement persistent counter for true round-robin
+                const selectedAgent = departmentAgents[0];
+                parsed.data.assigneeId = selectedAgent.id;
+                parsed.data.status = 'Open';
+                console.log('🔄 Round-robin assigned to:', selectedAgent.name);
+              } else {
+                // Least loaded: find agent with fewest open tickets
+                const allTickets = await storage.getTickets();
+                const agentTicketCounts = departmentAgents.map(agent => ({
+                  agent,
+                  openTickets: allTickets.filter(t =>
+                    t.assigneeId === agent.id &&
+                    ['New', 'Open', 'Pending'].includes(t.status)
+                  ).length
+                }));
+
+                // Sort by ticket count (ascending)
+                agentTicketCounts.sort((a, b) => a.openTickets - b.openTickets);
+                const selectedAgent = agentTicketCounts[0].agent;
+
+                parsed.data.assigneeId = selectedAgent.id;
+                parsed.data.status = 'Open';
+                console.log('📊 Least-loaded assigned to:', selectedAgent.name, 'with', agentTicketCounts[0].openTickets, 'open tickets');
+              }
+            } else {
+              console.log('⚠️ No active agents found in department:', routingRule.targetDepartment);
+            }
+          }
+        }
+      } else {
+        console.log('ℹ️ No active routing rule found for this category');
+      }
+
       console.log('💾 Attempting to create ticket in database...');
       const ticket = await storage.createTicket(parsed.data);
       console.log('✅ Ticket created successfully:', ticket.ticketNumber);
@@ -2220,6 +2308,93 @@ export async function registerRoutes(
       res.json({ message: "Tag deleted successfully" });
     } catch (error: any) {
       console.error("Error deleting tag:", error);
+      res.status(500).json({ error: error.message });
+    }
+  });
+
+  // Category Routing Rules - Auto-routing and assignment configuration
+  app.get("/api/config/routing-rules", async (_req, res) => {
+    try {
+      const rules = await storage.getCategoryRoutingRules();
+      res.json(rules);
+    } catch (error: any) {
+      console.error("Error fetching routing rules:", error);
+      res.status(500).json({ error: error.message });
+    }
+  });
+
+  app.get("/api/config/routing-rules/category/:categoryId", async (req, res) => {
+    try {
+      const { categoryId } = req.params;
+      const rule = await storage.getCategoryRoutingRuleByCategoryId(categoryId);
+      if (!rule) {
+        return res.status(404).json({ error: "No routing rule found for this category" });
+      }
+      res.json(rule);
+    } catch (error: any) {
+      console.error("Error fetching routing rule:", error);
+      res.status(500).json({ error: error.message });
+    }
+  });
+
+  app.post("/api/config/routing-rules", async (req, res) => {
+    try {
+      const { categoryId, targetDepartment, autoAssignEnabled, assignmentStrategy, assignedAgentId, priorityBoost, slaResponseHoursOverride, slaResolutionHoursOverride } = req.body;
+
+      if (!categoryId || !targetDepartment) {
+        return res.status(400).json({ error: "categoryId and targetDepartment are required" });
+      }
+
+      // Check if rule already exists for this category
+      const existing = await storage.getCategoryRoutingRuleByCategoryId(categoryId);
+      if (existing) {
+        return res.status(400).json({ error: "A routing rule already exists for this category. Use PUT to update it." });
+      }
+
+      const rule = await storage.createCategoryRoutingRule({
+        categoryId,
+        targetDepartment,
+        autoAssignEnabled: autoAssignEnabled || false,
+        assignmentStrategy: assignmentStrategy || "round_robin",
+        assignedAgentId: assignedAgentId || null,
+        priorityBoost: priorityBoost || 0,
+        slaResponseHoursOverride: slaResponseHoursOverride || null,
+        slaResolutionHoursOverride: slaResolutionHoursOverride || null,
+        isActive: true,
+      });
+
+      res.status(201).json(rule);
+    } catch (error: any) {
+      console.error("Error creating routing rule:", error);
+      res.status(500).json({ error: error.message });
+    }
+  });
+
+  app.put("/api/config/routing-rules/:id", async (req, res) => {
+    try {
+      const { id } = req.params;
+      const updates = req.body;
+
+      const rule = await storage.updateCategoryRoutingRule(id, updates);
+
+      if (!rule) {
+        return res.status(404).json({ error: "Routing rule not found" });
+      }
+
+      res.json(rule);
+    } catch (error: any) {
+      console.error("Error updating routing rule:", error);
+      res.status(500).json({ error: error.message });
+    }
+  });
+
+  app.delete("/api/config/routing-rules/:id", async (req, res) => {
+    try {
+      const { id } = req.params;
+      await storage.deleteCategoryRoutingRule(id);
+      res.json({ message: "Routing rule deleted successfully" });
+    } catch (error: any) {
+      console.error("Error deleting routing rule:", error);
       res.status(500).json({ error: error.message });
     }
   });
