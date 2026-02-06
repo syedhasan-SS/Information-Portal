@@ -438,7 +438,7 @@ export default function RoutingConfigPage() {
                 <SelectTrigger id="category">
                   <SelectValue placeholder="Select a category" />
                 </SelectTrigger>
-                <SelectContent>
+                <SelectContent className="max-h-[300px] overflow-y-auto">
                   {editingRule ? (
                     <SelectItem value={editingRule.categoryId}>
                       {getCategoryName(editingRule.categoryId)}
@@ -469,7 +469,7 @@ export default function RoutingConfigPage() {
                 <SelectTrigger id="department">
                   <SelectValue placeholder="Select target department" />
                 </SelectTrigger>
-                <SelectContent>
+                <SelectContent className="max-h-[300px] overflow-y-auto">
                   {DEPARTMENTS.map((dept) => (
                     <SelectItem key={dept} value={dept}>
                       {dept}
@@ -507,7 +507,7 @@ export default function RoutingConfigPage() {
                       <SelectTrigger id="strategy">
                         <SelectValue />
                       </SelectTrigger>
-                      <SelectContent>
+                      <SelectContent className="max-h-[300px] overflow-y-auto">
                         {ASSIGNMENT_STRATEGIES.map((strategy) => (
                           <SelectItem key={strategy.value} value={strategy.value}>
                             {strategy.label}
@@ -528,7 +528,7 @@ export default function RoutingConfigPage() {
                         <SelectTrigger id="agent">
                           <SelectValue placeholder="Select an agent" />
                         </SelectTrigger>
-                        <SelectContent>
+                        <SelectContent className="max-h-[300px] overflow-y-auto">
                           {departmentAgents.map((agent) => (
                             <SelectItem key={agent.id} value={agent.id}>
                               {agent.name} ({agent.email})
