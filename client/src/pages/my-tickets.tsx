@@ -137,7 +137,7 @@ function getCategoryDisplay(ticket: Ticket, categoryMap: Record<string, Category
 export default function MyTicketsPage() {
   const [, setLocation] = useLocation();
   const { user, hasPermission } = useAuth();
-  const [activeTab, setActiveTab] = useState<"created" | "assigned">("created");
+  const [activeTab, setActiveTab] = useState<"created" | "assigned" | "solved">("created");
   const [createdSubTab, setCreatedSubTab] = useState<"all" | "new" | "open" | "assigned" | "solved">("all");
   const [showNewTicketDialog, setShowNewTicketDialog] = useState(false);
   const [newTicket, setNewTicket] = useState({
@@ -448,7 +448,19 @@ export default function MyTicketsPage() {
 
   // Filter tickets by current logged-in user
   const createdTickets = tickets?.filter((t) => t.createdById === user?.id) || [];
-  const assignedTickets = tickets?.filter((t) => t.assigneeId === user?.id) || [];
+
+  // Assigned tickets - exclude solved/closed tickets
+  const assignedTickets = tickets?.filter((t) =>
+    t.assigneeId === user?.id &&
+    t.status !== "Solved" &&
+    t.status !== "Closed"
+  ) || [];
+
+  // Solved tickets - tickets that user created OR was assigned to
+  const solvedTickets = tickets?.filter((t) =>
+    (t.createdById === user?.id || t.assigneeId === user?.id) &&
+    (t.status === "Solved" || t.status === "Closed")
+  ) || [];
 
   // Sub-filter created tickets based on workflow status
   const filteredCreatedTickets = useMemo(() => {
@@ -462,18 +474,22 @@ export default function MyTicketsPage() {
         // Open: Claimed and assigned to someone
         return createdTickets.filter(t => t.status === "Open" && t.assigneeId);
       case "assigned":
-        // All assigned tickets regardless of status
-        return createdTickets.filter(t => t.assigneeId);
+        // All assigned tickets (exclude solved/closed)
+        return createdTickets.filter(t => t.assigneeId && t.status !== "Solved" && t.status !== "Closed");
       case "solved":
-        // All solved tickets
-        return createdTickets.filter(t => t.status === "Solved");
+        // All solved tickets created by user
+        return createdTickets.filter(t => t.status === "Solved" || t.status === "Closed");
       case "all":
       default:
         return createdTickets;
     }
   }, [createdTickets, createdSubTab, activeTab]);
 
-  const displayedTickets = activeTab === "created" ? filteredCreatedTickets : assignedTickets;
+  const displayedTickets = activeTab === "created"
+    ? filteredCreatedTickets
+    : activeTab === "assigned"
+      ? assignedTickets
+      : solvedTickets;
 
   const getSlaStatusBadge = (status?: string | null) => {
     switch (status) {
@@ -573,6 +589,15 @@ export default function MyTicketsPage() {
             <User className="mr-2 h-4 w-4" />
             Assigned to Me
             <Badge variant="outline" className="ml-2">{assignedTickets.length}</Badge>
+          </Button>
+          <Button
+            variant={activeTab === "solved" ? "secondary" : "ghost"}
+            onClick={() => setActiveTab("solved")}
+            data-testid="tab-solved"
+          >
+            <Check className="mr-2 h-4 w-4" />
+            Solved Tickets
+            <Badge variant="outline" className="ml-2">{solvedTickets.length}</Badge>
           </Button>
         </div>
 
