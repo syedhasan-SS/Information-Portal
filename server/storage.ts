@@ -151,16 +151,23 @@ export class DatabaseStorage implements IStorage {
   async createTicket(ticket: InsertTicket): Promise<Ticket> {
     // Generate ticket number if not provided
     if (!ticket.ticketNumber) {
+      // Determine department prefix based on ticket type
+      // SS = Seller Support (has vendorHandle)
+      // CS = Customer Support (has customer field but no vendorHandle)
+      const prefix = ticket.vendorHandle ? 'SS' : 'CS';
+
+      // Get the last ticket number for this prefix
       const lastTicket = await db.select({ ticketNumber: tickets.ticketNumber })
         .from(tickets)
+        .where(sql`${tickets.ticketNumber} LIKE ${prefix + '%'}`)
         .orderBy(sql`${tickets.ticketNumber} DESC`)
         .limit(1);
 
       const lastNumber = lastTicket[0]?.ticketNumber
         ? parseInt(lastTicket[0].ticketNumber.replace(/[^\d]/g, ''))
-        : 1000;
+        : 0;
 
-      ticket.ticketNumber = `TKT-${(lastNumber + 1).toString().padStart(6, '0')}`;
+      ticket.ticketNumber = `${prefix}${(lastNumber + 1).toString().padStart(5, '0')}`;
     }
 
     // Set default ownerTeam if not provided
