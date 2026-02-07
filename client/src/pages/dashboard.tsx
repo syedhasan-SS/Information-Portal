@@ -83,19 +83,16 @@ export default function DashboardPage() {
           // CX users without sub-department - deny access
           return false;
         }
-        // Seller Support agents see only Seller Support tickets
+        // Seller Support agents see only Seller Support tickets (tickets with vendorHandle)
         if (user.subDepartment === "Seller Support") {
-          return ticket.department === "Seller Support" ||
-                 (ticket.department === "CX" && ticket.subDepartment === "Seller Support");
+          return !!(ticket as any).vendorHandle;
         }
-        // Customer Support agents see only Customer Support tickets
+        // Customer Support agents see only Customer Support tickets (tickets without vendorHandle)
         if (user.subDepartment === "Customer Support") {
-          return ticket.department === "Customer Support" ||
-                 (ticket.department === "CX" && ticket.subDepartment === "Customer Support");
+          return !(ticket as any).vendorHandle;
         }
-        // Other CX sub-departments
-        return ticket.department === user.subDepartment ||
-               (ticket.department === "CX" && ticket.subDepartment === user.subDepartment);
+        // Other CX sub-departments: deny access
+        return false;
       }
       // All other departments: see only their department tickets
       return ticket.department === user.department;
@@ -109,17 +106,16 @@ export default function DashboardPage() {
           // CX users without sub-department - deny access
           return false;
         }
+        // Seller Support agents see only Seller Support tickets (tickets with vendorHandle)
         if (user.subDepartment === "Seller Support") {
-          return ticket.department === "Seller Support" ||
-                 (ticket.department === "CX" && ticket.subDepartment === "Seller Support");
+          return !!(ticket as any).vendorHandle;
         }
+        // Customer Support agents see only Customer Support tickets (tickets without vendorHandle)
         if (user.subDepartment === "Customer Support") {
-          return ticket.department === "Customer Support" ||
-                 (ticket.department === "CX" && ticket.subDepartment === "Customer Support");
+          return !(ticket as any).vendorHandle;
         }
-        // Other CX sub-departments
-        return ticket.department === user.subDepartment ||
-               (ticket.department === "CX" && ticket.subDepartment === user.subDepartment);
+        // Other CX sub-departments: deny access
+        return false;
       }
       return ticket.department === user.department;
     }
@@ -134,17 +130,16 @@ export default function DashboardPage() {
           // CX users without sub-department - only see assigned tickets
           return isAssigned;
         }
+        // Seller Support agents see assigned tickets OR Seller Support tickets (with vendorHandle)
         if (user.subDepartment === "Seller Support") {
-          return isAssigned || ticket.department === "Seller Support" ||
-                 (ticket.department === "CX" && ticket.subDepartment === "Seller Support");
+          return isAssigned || !!(ticket as any).vendorHandle;
         }
+        // Customer Support agents see assigned tickets OR Customer Support tickets (without vendorHandle)
         if (user.subDepartment === "Customer Support") {
-          return isAssigned || ticket.department === "Customer Support" ||
-                 (ticket.department === "CX" && ticket.subDepartment === "Customer Support");
+          return isAssigned || !(ticket as any).vendorHandle;
         }
-        // Other CX sub-departments
-        return isAssigned || ticket.department === user.subDepartment ||
-               (ticket.department === "CX" && ticket.subDepartment === user.subDepartment);
+        // Other CX sub-departments: only assigned tickets
+        return isAssigned;
       }
 
       // All other agents: see assigned or their department tickets

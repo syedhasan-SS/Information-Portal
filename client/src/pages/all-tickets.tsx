@@ -155,20 +155,19 @@ export default function AllTicketsPage() {
         }
 
         // Seller Support agents see ONLY Seller Support tickets
+        // Seller Support tickets are identified by having a vendorHandle field populated
         if (user.subDepartment === "Seller Support") {
-          return ticketDept === "Seller Support" ||
-                 (ticketDept === "CX" && ticket.subDepartment === "Seller Support");
+          return !!(ticket as any).vendorHandle; // Only tickets with vendor handle
         }
 
         // Customer Support agents see ONLY Customer Support tickets
+        // Customer Support tickets are identified by having NO vendorHandle
         if (user.subDepartment === "Customer Support") {
-          return ticketDept === "Customer Support" ||
-                 (ticketDept === "CX" && ticket.subDepartment === "Customer Support");
+          return !(ticket as any).vendorHandle; // Only tickets WITHOUT vendor handle
         }
 
-        // Any other CX sub-department: see only their sub-department
-        return ticketDept === user.subDepartment ||
-               (ticketDept === "CX" && ticket.subDepartment === user.subDepartment);
+        // Any other CX sub-department: deny access (should not happen)
+        return false;
       }
 
       // All other department users see only their department's tickets
