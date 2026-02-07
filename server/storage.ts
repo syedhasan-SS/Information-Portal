@@ -257,6 +257,53 @@ export class DatabaseStorage implements IStorage {
     return results[0];
   }
 
+  /**
+   * Get category information from categoryHierarchy by building the path
+   * Used for new tickets that reference categoryHierarchy IDs
+   */
+  async getCategoryFromHierarchyById(id: string): Promise<Category | undefined> {
+    const leafCategory = await db.select().from(categoryHierarchy)
+      .where(eq(categoryHierarchy.id, id))
+      .limit(1);
+
+    if (!leafCategory[0]) return undefined;
+
+    // Get all categories to build path
+    const allCategories = await db.select().from(categoryHierarchy)
+      .where(sql`${categoryHierarchy.deletedAt} IS NULL`);
+
+    const categoryMap = new Map(allCategories.map(c => [c.id, c]));
+
+    // Walk up tree to build full path
+    const path: typeof leafCategory[0][] = [];
+    let current: typeof leafCategory[0] | undefined = leafCategory[0];
+    while (current) {
+      path.unshift(current);
+      current = current.parentId ? categoryMap.get(current.parentId) : undefined;
+    }
+
+    // Extract L1, L2, L3, L4
+    const l1 = path[0]?.name || "";
+    const l2 = path[1]?.name || "";
+    const l3 = path[2]?.name || "";
+    const l4 = path[3]?.name || null;
+    const fullPath = path.map(p => p.name).filter(n => n).join(" > ");
+
+    // Return in Category format for compatibility
+    return {
+      id: leafCategory[0].id,
+      issueType: null,
+      l1,
+      l2,
+      l3,
+      l4,
+      path: fullPath,
+      departmentType: leafCategory[0].departmentType || "All",
+      issuePriorityPoints: 10,
+      createdAt: leafCategory[0].createdAt,
+    };
+  }
+
   async getCategoryByPath(path: string): Promise<Category | undefined> {
     const results = await db.select().from(categories).where(eq(categories.path, path)).limit(1);
     return results[0];
@@ -342,8 +389,17 @@ export class DatabaseStorage implements IStorage {
    */
   private async captureConfigurationSnapshots(ticketData: InsertTicket) {
     // Fetch configuration data in parallel
-    const [category, slaConfig, tagsData] = await Promise.all([
-      ticketData.categoryId ? this.getCategoryById(ticketData.categoryId) : Promise.resolve(null),
+    // Try categoryHierarchy first (new system), then fall back to old categories table
+    let category = null;
+    if (ticketData.categoryId) {
+      category = await this.getCategoryFromHierarchyById(ticketData.categoryId);
+      if (!category) {
+        // Fallback to old categories table for backward compatibility
+        category = await this.getCategoryById(ticketData.categoryId);
+      }
+    }
+
+    const [slaConfig, tagsData] = await Promise.all([
       this.findMatchingSlaConfiguration(ticketData.categoryId, ticketData.department),
       ticketData.tags ? this.getTagsByNames(ticketData.tags) : Promise.resolve([]),
     ]);
