@@ -38,6 +38,8 @@ import {
   FolderTree,
   ChevronsUpDown,
   Check,
+  Upload,
+  FileUp,
 } from "lucide-react";
 import {
   DropdownMenu,
@@ -130,6 +132,19 @@ async function createUser(data: {
   return res.json();
 }
 
+async function bulkCreateUsers(users: any[]): Promise<any> {
+  const res = await fetch("/api/users/bulk", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ users }),
+  });
+  if (!res.ok) {
+    const err = await res.json();
+    throw new Error(err.error || "Failed to bulk create users");
+  }
+  return res.json();
+}
+
 async function updateUser(id: string, data: {
   name?: string;
   email?: string;
@@ -217,6 +232,11 @@ export default function UsersPage() {
   const [selectedPermissions, setSelectedPermissions] = useState<string[]>([]);
   const [visiblePasswords, setVisiblePasswords] = useState<Set<string>>(new Set());
   const [activeTab, setActiveTab] = useState<"users" | "departments" | "hierarchy">("users");
+
+  // Bulk upload state
+  const [showBulkUpload, setShowBulkUpload] = useState(false);
+  const [bulkFile, setBulkFile] = useState<File | null>(null);
+  const [bulkUploadResult, setBulkUploadResult] = useState<any>(null);
 
   // Manager combobox state
   const [managerComboOpen, setManagerComboOpen] = useState(false);
@@ -450,6 +470,19 @@ export default function UsersPage() {
     },
   });
 
+  const bulkMutation = useMutation({
+    mutationFn: bulkCreateUsers,
+    onSuccess: (data) => {
+      queryClient.invalidateQueries({ queryKey: ["users"] });
+      setBulkUploadResult(data);
+      setBulkFile(null);
+    },
+    onError: (err: Error) => {
+      setError(err.message);
+      setSuccess("");
+    },
+  });
+
   const updateMutation = useMutation({
     mutationFn: ({ id, data }: { id: string; data: any }) => updateUser(id, data),
     onSuccess: () => {
@@ -530,6 +563,65 @@ export default function UsersPage() {
       roles: selectedRoles, // Always send roles array, even if empty
       department: formData.department || undefined,
     });
+  };
+
+  const handleBulkUpload = () => {
+    if (!bulkFile) {
+      setError("Please select a CSV file");
+      return;
+    }
+
+    const reader = new FileReader();
+    reader.onload = (e) => {
+      try {
+        const text = e.target?.result as string;
+        const lines = text.split('\n').filter(line => line.trim());
+
+        if (lines.length < 2) {
+          setError("CSV file is empty or has no data rows");
+          return;
+        }
+
+        // Parse CSV header
+        const headers = lines[0].split(',').map(h => h.trim().toLowerCase());
+        const requiredHeaders = ['name', 'email', 'password', 'role'];
+        const missingHeaders = requiredHeaders.filter(h => !headers.includes(h));
+
+        if (missingHeaders.length > 0) {
+          setError(`Missing required columns: ${missingHeaders.join(', ')}`);
+          return;
+        }
+
+        // Parse data rows
+        const usersData = lines.slice(1).map((line, index) => {
+          const values = line.split(',').map(v => v.trim());
+          const user: any = {};
+
+          headers.forEach((header, i) => {
+            if (values[i]) {
+              user[header] = values[i];
+            }
+          });
+
+          // Handle roles array if present
+          if (user.roles && typeof user.roles === 'string') {
+            user.roles = user.roles.split(';').map((r: string) => r.trim()).filter((r: string) => r);
+          }
+
+          return user;
+        });
+
+        bulkMutation.mutate(usersData);
+      } catch (err: any) {
+        setError("Failed to parse CSV file: " + err.message);
+      }
+    };
+
+    reader.onerror = () => {
+      setError("Failed to read file");
+    };
+
+    reader.readAsText(bulkFile);
   };
 
   const handleEditClick = (user: User) => {
@@ -708,39 +800,38 @@ export default function UsersPage() {
             <div className="absolute top-0 left-1/2 w-px h-6 bg-border -translate-x-1/2" />
           )}
 
-          <Card className="w-[200px] p-4 hover:shadow-lg transition-all hover:border-primary/50 bg-card">
+          <Card className="w-[160px] p-3 hover:shadow-lg transition-all hover:border-primary/50 bg-card">
             <div className="flex flex-col items-center text-center">
-              <Avatar className="h-14 w-14 mb-2 ring-2 ring-background shadow-md">
+              <Avatar className="h-10 w-10 mb-1.5 ring-2 ring-background shadow-md">
                 {nodeUser.profilePicture && <AvatarImage src={nodeUser.profilePicture} alt={nodeUser.name} />}
-                <AvatarFallback className="bg-gradient-to-br from-blue-500 to-purple-600 text-white font-semibold text-lg">
+                <AvatarFallback className="bg-gradient-to-br from-blue-500 to-purple-600 text-white font-semibold text-sm">
                   {nodeUser.name.split(' ').map(n => n[0]).join('').slice(0, 2).toUpperCase()}
                 </AvatarFallback>
               </Avatar>
-              <h3 className="font-semibold text-sm leading-tight">{nodeUser.name}</h3>
+              <h3 className="font-semibold text-xs leading-tight">{nodeUser.name}</h3>
               <Badge
                 variant="outline"
                 className={cn(
-                  "mt-1 text-xs",
+                  "mt-0.5 text-[10px] px-1.5 py-0",
                   roleColors[nodeUser.role]
                 )}
               >
                 {nodeUser.role}
               </Badge>
               {nodeUser.department && (
-                <p className="text-xs text-muted-foreground mt-1">
+                <p className="text-[10px] text-muted-foreground mt-0.5 truncate w-full">
                   {nodeUser.department}
-                  {nodeUser.subDepartment && <span className="block">{nodeUser.subDepartment}</span>}
                 </p>
               )}
               {!nodeUser.isActive && (
-                <Badge variant="secondary" className="mt-1 text-xs">
+                <Badge variant="secondary" className="mt-0.5 text-[10px] px-1.5 py-0">
                   Inactive
                 </Badge>
               )}
               {hasReports && (
-                <p className="text-xs text-muted-foreground mt-2 flex items-center gap-1">
-                  <Users className="h-3 w-3" />
-                  {directReports.length} direct {directReports.length === 1 ? 'report' : 'reports'}
+                <p className="text-[10px] text-muted-foreground mt-1 flex items-center gap-0.5">
+                  <Users className="h-2.5 w-2.5" />
+                  {directReports.length}
                 </p>
               )}
             </div>
@@ -759,7 +850,7 @@ export default function UsersPage() {
                 <div
                   className="h-px bg-border absolute top-0"
                   style={{
-                    width: `calc(${(directReports.length - 1) * 220}px)`,
+                    width: `calc(${(directReports.length - 1) * 180}px)`,
                     left: '50%',
                     transform: 'translateX(-50%)'
                   }}
@@ -768,7 +859,7 @@ export default function UsersPage() {
             )}
 
             {/* Children nodes */}
-            <div className="flex gap-5 pt-0">
+            <div className="flex gap-4 pt-0">
               {directReports.map((report) => (
                 <OrgChartNode key={report.id} user={report} />
               ))}
@@ -808,15 +899,29 @@ export default function UsersPage() {
               </div>
             </div>
 
-            <Button
-              size="sm"
-              onClick={() => setShowForm(true)}
-              className="bg-accent text-accent-foreground hover:bg-accent/90"
-              data-testid="button-create-user"
-            >
-              <Plus className="h-4 w-4" />
-              Create User
-            </Button>
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button
+                  size="sm"
+                  className="bg-accent text-accent-foreground hover:bg-accent/90"
+                  data-testid="button-create-user"
+                >
+                  <Plus className="h-4 w-4 mr-2" />
+                  Create User
+                  <ChevronDown className="h-3 w-3 ml-1" />
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end">
+                <DropdownMenuItem onClick={() => setShowForm(true)}>
+                  <Plus className="h-4 w-4 mr-2" />
+                  Create Single User
+                </DropdownMenuItem>
+                <DropdownMenuItem onClick={() => setShowBulkUpload(true)}>
+                  <FileUp className="h-4 w-4 mr-2" />
+                  Bulk Upload (CSV)
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
           </div>
         </div>
       </header>
@@ -1637,8 +1742,8 @@ export default function UsersPage() {
               </div>
             </Card>
           ) : users && users.filter(u => !u.managerId).length > 0 ? (
-            <Card className="p-8 overflow-x-auto">
-              <div className="flex gap-12 justify-center min-w-max pb-4">
+            <Card className="p-6 overflow-x-auto">
+              <div className="flex gap-8 justify-center min-w-max pb-4">
                 {users.filter(u => !u.managerId).map((topUser) => (
                   <OrgChartNode key={topUser.id} user={topUser} isRoot />
                 ))}
@@ -1958,7 +2063,7 @@ export default function UsersPage() {
                       value={reporteesSearchValue}
                       onValueChange={setReporteesSearchValue}
                     />
-                    <CommandList>
+                    <CommandList className="max-h-[300px] overflow-y-auto">
                       <CommandEmpty>
                         <p className="text-sm text-muted-foreground p-2">
                           No users found
@@ -2540,6 +2645,134 @@ export default function UsersPage() {
             >
               {deleteSubDeptMutation.isPending ? <><Loader2 className="h-4 w-4 animate-spin mr-2" /> Deleting...</> : "Delete"}
             </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Bulk Upload Dialog */}
+      <Dialog open={showBulkUpload} onOpenChange={(open) => {
+        setShowBulkUpload(open);
+        if (!open) {
+          setBulkFile(null);
+          setBulkUploadResult(null);
+          setError("");
+        }
+      }}>
+        <DialogContent className="sm:max-w-[600px]">
+          <DialogHeader>
+            <DialogTitle>Bulk User Upload</DialogTitle>
+            <DialogDescription>
+              Upload a CSV file to create multiple users at once. Download the template to see the required format.
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="space-y-4">
+            {error && (
+              <div className="flex items-center gap-2 rounded-lg border border-destructive/20 bg-destructive/10 p-3 text-sm text-destructive">
+                <AlertCircle className="h-4 w-4" />
+                {error}
+              </div>
+            )}
+
+            {bulkUploadResult && (
+              <div className="rounded-lg border p-4 space-y-3">
+                <div className="flex items-center gap-2">
+                  <CheckCircle2 className="h-5 w-5 text-green-600" />
+                  <p className="font-semibold">{bulkUploadResult.message}</p>
+                </div>
+                <div className="text-sm space-y-1">
+                  <p>✓ Successfully created: {bulkUploadResult.created} users</p>
+                  {bulkUploadResult.failed > 0 && (
+                    <p className="text-destructive">✗ Failed: {bulkUploadResult.failed} users</p>
+                  )}
+                </div>
+                {bulkUploadResult.details?.failed?.length > 0 && (
+                  <div className="mt-3">
+                    <p className="text-sm font-semibold mb-2">Failed rows:</p>
+                    <div className="max-h-40 overflow-y-auto bg-muted p-2 rounded text-xs space-y-1">
+                      {bulkUploadResult.details.failed.map((fail: any, i: number) => (
+                        <div key={i}>Row {fail.row} ({fail.email}): {fail.error}</div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+              </div>
+            )}
+
+            <div className="space-y-2">
+              <Label>CSV File</Label>
+              <div className="flex gap-2">
+                <Input
+                  type="file"
+                  accept=".csv"
+                  onChange={(e) => setBulkFile(e.target.files?.[0] || null)}
+                  disabled={bulkMutation.isPending}
+                />
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={() => {
+                    // Create and download CSV template
+                    const template = "name,email,password,role,department,subDepartment,managerId\nJohn Doe,john@example.com,password123,Agent,Support,,\nJane Smith,jane@example.com,password456,Manager,Sales,,";
+                    const blob = new Blob([template], { type: 'text/csv' });
+                    const url = URL.createObjectURL(blob);
+                    const a = document.createElement('a');
+                    a.href = url;
+                    a.download = 'user_upload_template.csv';
+                    a.click();
+                    URL.revokeObjectURL(url);
+                  }}
+                >
+                  Download Template
+                </Button>
+              </div>
+              <p className="text-xs text-muted-foreground">
+                Required columns: name, email, password, role. Optional: department, subDepartment, managerId
+              </p>
+            </div>
+
+            <div className="bg-muted p-3 rounded-lg text-xs space-y-1">
+              <p className="font-semibold">CSV Format Guidelines:</p>
+              <ul className="list-disc list-inside space-y-0.5 ml-2">
+                <li>First row must contain column headers</li>
+                <li>Required: name, email, password, role</li>
+                <li>Optional: department, subDepartment, managerId</li>
+                <li>Use managerId for the user's ID that this user reports to</li>
+                <li>All fields should be comma-separated</li>
+              </ul>
+            </div>
+          </div>
+
+          <DialogFooter>
+            <Button
+              variant="outline"
+              onClick={() => {
+                setShowBulkUpload(false);
+                setBulkFile(null);
+                setBulkUploadResult(null);
+                setError("");
+              }}
+            >
+              {bulkUploadResult ? "Close" : "Cancel"}
+            </Button>
+            {!bulkUploadResult && (
+              <Button
+                onClick={handleBulkUpload}
+                disabled={!bulkFile || bulkMutation.isPending}
+              >
+                {bulkMutation.isPending ? (
+                  <>
+                    <Loader2 className="h-4 w-4 animate-spin mr-2" />
+                    Uploading...
+                  </>
+                ) : (
+                  <>
+                    <Upload className="h-4 w-4 mr-2" />
+                    Upload Users
+                  </>
+                )}
+              </Button>
+            )}
           </DialogFooter>
         </DialogContent>
       </Dialog>

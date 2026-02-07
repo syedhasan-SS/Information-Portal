@@ -617,6 +617,83 @@ export async function registerRoutes(
     }
   });
 
+  app.post("/api/users/bulk", async (req, res) => {
+    try {
+      const { users: usersData } = req.body;
+
+      if (!Array.isArray(usersData) || usersData.length === 0) {
+        return res.status(400).json({ error: "Users array is required and must not be empty" });
+      }
+
+      const results = {
+        created: [] as any[],
+        failed: [] as { row: number; email: string; error: string }[],
+      };
+
+      for (let i = 0; i < usersData.length; i++) {
+        const userData = usersData[i];
+
+        try {
+          // Validate each user
+          const parsed = insertUserSchema.safeParse(userData);
+          if (!parsed.success) {
+            results.failed.push({
+              row: i + 1,
+              email: userData.email || 'N/A',
+              error: parsed.error.errors[0]?.message || "Validation failed",
+            });
+            continue;
+          }
+
+          // Check if email already exists
+          const existing = await storage.getUserByEmail(parsed.data.email);
+          if (existing) {
+            results.failed.push({
+              row: i + 1,
+              email: parsed.data.email,
+              error: "Email already exists",
+            });
+            continue;
+          }
+
+          // Ensure 'role' field is synced with 'roles' array
+          const userDataToCreate = { ...parsed.data };
+          if (userDataToCreate.roles && Array.isArray(userDataToCreate.roles) && userDataToCreate.roles.length > 0) {
+            userDataToCreate.role = userDataToCreate.roles[0];
+          }
+
+          // Store plain password for email
+          const plainPassword = userDataToCreate.password;
+
+          // Create user
+          const user = await storage.createUser(userDataToCreate);
+
+          // Send welcome email (don't await)
+          sendNewUserEmail(user, plainPassword).catch(err => {
+            console.error(`Failed to send welcome email to ${user.email}:`, err);
+          });
+
+          results.created.push(user);
+        } catch (error: any) {
+          results.failed.push({
+            row: i + 1,
+            email: userData.email || 'N/A',
+            error: error.message || "Failed to create user",
+          });
+        }
+      }
+
+      res.status(201).json({
+        message: `Created ${results.created.length} users, ${results.failed.length} failed`,
+        created: results.created.length,
+        failed: results.failed.length,
+        details: results,
+      });
+    } catch (error: any) {
+      res.status(500).json({ error: error.message });
+    }
+  });
+
   app.patch("/api/users/:id", async (req, res) => {
     try {
       const updates = { ...req.body };
