@@ -71,7 +71,8 @@ export default function DashboardPage() {
     if (!user) return false;
 
     // Owners and Admins see all tickets
-    if (hasPermission("view:all_tickets")) {
+    // EXCEPTION: CX users ALWAYS get filtered by sub-department regardless of permissions
+    if (hasPermission("view:all_tickets") && user.department !== "CX") {
       return true;
     }
 
