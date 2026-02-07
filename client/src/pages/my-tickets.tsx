@@ -267,8 +267,26 @@ export default function MyTicketsPage() {
   }, {} as Record<string, typeof availableCategories[0]>) || {};
 
   const filteredCategories = availableCategories.filter((cat) => {
+    // Filter by Department (L1)
     if (newTicket.department && cat.l1 !== newTicket.department) return false;
+
+    // Filter by Issue Type
     if (newTicket.issueType && cat.issueType !== newTicket.issueType) return false;
+
+    // Filter by Sub-Department (L2) for CX users
+    // Map user's sub-department to the corresponding L2 category value
+    if (user?.department === "CX" && user.subDepartment && cat.l1 === "CX") {
+      // For Customer Support agents: only show categories under "Product Quality" L2
+      if (user.subDepartment === "Customer Support") {
+        if (cat.l2 !== "Product Quality") return false;
+      }
+
+      // For Seller Support agents: only show categories under "Seller Support" L2
+      if (user.subDepartment === "Seller Support") {
+        if (cat.l2 !== "Seller Support") return false;
+      }
+    }
+
     return true;
   });
 
