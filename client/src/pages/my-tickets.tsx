@@ -274,32 +274,8 @@ export default function MyTicketsPage() {
       // Filter by Issue Type
       if (newTicket.issueType && cat.issueType !== newTicket.issueType) return false;
 
-      // Filter by Sub-Department (L2) for CX users
-      // Map user's sub-department to the corresponding L2 category value
-      if (user?.department === "CX" && user.subDepartment && cat.l1 === "CX") {
-        // Log for debugging
-        console.log(`[Category Filter] User sub-department: ${user.subDepartment}, Category L2: ${cat.l2}, Category: ${cat.l3}`);
-
-        // For Customer Support agents: only show categories under Customer Support L2 categories
-        if (user.subDepartment === "Customer Support") {
-          // Check for various possible L2 values that indicate Customer Support categories
-          const isCustomerSupportL2 = cat.l2 === "Quality Check" ||
-                                       cat.l2 === "Product Quality" ||
-                                       cat.l2 === "Customer Support" ||
-                                       cat.l2 === "Customer Experience" ||
-                                       cat.l2 === "CX";
-          if (!isCustomerSupportL2) return false;
-        }
-
-        // For Seller Support agents: only show categories under Seller Support L2 categories
-        if (user.subDepartment === "Seller Support") {
-          const isSellerSupportL2 = cat.l2 === "Seller Support" ||
-                                    cat.l2 === "Seller Refund" ||
-                                    cat.l2 === "Vendor Support" ||
-                                    cat.l2 === "Seller Experience";
-          if (!isSellerSupportL2) return false;
-        }
-      }
+      // This filtering is already done in availableCategories above
+      // No need to duplicate the departmentType filtering here
 
       return true;
     });
@@ -1055,7 +1031,7 @@ export default function MyTicketsPage() {
                             value={categorySearchValue}
                             onValueChange={setCategorySearchValue}
                           />
-                          <CommandList className="max-h-[300px]">
+                          <CommandList className="max-h-[300px] overflow-y-auto">
                             <CommandEmpty>
                               <p className="text-sm text-muted-foreground p-2">
                                 No categories found matching "{categorySearchValue}"
