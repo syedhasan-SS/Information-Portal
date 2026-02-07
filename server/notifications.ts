@@ -10,13 +10,12 @@ import type { Ticket, Comment, User } from "@shared/schema";
  */
 export async function notifyTicketCreated(ticket: Ticket, creator: User | undefined) {
   try {
-    // Notify team members in the owner team/department
-    const teamMembers = await storage.getUsers();
+    // Notify team members in the owner team/department (optimized query)
+    const teamMembers = await storage.getUsersByDepartment(ticket.ownerTeam, { isActive: true });
+
+    // Filter out the creator
     const relevantUsers = teamMembers.filter(
-      (user) =>
-        user.department === ticket.ownerTeam &&
-        user.id !== ticket.createdById && // Don't notify the creator
-        user.isActive
+      (user) => user.id !== ticket.createdById
     );
 
     // Create notifications for team members
@@ -84,53 +83,52 @@ export async function notifyTicketAssigned(ticket: Ticket, assignee: User, actor
  */
 export async function notifyTicketSolved(ticket: Ticket, solver: User | undefined) {
   try {
-    // Notify the ticket creator (only if active)
+    // Use Set to deduplicate user IDs (if creator == assignee)
+    const usersToNotify = new Set<string>();
+
+    // Add ticket creator (if not the solver)
     if (ticket.createdById && ticket.createdById !== solver?.id) {
-      const creator = await storage.getUserById(ticket.createdById);
-      if (creator?.isActive) {
-        await storage.createNotification({
-          userId: ticket.createdById,
-          type: "ticket_solved",
-          title: "Ticket Solved",
-          message: `Your ticket has been solved: ${ticket.subject}`,
-          ticketId: ticket.id,
-          actorId: solver?.id,
-          metadata: {
-            ticketNumber: ticket.ticketNumber,
-            vendorHandle: ticket.vendorHandle,
-            solvedBy: solver?.name,
-          },
-          isRead: false,
-        });
-
-        console.log(`[Notifications] Notified ticket creator about ticket resolution: ${ticket.ticketNumber}`);
-      }
+      usersToNotify.add(ticket.createdById);
     }
 
-    // Also notify the assignee if different from creator and solver (only if active)
-    if (
-      ticket.assigneeId &&
-      ticket.assigneeId !== ticket.createdById &&
-      ticket.assigneeId !== solver?.id
-    ) {
-      const assignee = await storage.getUserById(ticket.assigneeId);
-      if (assignee?.isActive) {
-        await storage.createNotification({
-          userId: ticket.assigneeId,
-          type: "ticket_solved",
-          title: "Assigned Ticket Solved",
-          message: `A ticket assigned to you has been solved: ${ticket.subject}`,
-          ticketId: ticket.id,
-          actorId: solver?.id,
-          metadata: {
-            ticketNumber: ticket.ticketNumber,
-            vendorHandle: ticket.vendorHandle,
-            solvedBy: solver?.name,
-          },
-          isRead: false,
-        });
-      }
+    // Add ticket assignee (if not the solver and not already added)
+    if (ticket.assigneeId && ticket.assigneeId !== solver?.id) {
+      usersToNotify.add(ticket.assigneeId);
     }
+
+    // Create notifications for all unique users
+    const notificationPromises = Array.from(usersToNotify).map(async (userId) => {
+      const user = await storage.getUserById(userId);
+
+      // Only notify active users
+      if (!user?.isActive) {
+        console.log(`[Notifications] Skipping notification - user ${userId} is inactive`);
+        return;
+      }
+
+      const isCreator = userId === ticket.createdById;
+
+      await storage.createNotification({
+        userId,
+        type: "ticket_solved",
+        title: isCreator ? "Ticket Solved" : "Assigned Ticket Solved",
+        message: isCreator
+          ? `Your ticket has been solved: ${ticket.subject}`
+          : `A ticket assigned to you has been solved: ${ticket.subject}`,
+        ticketId: ticket.id,
+        actorId: solver?.id,
+        metadata: {
+          ticketNumber: ticket.ticketNumber,
+          vendorHandle: ticket.vendorHandle,
+          solvedBy: solver?.name,
+        },
+        isRead: false,
+      });
+
+      console.log(`[Notifications] Notified ${isCreator ? 'creator' : 'assignee'} about ticket resolution: ${ticket.ticketNumber}`);
+    });
+
+    await Promise.all(notificationPromises);
   } catch (error) {
     console.error("[Notifications] Failed to create ticket solved notifications:", error);
   }
@@ -200,8 +198,8 @@ export async function notifyMentions(
 ) {
   try {
     // Extract mentions from comment body using regex
-    // Supports @username or @email format
-    const mentionRegex = /@(\w+(?:\.\w+)*@?\w*\.?\w+)/g;
+    // Matches @email.address or @username (no spaces)
+    const mentionRegex = /@([\w.+-]+@[\w.-]+\.\w+|[\w.+-]+)/g;
     const mentions = comment.body.match(mentionRegex);
 
     if (!mentions || mentions.length === 0) return;
@@ -209,18 +207,31 @@ export async function notifyMentions(
     // Get all users to check for mentions
     const allUsers = await storage.getUsers();
 
-    // Find users who were mentioned
-    const mentionedUsers = allUsers.filter((user) => {
-      if (user.id === commenter?.id) return false; // Don't notify the commenter
+    // Track mentioned user IDs to deduplicate (same user mentioned multiple times)
+    const mentionedUserIds = new Set<string>();
 
-      return mentions.some((mention) => {
-        const cleanMention = mention.substring(1); // Remove @
+    // Find users who were mentioned using EXACT matching
+    mentions.forEach((mention) => {
+      const cleanMention = mention.substring(1).toLowerCase(); // Remove @ and lowercase
+
+      const matchedUser = allUsers.find((user) => {
+        // Skip commenter and inactive users
+        if (user.id === commenter?.id || !user.isActive) return false;
+
+        // Exact match on email or name (case-insensitive)
         return (
-          user.email.toLowerCase().includes(cleanMention.toLowerCase()) ||
-          user.name.toLowerCase().includes(cleanMention.toLowerCase())
+          user.email.toLowerCase() === cleanMention ||
+          user.name.toLowerCase() === cleanMention
         );
       });
+
+      if (matchedUser) {
+        mentionedUserIds.add(matchedUser.id);
+      }
     });
+
+    // Get user objects for notification
+    const mentionedUsers = allUsers.filter(user => mentionedUserIds.has(user.id));
 
     // Create notifications for mentioned users
     const notificationPromises = mentionedUsers.map((user) =>
@@ -249,18 +260,25 @@ export async function notifyMentions(
 }
 
 /**
- * Get current user from request body or session
- * Uses createdById from request body as fallback
+ * Get current user from request headers (x-user-email)
+ * SECURITY: Never trust client-provided user IDs from request body
  */
 export async function getCurrentUser(req: any): Promise<User | undefined> {
-  // Try to get user ID from request body (for updates/comments)
-  const userId = req.body?.createdById || req.body?.userId;
+  // Get user email from auth header (set by frontend after login)
+  const email = req.headers["x-user-email"] as string;
 
-  if (userId) {
-    return await storage.getUserById(userId);
+  if (!email) {
+    console.warn("[getCurrentUser] No x-user-email header found in request");
+    return undefined;
   }
 
-  // Fallback to session (when auth is fully implemented)
-  // return req.user as User;
-  return undefined;
+  // Look up user by email from auth header
+  const user = await storage.getUserByEmail(email);
+
+  if (!user) {
+    console.warn(`[getCurrentUser] No user found for email: ${email}`);
+    return undefined;
+  }
+
+  return user;
 }

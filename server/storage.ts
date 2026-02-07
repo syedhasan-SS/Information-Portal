@@ -89,6 +89,7 @@ export interface IStorage {
   getUsers(): Promise<User[]>;
   getUserById(id: string): Promise<User | undefined>;
   getUserByEmail(email: string): Promise<User | undefined>;
+  getUsersByDepartment(department: string, options?: { isActive?: boolean }): Promise<User[]>;
   createUser(user: InsertUser): Promise<User>;
   updateUser(id: string, updates: Partial<InsertUser>): Promise<User | undefined>;
 
@@ -389,6 +390,19 @@ export class DatabaseStorage implements IStorage {
   async getUserByEmail(email: string): Promise<User | undefined> {
     const results = await db.select().from(users).where(sql`LOWER(${users.email}) = LOWER(${email})`).limit(1);
     return results[0];
+  }
+
+  async getUsersByDepartment(department: string, options?: { isActive?: boolean }): Promise<User[]> {
+    const conditions = [eq(users.department, department)];
+
+    if (options?.isActive !== undefined) {
+      conditions.push(eq(users.isActive, options.isActive));
+    }
+
+    return await db.select()
+      .from(users)
+      .where(and(...conditions))
+      .orderBy(users.name);
   }
 
   async createUser(user: InsertUser): Promise<User> {

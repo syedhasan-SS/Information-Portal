@@ -34,6 +34,42 @@ import {
   triggerTicketUpdated,
 } from "./n8n-integration";
 
+// Permission check helper
+async function checkPermission(req: any, requiredPermission: string): Promise<{ hasPermission: boolean; user?: any; error?: string }> {
+  const email = req.headers["x-user-email"] as string;
+
+  if (!email) {
+    return { hasPermission: false, error: "No authentication header found" };
+  }
+
+  const user = await storage.getUserByEmail(email);
+
+  if (!user) {
+    return { hasPermission: false, error: "User not found" };
+  }
+
+  if (!user.isActive) {
+    return { hasPermission: false, error: "User account is inactive" };
+  }
+
+  // Owner and Admin have all permissions
+  if (user.role === "Owner" || user.role === "Admin") {
+    return { hasPermission: true, user };
+  }
+
+  // Check custom permissions first
+  if (user.customPermissions && user.customPermissions.includes(requiredPermission)) {
+    return { hasPermission: true, user };
+  }
+
+  // For edit:config permission, allow Head and Manager roles
+  if (requiredPermission === "edit:config" && (user.role === "Head" || user.role === "Manager")) {
+    return { hasPermission: true, user };
+  }
+
+  return { hasPermission: false, error: "Insufficient permissions" };
+}
+
 // Hardcoded default permissions (fallback when database is empty)
 const HARDCODED_PERMISSIONS = [
   { id: "hc-p-1", name: "view:dashboard", displayName: "View Dashboard", category: "General", isSystem: true, isActive: true },
@@ -407,6 +443,26 @@ export async function registerRoutes(
           error: "Invalid ticket update data",
           details: parsed.error.issues
         });
+      }
+
+      // Validate status transitions if status is being changed
+      if (parsed.data.status && parsed.data.status !== oldTicket.status) {
+        const validTransitions: Record<string, string[]> = {
+          "New": ["Open", "Closed"], // New tickets can be opened or closed (cancelled)
+          "Open": ["Pending", "Solved", "Closed"],
+          "Pending": ["Open", "Solved", "Closed"],
+          "Solved": ["Closed", "Open"], // Can reopen or close
+          "Closed": ["Open"], // Can only reopen closed tickets
+        };
+
+        const allowedNextStates = validTransitions[oldTicket.status] || [];
+
+        if (!allowedNextStates.includes(parsed.data.status)) {
+          return res.status(400).json({
+            error: `Invalid status transition from "${oldTicket.status}" to "${parsed.data.status}"`,
+            allowedTransitions: allowedNextStates
+          });
+        }
       }
 
       // Check if category changed and apply routing rules
@@ -2381,6 +2437,12 @@ export async function registerRoutes(
 
   app.post("/api/config/routing-rules", async (req, res) => {
     try {
+      // Check permission
+      const permissionCheck = await checkPermission(req, "edit:config");
+      if (!permissionCheck.hasPermission) {
+        return res.status(403).json({ error: permissionCheck.error || "Forbidden" });
+      }
+
       const { categoryId, targetDepartment, autoAssignEnabled, assignmentStrategy, assignedAgentId, priorityBoost, slaResponseHoursOverride, slaResolutionHoursOverride } = req.body;
 
       if (!categoryId || !targetDepartment) {
@@ -2417,6 +2479,12 @@ export async function registerRoutes(
 
   app.put("/api/config/routing-rules/:id", async (req, res) => {
     try {
+      // Check permission
+      const permissionCheck = await checkPermission(req, "edit:config");
+      if (!permissionCheck.hasPermission) {
+        return res.status(403).json({ error: permissionCheck.error || "Forbidden" });
+      }
+
       const { id } = req.params;
       const updates = req.body;
 
@@ -2452,6 +2520,12 @@ export async function registerRoutes(
 
   app.delete("/api/config/routing-rules/:id", async (req, res) => {
     try {
+      // Check permission
+      const permissionCheck = await checkPermission(req, "edit:config");
+      if (!permissionCheck.hasPermission) {
+        return res.status(403).json({ error: permissionCheck.error || "Forbidden" });
+      }
+
       const { id } = req.params;
       await storage.deleteCategoryRoutingRule(id);
       res.json({ message: "Routing rule deleted successfully" });
