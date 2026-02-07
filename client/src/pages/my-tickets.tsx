@@ -489,7 +489,9 @@ export default function MyTicketsPage() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["tickets"] });
       setShowNewTicketDialog(false);
-      setNewTicket({ vendorHandle: "", customer: "", department: "", issueType: "", categoryId: "", subject: "", description: "", fleekOrderIds: "" });
+      // Reset form, but pre-fill department for CX users
+      const defaultDepartment = user?.department === "CX" ? "CX" : "";
+      setNewTicket({ vendorHandle: "", customer: "", department: defaultDepartment, issueType: "", categoryId: "", subject: "", description: "", fleekOrderIds: "" });
       setSelectedOrderIds([]);
       setAvailableOrderIds([]);
       setResolvedFields([]);
@@ -825,6 +827,14 @@ export default function MyTicketsPage() {
         setShowNewTicketDialog(open);
         if (!open) {
           setResolvedFields([]);
+        } else {
+          // Pre-fill department for CX users since they can only create CX tickets
+          if (user?.department === "CX") {
+            setNewTicket(prev => ({
+              ...prev,
+              department: "CX"
+            }));
+          }
         }
       }}>
         <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
@@ -957,8 +967,13 @@ export default function MyTicketsPage() {
                 );
               }
 
-              // Department field
+              // Department field - Hide for CX users since they can only create CX tickets
               if (fieldName === "department") {
+                // For CX users, department is pre-filled and hidden
+                if (user?.department === "CX") {
+                  return null;
+                }
+
                 return (
                   <div key={fieldName} className="space-y-2">
                     <Label htmlFor="department">
