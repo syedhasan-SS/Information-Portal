@@ -1136,6 +1136,11 @@ export default function MyTicketsPage() {
 
               // Fleek Order IDs field
               if (fieldName === "fleekOrderIds") {
+                // For Seller Support: Only enable if vendor is selected (to fetch vendor's orders)
+                // For Customer Support: Always enable (manual entry, no vendor required)
+                const isVendorFieldVisible = isFieldVisible("vendorHandle");
+                const shouldDisableOrderIds = isVendorFieldVisible && !newTicket.vendorHandle;
+
                 return (
                   <div key={fieldName} className="space-y-2">
                     <Label htmlFor="fleekOrderIds">
@@ -1155,7 +1160,7 @@ export default function MyTicketsPage() {
                           aria-expanded={orderIdsComboOpen}
                           className="w-full justify-between font-normal h-auto min-h-10"
                           data-testid="select-order-ids"
-                          disabled={!newTicket.vendorHandle}
+                          disabled={shouldDisableOrderIds}
                         >
                           <div className="flex flex-wrap gap-1 flex-1">
                             {selectedOrderIds.length > 0 ? (
@@ -1173,7 +1178,11 @@ export default function MyTicketsPage() {
                               ))
                             ) : (
                               <span className="text-muted-foreground">
-                                {newTicket.vendorHandle ? "Select or type order IDs..." : "Select vendor first"}
+                                {shouldDisableOrderIds
+                                  ? "Select vendor first"
+                                  : (isVendorFieldVisible && newTicket.vendorHandle
+                                      ? "Select or type order IDs..."
+                                      : "Type order IDs...")}
                               </span>
                             )}
                           </div>
