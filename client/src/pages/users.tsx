@@ -876,7 +876,9 @@ export default function UsersPage() {
                 <div
                   className="h-px bg-border absolute top-0"
                   style={{
-                    width: `calc(${(directReports.length - 1) * 180}px)`,
+                    // Card width (160px) + gap (16px = gap-4) = 176px per child
+                    // Line spans from center of first child to center of last child
+                    width: `${(directReports.length - 1) * 176}px`,
                     left: '50%',
                     transform: 'translateX(-50%)'
                   }}
