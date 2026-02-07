@@ -1058,7 +1058,7 @@ export default function RolesPage() {
                   <SelectTrigger>
                     <SelectValue placeholder="Select a category" />
                   </SelectTrigger>
-                  <SelectContent>
+                  <SelectContent className="max-h-[300px] overflow-y-auto">
                     {permissionsData?.grouped && Object.keys(permissionsData.grouped).sort().map(cat => (
                       <SelectItem key={cat} value={cat}>
                         {cat}

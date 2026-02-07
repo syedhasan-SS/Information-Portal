@@ -2606,7 +2606,7 @@ export default function UsersPage() {
                 <SelectTrigger>
                   <SelectValue placeholder="Select department" />
                 </SelectTrigger>
-                <SelectContent>
+                <SelectContent className="max-h-[300px] overflow-y-auto">
                   {departmentsData?.map((dept) => (
                     <SelectItem key={dept.id} value={dept.id}>
                       {dept.name}
@@ -2625,7 +2625,7 @@ export default function UsersPage() {
                 <SelectTrigger>
                   <SelectValue placeholder={subDeptFormData.departmentId ? "Select parent sub-department" : "Select department first"} />
                 </SelectTrigger>
-                <SelectContent>
+                <SelectContent className="max-h-[300px] overflow-y-auto">
                   <SelectItem value="__none__">None (Top-level sub-department)</SelectItem>
                   {departmentsData
                     ?.find(d => d.id === subDeptFormData.departmentId)

@@ -351,7 +351,7 @@ export default function AnalyticsPage() {
                 <SelectTrigger id="time-grouping">
                   <SelectValue />
                 </SelectTrigger>
-                <SelectContent>
+                <SelectContent className="max-h-[300px] overflow-y-auto">
                   {TIME_GROUPINGS.map((grouping) => (
                     <SelectItem key={grouping} value={grouping}>
                       {grouping}
@@ -367,7 +367,7 @@ export default function AnalyticsPage() {
                 <SelectTrigger id="issue-type">
                   <SelectValue />
                 </SelectTrigger>
-                <SelectContent>
+                <SelectContent className="max-h-[300px] overflow-y-auto">
                   {ISSUE_TYPES.map((type) => (
                     <SelectItem key={type} value={type}>
                       {type}

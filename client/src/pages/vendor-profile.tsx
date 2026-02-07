@@ -270,7 +270,7 @@ export default function VendorProfilePage() {
                   <SelectTrigger className="w-32">
                     <SelectValue />
                   </SelectTrigger>
-                  <SelectContent>
+                  <SelectContent className="max-h-[300px] overflow-y-auto">
                     {STATUSES.map((status) => (
                       <SelectItem key={status} value={status}>{status}</SelectItem>
                     ))}

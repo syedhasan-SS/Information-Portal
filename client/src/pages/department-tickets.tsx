@@ -217,7 +217,7 @@ export default function DepartmentTicketsPage() {
                   <Filter className="mr-2 h-4 w-4" />
                   <SelectValue placeholder="Status" />
                 </SelectTrigger>
-                <SelectContent>
+                <SelectContent className="max-h-[300px] overflow-y-auto">
                   <SelectItem value="all">All Status</SelectItem>
                   <SelectItem value="New">New</SelectItem>
                   <SelectItem value="Open">Open</SelectItem>
@@ -231,7 +231,7 @@ export default function DepartmentTicketsPage() {
                   <Filter className="mr-2 h-4 w-4" />
                   <SelectValue placeholder="Priority" />
                 </SelectTrigger>
-                <SelectContent>
+                <SelectContent className="max-h-[300px] overflow-y-auto">
                   <SelectItem value="all">All Priority</SelectItem>
                   <SelectItem value="Critical">Critical</SelectItem>
                   <SelectItem value="High">High</SelectItem>

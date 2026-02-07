@@ -505,7 +505,7 @@ export default function ProductRequestsPage() {
             <SelectTrigger className="w-full sm:w-[200px]">
               <SelectValue placeholder="Filter by type" />
             </SelectTrigger>
-            <SelectContent>
+            <SelectContent className="max-h-[300px] overflow-y-auto">
               <SelectItem value="all">All Types</SelectItem>
               {REQUEST_TYPES.map((type) => (
                 <SelectItem key={type} value={type}>
@@ -518,7 +518,7 @@ export default function ProductRequestsPage() {
             <SelectTrigger className="w-full sm:w-[200px]">
               <SelectValue placeholder="Filter by status" />
             </SelectTrigger>
-            <SelectContent>
+            <SelectContent className="max-h-[300px] overflow-y-auto">
               <SelectItem value="all">All Statuses</SelectItem>
               <SelectItem value="Draft">Draft</SelectItem>
               <SelectItem value="Pending Approval">Pending Approval</SelectItem>
@@ -633,7 +633,7 @@ export default function ProductRequestsPage() {
                 <SelectTrigger>
                   <SelectValue />
                 </SelectTrigger>
-                <SelectContent>
+                <SelectContent className="max-h-[300px] overflow-y-auto">
                   {REQUEST_TYPES.map((type) => (
                     <SelectItem key={type} value={type}>
                       {type}
@@ -652,7 +652,7 @@ export default function ProductRequestsPage() {
                 <SelectTrigger>
                   <SelectValue />
                 </SelectTrigger>
-                <SelectContent>
+                <SelectContent className="max-h-[300px] overflow-y-auto">
                   {PRIORITIES.map((priority) => (
                     <SelectItem key={priority} value={priority}>
                       {priority}
@@ -802,7 +802,7 @@ export default function ProductRequestsPage() {
                         <SelectTrigger>
                           <SelectValue placeholder="Select user..." />
                         </SelectTrigger>
-                        <SelectContent>
+                        <SelectContent className="max-h-[300px] overflow-y-auto">
                           {users
                             ?.filter((u) => u.role === "Owner" || u.role === "Admin")
                             .map((u) => (

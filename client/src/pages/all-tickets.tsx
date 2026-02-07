@@ -440,7 +440,7 @@ export default function AllTicketsPage() {
                   <SelectTrigger className="h-8 w-40">
                     <SelectValue placeholder="All" />
                   </SelectTrigger>
-                  <SelectContent>
+                  <SelectContent className="max-h-[300px] overflow-y-auto">
                     <SelectItem value="all">All Departments</SelectItem>
                     {departmentsData?.filter(d => d.isActive).map((dept) => (
                       <SelectItem key={dept.id} value={dept.name}>{dept.name}</SelectItem>
@@ -455,7 +455,7 @@ export default function AllTicketsPage() {
                   <SelectTrigger className="h-8 w-36">
                     <SelectValue placeholder="All" />
                   </SelectTrigger>
-                  <SelectContent>
+                  <SelectContent className="max-h-[300px] overflow-y-auto">
                     <SelectItem value="all">All Types</SelectItem>
                     {ISSUE_TYPES.map((type) => (
                       <SelectItem key={type} value={type}>{type}</SelectItem>
@@ -470,7 +470,7 @@ export default function AllTicketsPage() {
                   <SelectTrigger className="h-8 w-32">
                     <SelectValue placeholder="All" />
                   </SelectTrigger>
-                  <SelectContent>
+                  <SelectContent className="max-h-[300px] overflow-y-auto">
                     <SelectItem value="all">All</SelectItem>
                     <SelectItem value="on_track">On Track</SelectItem>
                     <SelectItem value="at_risk">At Risk</SelectItem>
@@ -627,7 +627,7 @@ export default function AllTicketsPage() {
                     <SelectTrigger className="h-8 w-16">
                       <SelectValue />
                     </SelectTrigger>
-                    <SelectContent>
+                    <SelectContent className="max-h-[300px] overflow-y-auto">
                       <SelectItem value="25">25</SelectItem>
                       <SelectItem value="50">50</SelectItem>
                       <SelectItem value="100">100</SelectItem>
