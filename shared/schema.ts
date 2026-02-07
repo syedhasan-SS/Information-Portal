@@ -40,7 +40,9 @@ export const tickets = pgTable("tickets", {
   customer: text("customer"), // For Customer Support tickets (customer name/ID)
   department: text("department").notNull().$type<"Finance" | "Operations" | "Marketplace" | "Tech" | "Supply" | "Growth" | "Experience" | "CX">(),
   issueType: text("issue_type").notNull().$type<"Complaint" | "Request" | "Information">(),
-  categoryId: varchar("category_id").notNull().references(() => categories.id),
+  // categoryId can reference either categories.id (old) OR categoryHierarchy.id (new)
+  // No FK constraint to support both during transition
+  categoryId: varchar("category_id"),
   subject: text("subject").notNull(),
   description: text("description").notNull(),
   fleekOrderIds: text("fleek_order_ids").array(),
