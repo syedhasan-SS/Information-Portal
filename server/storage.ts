@@ -141,33 +141,34 @@ export class DatabaseStorage implements IStorage {
     // Get all categories
     const allCategories = await db.select().from(categories).orderBy(categories.path);
 
-    // Get all L1 categoryHierarchy items to map departmentType
-    const l1Categories = await db
+    // Get all L3 categoryHierarchy items to map departmentType (since departmentType is stored at L3 level)
+    const l3Categories = await db
       .select()
       .from(categoryHierarchy)
-      .where(eq(categoryHierarchy.level, 1));
+      .where(eq(categoryHierarchy.level, 3));
 
-    console.log(`[getCategories] Found ${l1Categories.length} L1 categories in categoryHierarchy`);
-    console.log('[getCategories] L1 categories:', l1Categories.map(c => ({
+    console.log(`[getCategories] Found ${l3Categories.length} L3 categories in categoryHierarchy`);
+    console.log('[getCategories] Sample L3 categories:', l3Categories.slice(0, 5).map(c => ({
       name: c.name,
       departmentType: c.departmentType
     })));
 
-    // Create a map of L1 name to departmentType
+    // Create a map of L3 name to departmentType
     const departmentTypeMap = new Map<string, string>();
-    for (const l1Cat of l1Categories) {
-      departmentTypeMap.set(l1Cat.name, l1Cat.departmentType || "All");
+    for (const l3Cat of l3Categories) {
+      departmentTypeMap.set(l3Cat.name, l3Cat.departmentType || "All");
     }
 
-    // Enhance categories with departmentType from their L1 category
+    // Enhance categories with departmentType from their L3 category
     const enhancedCategories = allCategories.map(cat => ({
       ...cat,
-      departmentType: departmentTypeMap.get(cat.l1) || "All"
+      departmentType: departmentTypeMap.get(cat.l3) || "All"
     }));
 
     console.log(`[getCategories] Returning ${enhancedCategories.length} categories with departmentType`);
-    console.log('[getCategories] Sample categories:', enhancedCategories.slice(0, 3).map(c => ({
+    console.log('[getCategories] Sample enhanced categories:', enhancedCategories.slice(0, 5).map(c => ({
       l1: c.l1,
+      l2: c.l2,
       l3: c.l3,
       departmentType: c.departmentType
     })));
