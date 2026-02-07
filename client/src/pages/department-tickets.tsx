@@ -60,15 +60,38 @@ export default function DepartmentTicketsPage() {
   const [priorityFilter, setPriorityFilter] = useState<string>("all");
 
   // Fetch tickets for the user's department
-  const { data: tickets, isLoading } = useQuery({
-    queryKey: ["department-tickets", user?.department],
+  const { data: allTickets, isLoading } = useQuery({
+    queryKey: ["department-tickets", user?.department, user?.subDepartment],
     queryFn: async () => {
       if (!user?.department) return [];
-      const res = await fetch(`/api/tickets?department=${user.department}`);
+      const res = await fetch(`/api/tickets`);
       if (!res.ok) throw new Error("Failed to fetch tickets");
       return res.json() as Promise<Ticket[]>;
     },
     enabled: !!user?.department,
+  });
+
+  // Filter tickets based on department and sub-department
+  const tickets = allTickets?.filter((ticket) => {
+    if (!user) return false;
+
+    // For CX department with sub-departments - strict filtering
+    if (user.department === "CX" && user.subDepartment) {
+      if (user.subDepartment === "Seller Support") {
+        return ticket.department === "Seller Support" ||
+               (ticket.department === "CX" && (ticket as any).subDepartment === "Seller Support");
+      }
+      if (user.subDepartment === "Customer Support") {
+        return ticket.department === "Customer Support" ||
+               (ticket.department === "CX" && (ticket as any).subDepartment === "Customer Support");
+      }
+      // Any other CX sub-department
+      return ticket.department === user.subDepartment ||
+             (ticket.department === "CX" && (ticket as any).subDepartment === user.subDepartment);
+    }
+
+    // All other departments: exact match only
+    return ticket.department === user.department;
   });
 
   // Fetch users for assignee names

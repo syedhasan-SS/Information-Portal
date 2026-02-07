@@ -75,24 +75,63 @@ export default function DashboardPage() {
       return true;
     }
 
-    // Seller Support (sub-department of CX) or CX users can see all tickets (they handle cross-department issues)
-    if (user.subDepartment === "Seller Support" || user.department === "CX") {
-      return true;
-    }
-
-    // Department-based access: Heads/Managers/Leads see their department tickets
+    // Department-based access: Heads/Managers/Leads see only their department tickets
     if (hasPermission("view:department_tickets") && user.department) {
+      // For CX department with sub-departments
+      if (user.department === "CX" && user.subDepartment) {
+        // Seller Support agents see only Seller Support tickets
+        if (user.subDepartment === "Seller Support") {
+          return ticket.department === "Seller Support" ||
+                 (ticket.department === "CX" && ticket.subDepartment === "Seller Support");
+        }
+        // Customer Support agents see only Customer Support tickets
+        if (user.subDepartment === "Customer Support") {
+          return ticket.department === "Customer Support" ||
+                 (ticket.department === "CX" && ticket.subDepartment === "Customer Support");
+        }
+      }
+      // All other departments: see only their department tickets
       return ticket.department === user.department;
     }
 
-    // Team-based access: Leads see team tickets
+    // Team-based access: Leads see only their department/team tickets
     if (hasPermission("view:team_tickets") && user.department) {
+      // Same sub-department filtering for CX teams
+      if (user.department === "CX" && user.subDepartment) {
+        if (user.subDepartment === "Seller Support") {
+          return ticket.department === "Seller Support" ||
+                 (ticket.department === "CX" && ticket.subDepartment === "Seller Support");
+        }
+        if (user.subDepartment === "Customer Support") {
+          return ticket.department === "Customer Support" ||
+                 (ticket.department === "CX" && ticket.subDepartment === "Customer Support");
+        }
+      }
       return ticket.department === user.department;
     }
 
-    // Agent/Associate level: see assigned tickets or their department tickets
-    if (["Agent", "Associate"].includes(user.role) && user.department) {
-      return ticket.assigneeId === user.id || ticket.department === user.department;
+    // Agent/Associate level: see only assigned tickets or their specific department/sub-department tickets
+    if (["Agent", "Associate"].includes(user.role)) {
+      const isAssigned = ticket.assigneeId === user.id;
+
+      // For CX agents with sub-departments
+      if (user.department === "CX" && user.subDepartment) {
+        if (user.subDepartment === "Seller Support") {
+          return isAssigned || ticket.department === "Seller Support" ||
+                 (ticket.department === "CX" && ticket.subDepartment === "Seller Support");
+        }
+        if (user.subDepartment === "Customer Support") {
+          return isAssigned || ticket.department === "Customer Support" ||
+                 (ticket.department === "CX" && ticket.subDepartment === "Customer Support");
+        }
+      }
+
+      // All other agents: see assigned or their department tickets
+      if (user.department) {
+        return isAssigned || ticket.department === user.department;
+      }
+
+      return isAssigned;
     }
 
     // Default: only show assigned tickets
