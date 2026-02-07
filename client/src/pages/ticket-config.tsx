@@ -118,6 +118,7 @@ export default function TicketConfigPage() {
   const [requestTypeFilter, setRequestTypeFilter] = useState<"All" | "Complaint" | "Request" | "Information">("All");
   const [statusFilter, setStatusFilter] = useState<"All" | "Active" | "Inactive">("All");
   const [slaFilter, setSlaFilter] = useState<"All" | "With Response SLA" | "Resolution Only">("All");
+  const [deptLevelFilter, setDeptLevelFilter] = useState<string>("All");
   const [categorySearchQuery, setCategorySearchQuery] = useState("");
 
   // Tag filter state
@@ -162,6 +163,13 @@ export default function TicketConfigPage() {
     },
   });
 
+  // Get unique L1 (Department Level) values for filter
+  const uniqueL1Values = React.useMemo(() => {
+    if (!configs) return [];
+    const l1Set = new Set(configs.map(c => c.l1));
+    return Array.from(l1Set).sort();
+  }, [configs]);
+
   // Filter configurations based on department
   const filteredConfigs = React.useMemo(() => {
     if (!configs) return [];
@@ -188,6 +196,9 @@ export default function TicketConfigPage() {
                        (slaFilter === "With Response SLA" && config.slaResponseHours) ||
                        (slaFilter === "Resolution Only" && !config.slaResponseHours);
 
+      // Department Level (L1) filter
+      const deptLevelMatch = deptLevelFilter === "All" || config.l1 === deptLevelFilter;
+
       // Search filter (searches across all text fields)
       const searchMatch = categorySearchQuery.trim() === "" ||
         config.issueType.toLowerCase().includes(categorySearchQuery.toLowerCase()) ||
@@ -197,9 +208,9 @@ export default function TicketConfigPage() {
         (config.l4 && config.l4.toLowerCase().includes(categorySearchQuery.toLowerCase())) ||
         (config.description && config.description.toLowerCase().includes(categorySearchQuery.toLowerCase()));
 
-      return deptMatch && requestTypeMatch && statusMatch && slaMatch && searchMatch;
+      return deptMatch && requestTypeMatch && statusMatch && slaMatch && deptLevelMatch && searchMatch;
     });
-  }, [configs, departmentFilter, requestTypeFilter, statusFilter, slaFilter, categorySearchQuery]);
+  }, [configs, departmentFilter, requestTypeFilter, statusFilter, slaFilter, deptLevelFilter, categorySearchQuery]);
 
   // Fetch tags
   const { data: tags, isLoading: isLoadingTags } = useQuery({
@@ -1559,32 +1570,12 @@ export default function TicketConfigPage() {
             )}
           </div>
 
-          {/* Search Bar */}
-          <div className="mb-4">
-            <div className="relative">
-              <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-              <Input
-                type="text"
-                placeholder="Search categories by name, department, or description..."
-                value={categorySearchQuery}
-                onChange={(e) => setCategorySearchQuery(e.target.value)}
-                className="pl-10 pr-10"
-              />
-              {categorySearchQuery && (
-                <button
-                  onClick={() => setCategorySearchQuery("")}
-                  className="absolute right-3 top-1/2 transform -translate-y-1/2 text-muted-foreground hover:text-foreground"
-                >
-                  <ClearIcon className="h-4 w-4" />
-                </button>
-              )}
-            </div>
-          </div>
-
-          {/* Category Filters */}
+          {/* Category Filters with Search */}
           <Card className="mb-4 p-4">
-            <div className="flex flex-wrap items-center gap-4">
-              <span className="text-sm font-medium text-muted-foreground">Request Type:</span>
+            <div className="flex flex-col lg:flex-row gap-4">
+              {/* Filters Section */}
+              <div className="flex-1 flex flex-wrap items-center gap-4">
+                <span className="text-sm font-medium text-muted-foreground">Request Type:</span>
               <div className="flex flex-wrap gap-2">
                 <Button
                   variant={requestTypeFilter === "All" ? "default" : "outline"}
@@ -1669,7 +1660,47 @@ export default function TicketConfigPage() {
                   Resolution Only
                 </Button>
               </div>
+
+              <div className="h-6 w-px bg-border" />
+
+              <span className="text-sm font-medium text-muted-foreground">Dept:</span>
+              <Select value={deptLevelFilter} onValueChange={setDeptLevelFilter}>
+                <SelectTrigger className="w-[180px] h-9">
+                  <SelectValue placeholder="All Departments" />
+                </SelectTrigger>
+                <SelectContent className="max-h-[300px] overflow-y-auto">
+                  <SelectItem value="All">All Departments</SelectItem>
+                  {uniqueL1Values.map((l1) => (
+                    <SelectItem key={l1} value={l1}>
+                      {l1}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
             </div>
+
+            {/* Search Section - Right Side */}
+            <div className="lg:w-80">
+              <div className="relative">
+                <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                <Input
+                  type="text"
+                  placeholder="Search category..."
+                  value={categorySearchQuery}
+                  onChange={(e) => setCategorySearchQuery(e.target.value)}
+                  className="pl-10 pr-10 h-9"
+                />
+                {categorySearchQuery && (
+                  <button
+                    onClick={() => setCategorySearchQuery("")}
+                    className="absolute right-3 top-1/2 transform -translate-y-1/2 text-muted-foreground hover:text-foreground"
+                  >
+                    <ClearIcon className="h-4 w-4" />
+                  </button>
+                )}
+              </div>
+            </div>
+          </div>
           </Card>
         </div>
 
