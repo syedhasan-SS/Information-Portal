@@ -106,6 +106,7 @@ export interface IStorage {
 
   // Category Routing Rules
   getCategoryRoutingRules(): Promise<CategoryRoutingRule[]>;
+  getCategoryRoutingRuleById(id: string): Promise<CategoryRoutingRule | undefined>;
   getCategoryRoutingRuleByCategoryId(categoryId: string): Promise<CategoryRoutingRule | undefined>;
   createCategoryRoutingRule(rule: InsertCategoryRoutingRule): Promise<CategoryRoutingRule>;
   updateCategoryRoutingRule(id: string, updates: Partial<InsertCategoryRoutingRule>): Promise<CategoryRoutingRule | undefined>;
@@ -943,6 +944,14 @@ export class DatabaseStorage implements IStorage {
       .from(categoryRoutingRules)
       .where(eq(categoryRoutingRules.isActive, true))
       .orderBy(categoryRoutingRules.createdAt);
+  }
+
+  async getCategoryRoutingRuleById(id: string): Promise<CategoryRoutingRule | undefined> {
+    const results = await db.select()
+      .from(categoryRoutingRules)
+      .where(eq(categoryRoutingRules.id, id))
+      .limit(1);
+    return results[0];
   }
 
   async getCategoryRoutingRuleByCategoryId(categoryId: string): Promise<CategoryRoutingRule | undefined> {

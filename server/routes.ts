@@ -2387,10 +2387,13 @@ export async function registerRoutes(
         return res.status(400).json({ error: "categoryId and targetDepartment are required" });
       }
 
-      // Check if rule already exists for this category
+      // Check if an ACTIVE rule already exists for this category
       const existing = await storage.getCategoryRoutingRuleByCategoryId(categoryId);
-      if (existing) {
-        return res.status(400).json({ error: "A routing rule already exists for this category. Use PUT to update it." });
+      if (existing && existing.isActive) {
+        return res.status(400).json({
+          error: "An active routing rule already exists for this category. Deactivate the existing rule first or use PUT to update it.",
+          existingRuleId: existing.id
+        });
       }
 
       const rule = await storage.createCategoryRoutingRule({
@@ -2416,6 +2419,23 @@ export async function registerRoutes(
     try {
       const { id } = req.params;
       const updates = req.body;
+
+      // If activating a rule, ensure no other active rule exists for the same category
+      if (updates.isActive === true) {
+        const currentRule = await storage.getCategoryRoutingRuleById(id);
+        if (!currentRule) {
+          return res.status(404).json({ error: "Routing rule not found" });
+        }
+
+        // Check if another active rule exists for this category
+        const existingActiveRule = await storage.getCategoryRoutingRuleByCategoryId(currentRule.categoryId);
+        if (existingActiveRule && existingActiveRule.id !== id && existingActiveRule.isActive) {
+          return res.status(400).json({
+            error: "Another active routing rule already exists for this category. Deactivate it first.",
+            conflictingRuleId: existingActiveRule.id
+          });
+        }
+      }
 
       const rule = await storage.updateCategoryRoutingRule(id, updates);
 
