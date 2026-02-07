@@ -625,6 +625,15 @@ export default function UsersPage() {
             user.roles = user.roles.split(';').map((r: string) => r.trim()).filter((r: string) => r);
           }
 
+          // Handle managerId: convert empty string to undefined
+          if (user.managerid === '' || user.managerid === null) {
+            delete user.managerid;
+          }
+          // Also check camelCase version
+          if (user.managerId === '' || user.managerId === null) {
+            delete user.managerId;
+          }
+
           return user;
         });
 
