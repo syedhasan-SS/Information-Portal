@@ -60,7 +60,7 @@ export default function AdminToolsPage() {
       <div className="mb-6">
         <Button
           variant="ghost"
-          onClick={() => setLocation("/ticket-manager")}
+          onClick={() => setLocation("/ticket-config")}
           className="mb-4"
         >
           <ArrowLeft className="h-4 w-4 mr-2" />
