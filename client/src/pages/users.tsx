@@ -812,87 +812,87 @@ export default function UsersPage() {
     Agent: "bg-slate-500/10 text-slate-600 border-slate-500/20",
   };
 
-  // Department colors for org chart - darker cards
-  const departmentColors: Record<string, { border: string; bg: string }> = {
-    Finance: { border: "border-blue-400", bg: "bg-blue-700" },
-    HR: { border: "border-purple-400", bg: "bg-purple-700" },
-    IT: { border: "border-green-400", bg: "bg-green-700" },
-    Sales: { border: "border-orange-400", bg: "bg-orange-700" },
-    Marketing: { border: "border-pink-400", bg: "bg-pink-700" },
-    Operations: { border: "border-cyan-400", bg: "bg-cyan-700" },
-    CX: { border: "border-amber-400", bg: "bg-amber-700" },
-    Legal: { border: "border-indigo-400", bg: "bg-indigo-700" },
-    Product: { border: "border-teal-400", bg: "bg-teal-700" },
+  // Department colors for org chart - light borders only
+  const departmentColors: Record<string, string> = {
+    Finance: "border-blue-300",
+    HR: "border-purple-300",
+    IT: "border-green-300",
+    Sales: "border-orange-300",
+    Marketing: "border-pink-300",
+    Operations: "border-cyan-300",
+    CX: "border-amber-300",
+    Legal: "border-indigo-300",
+    Product: "border-teal-300",
   };
 
-  const getDepartmentStyle = (department: string | null) => {
-    if (!department) return { border: "border-gray-400", bg: "bg-slate-700" };
-    return departmentColors[department] || { border: "border-gray-400", bg: "bg-slate-700" };
+  const getDepartmentBorder = (department: string | null) => {
+    if (!department) return "border-gray-300";
+    return departmentColors[department] || "border-gray-300";
   };
-
-  const uniqueDepartments = Array.from(new Set(users?.filter(u => u.department).map(u => u.department) || []));
 
   // Org Chart Node component - Visual hierarchy chart
   const OrgChartNode = ({ user: nodeUser, isRoot = false }: { user: User; isRoot?: boolean }) => {
     const directReports = getDirectReports(nodeUser.id);
     const hasReports = directReports.length > 0;
-    const deptStyle = getDepartmentStyle(nodeUser.department);
+    const deptBorder = getDepartmentBorder(nodeUser.department);
 
     return (
       <div className="flex flex-col items-center">
         {/* Card with Avatar on top */}
-        <div className={`relative ${!isRoot ? 'pt-6' : ''}`}>
-          {/* Vertical line from parent to avatar */}
-          {!isRoot && (
-            <div className="absolute top-0 left-1/2 w-0.5 h-6 bg-blue-400 -translate-x-1/2" />
-          )}
+        <div className="flex flex-col items-center">
+          {/* Avatar Circle */}
+          <Avatar className="h-14 w-14 ring-2 ring-background shadow-md border-2 border-gray-200 mb-2">
+            {nodeUser.profilePicture && <AvatarImage src={nodeUser.profilePicture} alt={nodeUser.name} />}
+            <AvatarFallback className="bg-gradient-to-br from-blue-500 to-purple-600 text-white font-semibold text-sm">
+              {nodeUser.name.split(' ').map(n => n[0]).join('').slice(0, 2).toUpperCase()}
+            </AvatarFallback>
+          </Avatar>
 
-          <div className="flex flex-col items-center">
-            {/* Avatar Circle */}
-            <Avatar className="h-16 w-16 ring-4 ring-white shadow-lg border-2 border-blue-400 mb-2">
-              {nodeUser.profilePicture && <AvatarImage src={nodeUser.profilePicture} alt={nodeUser.name} />}
-              <AvatarFallback className="bg-gradient-to-br from-blue-500 to-blue-600 text-white font-semibold text-base">
-                {nodeUser.name.split(' ').map(n => n[0]).join('').slice(0, 2).toUpperCase()}
-              </AvatarFallback>
-            </Avatar>
-
-            {/* Info Card */}
-            <div className={cn(
-              "w-[160px] rounded-lg px-3 py-2.5 shadow-md text-center",
-              deptStyle.bg
-            )}>
-              <h3 className="font-semibold text-sm text-white leading-tight">{nodeUser.name}</h3>
-              <p className="text-xs text-white/90 mt-1">{nodeUser.role}</p>
-              {nodeUser.department && (
-                <p className="text-xs text-white/80 mt-0.5 truncate">
-                  {nodeUser.department}
-                </p>
-              )}
-            </div>
-          </div>
+          {/* Info Card */}
+          <Card className={cn(
+            "w-[160px] rounded-md px-3 py-2.5 text-center border-2 bg-white",
+            deptBorder
+          )}>
+            <h3 className="font-semibold text-sm leading-tight">{nodeUser.name}</h3>
+            <p className="text-xs text-muted-foreground mt-1">{nodeUser.role}</p>
+            {nodeUser.department && (
+              <p className="text-xs text-muted-foreground/80 mt-0.5 truncate">
+                {nodeUser.department}
+              </p>
+            )}
+          </Card>
         </div>
 
         {/* Children */}
         {hasReports && (
           <div className="flex flex-col items-center">
             {/* Vertical line down from card */}
-            <div className="w-0.5 h-8 bg-blue-400" />
+            <div className="w-px h-8 bg-border" />
 
-            {/* Horizontal connector line */}
-            {directReports.length > 1 && (
-              <div
-                className="h-0.5 bg-blue-400"
-                style={{
-                  width: `${(directReports.length - 1) * 176}px` // 160px card + 16px gap
-                }}
-              />
-            )}
+            {/* Children container with proper line positioning */}
+            <div className="relative">
+              {/* Horizontal connector line */}
+              {directReports.length > 1 && (
+                <div
+                  className="h-px bg-border absolute top-0"
+                  style={{
+                    left: '80px', // Half of 160px card width
+                    right: '80px',
+                    width: `${(directReports.length - 1) * 176}px` // 160px card + 16px gap
+                  }}
+                />
+              )}
 
-            {/* Children nodes with individual vertical connectors */}
-            <div className="flex gap-4">
-              {directReports.map((report) => (
-                <OrgChartNode key={report.id} user={report} />
-              ))}
+              {/* Children nodes */}
+              <div className="flex gap-4">
+                {directReports.map((report) => (
+                  <div key={report.id} className="flex flex-col items-center">
+                    {/* Vertical line from horizontal to child */}
+                    <div className="w-px h-8 bg-border" />
+                    <OrgChartNode user={report} />
+                  </div>
+                ))}
+              </div>
             </div>
           </div>
         )}
@@ -1798,26 +1798,7 @@ export default function UsersPage() {
         <div className="space-y-6">
           <div className="flex items-center justify-between">
             <h2 className="text-xl font-semibold">Organization Chart</h2>
-            <div className="flex items-center gap-4">
-              {/* Legend */}
-              {uniqueDepartments.length > 0 && (
-                <Card className="px-3 py-2">
-                  <div className="flex items-center gap-3">
-                    <span className="text-xs font-medium">Legend:</span>
-                    {uniqueDepartments.slice(0, 5).map((dept) => {
-                      const style = getDepartmentStyle(dept);
-                      return (
-                        <div key={dept} className="flex items-center gap-1.5">
-                          <div className={cn("w-3 h-3 rounded-sm border-l-4", style.border)} />
-                          <span className="text-xs text-muted-foreground">{dept}</span>
-                        </div>
-                      );
-                    })}
-                  </div>
-                </Card>
-              )}
-              <p className="text-sm text-muted-foreground">Scroll to view full chart</p>
-            </div>
+            <p className="text-sm text-muted-foreground">Scroll horizontally to view full chart</p>
           </div>
 
           {isLoading ? (
