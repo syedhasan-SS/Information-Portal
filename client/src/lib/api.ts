@@ -41,6 +41,15 @@ export async function getCategories(): Promise<(Category & { departmentType?: st
   return fetchAPI<(Category & { departmentType?: string })[]>("/api/categories");
 }
 
+export async function getCategoriesForTicketCreation(filters?: { departmentType?: string; issueType?: string }): Promise<(Category & { departmentType: string })[]> {
+  const params = new URLSearchParams();
+  if (filters?.departmentType) params.append('departmentType', filters.departmentType);
+  if (filters?.issueType) params.append('issueType', filters.issueType);
+
+  const url = `/api/categories/for-ticket-creation${params.toString() ? '?' + params.toString() : ''}`;
+  return fetchAPI<(Category & { departmentType: string })[]>(url);
+}
+
 export async function createCategory(category: Omit<Category, "id" | "createdAt">): Promise<Category> {
   return fetchAPI<Category>("/api/categories", {
     method: "POST",

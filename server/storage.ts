@@ -138,8 +138,10 @@ export class DatabaseStorage implements IStorage {
 
   // Categories
   async getCategories(): Promise<(Category & { departmentType?: string })[]> {
-    // Get all categories
+    // Get all categories from flat table
     const allCategories = await db.select().from(categories).orderBy(categories.path);
+
+    console.log(`[getCategories] Processing ${allCategories.length} flat categories`);
 
     // Get all L3 AND L4 categoryHierarchy items to map departmentType
     // Note: departmentType is stored at BOTH L3 and L4 levels in some configurations
@@ -634,6 +636,118 @@ export class DatabaseStorage implements IStorage {
       .where(eq(categoryHierarchy.id, id))
       .returning();
     return results[0];
+  }
+
+  // Get categories for ticket creation - builds complete paths from categoryHierarchy
+  async getCategoriesForTicketCreation(filters?: { departmentType?: string; issueType?: string }) {
+    // Get all L3 and L4 categories (these are the selectable endpoints)
+    const l3Categories = await db
+      .select()
+      .from(categoryHierarchy)
+      .where(and(
+        eq(categoryHierarchy.level, 3),
+        eq(categoryHierarchy.isActive, true),
+        sql`${categoryHierarchy.deletedAt} IS NULL`
+      ));
+
+    const l4Categories = await db
+      .select()
+      .from(categoryHierarchy)
+      .where(and(
+        eq(categoryHierarchy.level, 4),
+        eq(categoryHierarchy.isActive, true),
+        sql`${categoryHierarchy.deletedAt} IS NULL`
+      ));
+
+    // Get all parent categories to build paths
+    const allCategories = await db
+      .select()
+      .from(categoryHierarchy)
+      .where(sql`${categoryHierarchy.deletedAt} IS NULL`);
+
+    const categoryMap = new Map(allCategories.map(c => [c.id, c]));
+
+    // Build complete category objects
+    const buildCategoryObject = (leafCategory: CategoryHierarchy) => {
+      const path: CategoryHierarchy[] = [];
+      let current: CategoryHierarchy | undefined = leafCategory;
+
+      // Walk up the tree to build full path
+      while (current) {
+        path.unshift(current);
+        current = current.parentId ? categoryMap.get(current.parentId) : undefined;
+      }
+
+      // Extract L1, L2, L3, L4
+      const l1 = path[0]?.name || "";
+      const l2 = path[1]?.name || "";
+      const l3 = path[2]?.name || "";
+      const l4 = path[3]?.name || null;
+
+      // Get departmentType from the leaf (L3 or L4)
+      const departmentType = leafCategory.departmentType || "All";
+
+      return {
+        id: leafCategory.id,
+        issueType: null, // Will be filtered by issueType separately
+        l1,
+        l2,
+        l3,
+        l4,
+        path: path.map(p => p.name).join(" > "),
+        departmentType,
+        issuePriorityPoints: 10, // Default, can be configured
+        createdAt: leafCategory.createdAt
+      };
+    };
+
+    // Build from L4 categories (those with names - Seller Support case)
+    const l4Objects = l4Categories
+      .filter(l4 => l4.name && l4.name.trim() !== "")
+      .map(buildCategoryObject);
+
+    // Build from L3 categories (those without L4 or with empty L4 - Customer Support case)
+    const l3Objects = l3Categories
+      .filter(l3 => {
+        // Include L3 if it has a child L4 with departmentType but empty name
+        const childL4 = l4Categories.find(l4 => l4.parentId === l3.id);
+        if (childL4 && childL4.departmentType && childL4.departmentType !== "All") {
+          return true;
+        }
+        // Or if L3 itself has departmentType set
+        return l3.departmentType && l3.departmentType !== "All";
+      })
+      .map(l3 => {
+        // Check if L3 has a child L4 with departmentType
+        const childL4 = l4Categories.find(l4 => l4.parentId === l3.id);
+        const effectiveDepartmentType = childL4?.departmentType || l3.departmentType || "All";
+
+        const obj = buildCategoryObject(l3);
+        return {
+          ...obj,
+          id: childL4?.id || l3.id, // Use L4 ID if exists for consistency
+          departmentType: effectiveDepartmentType
+        };
+      });
+
+    let allCategoryObjects = [...l4Objects, ...l3Objects];
+
+    // Filter by departmentType if specified
+    if (filters?.departmentType) {
+      allCategoryObjects = allCategoryObjects.filter(cat =>
+        cat.departmentType === filters.departmentType || cat.departmentType === "All"
+      );
+    }
+
+    console.log(`[getCategoriesForTicketCreation] Built ${allCategoryObjects.length} categories`);
+    console.log(`[getCategoriesForTicketCreation] Breakdown:`, {
+      total: allCategoryObjects.length,
+      customerSupport: allCategoryObjects.filter(c => c.departmentType === "Customer Support").length,
+      sellerSupport: allCategoryObjects.filter(c => c.departmentType === "Seller Support").length,
+      all: allCategoryObjects.filter(c => c.departmentType === "All").length
+    });
+
+    return allCategoryObjects;
   }
 
   // Category Mappings

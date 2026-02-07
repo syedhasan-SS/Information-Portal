@@ -213,6 +213,22 @@ export async function registerRoutes(
     }
   });
 
+  // NEW: Categories for ticket creation from categoryHierarchy
+  app.get("/api/categories/for-ticket-creation", async (req, res) => {
+    try {
+      const departmentType = req.query.departmentType as string | undefined;
+      const issueType = req.query.issueType as string | undefined;
+
+      const categories = await storage.getCategoriesForTicketCreation({
+        departmentType,
+        issueType
+      });
+      res.json(categories);
+    } catch (error: any) {
+      res.status(500).json({ error: error.message });
+    }
+  });
+
   app.post("/api/categories", async (req, res) => {
     try {
       const parsed = insertCategorySchema.safeParse(req.body);

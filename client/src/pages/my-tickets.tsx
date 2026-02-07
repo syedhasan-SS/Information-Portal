@@ -99,6 +99,16 @@ async function getCategories(): Promise<Category[]> {
   return res.json();
 }
 
+async function getCategoriesForTicketCreation(filters?: { departmentType?: string }): Promise<(Category & { departmentType: string })[]> {
+  const params = new URLSearchParams();
+  if (filters?.departmentType) params.append('departmentType', filters.departmentType);
+
+  const url = `/api/categories/for-ticket-creation${params.toString() ? '?' + params.toString() : ''}`;
+  const res = await fetch(url);
+  if (!res.ok) throw new Error("Failed to fetch categories for ticket creation");
+  return res.json();
+}
+
 async function getVendors(): Promise<Vendor[]> {
   const res = await fetch("/api/vendors");
   if (!res.ok) throw new Error("Failed to fetch vendors");
@@ -181,9 +191,21 @@ export default function MyTicketsPage() {
     queryFn: getTickets,
   });
 
+  // Fetch categories from categoryHierarchy filtered by user's departmentType
+  const userDepartmentType = useMemo(() => {
+    if (!user) return undefined;
+    if (user.department === "CX" && user.subDepartment) {
+      return user.subDepartment; // "Customer Support" or "Seller Support"
+    }
+    return undefined;
+  }, [user]);
+
   const { data: categories } = useQuery({
-    queryKey: ["categories"],
-    queryFn: getCategories,
+    queryKey: ["categories-for-ticket", userDepartmentType],
+    queryFn: () => getCategoriesForTicketCreation({
+      departmentType: userDepartmentType
+    }),
+    enabled: !!user,
   });
 
   // Fetch unified ticket configs from the new category system
@@ -228,56 +250,27 @@ export default function MyTicketsPage() {
     return sortedVisibleFields.find((f: any) => f.fieldName === fieldName);
   };
 
-  // Use categories from categories table - these have the correct IDs for ticket creation
+  // Categories are already filtered by departmentType from the API
+  // Just need to filter by issueType from form selection
   const availableCategories = useMemo(() => {
     if (!categories || !user) return [];
 
-    console.log(`[Available Categories] Total categories: ${categories.length}, User: ${user.email}, Dept: ${user.department}, SubDept: ${user.subDepartment}`);
+    console.log(`[Available Categories] Total categories from API: ${categories.length}`);
+    console.log(`[Available Categories] User: ${user.email}, Dept: ${user.department}, SubDept: ${user.subDepartment}`);
 
-    // Log first 3 categories to see what departmentType values we have
     if (categories.length > 0) {
-      console.log('[Available Categories] Sample categories:', categories.slice(0, 3).map(cat => ({
-        l3: cat.l3,
-        departmentType: (cat as any).departmentType
-      })));
+      const breakdown = categories.reduce((acc, cat) => {
+        const type = (cat as any).departmentType || "Unknown";
+        acc[type] = (acc[type] || 0) + 1;
+        return acc;
+      }, {} as Record<string, number>);
+      console.log('[Available Categories] Breakdown by departmentType:', breakdown);
     }
 
-    const filtered = categories.filter((cat) => {
-      // Filter by issue type if selected
-      if (newTicket.issueType && cat.issueType !== newTicket.issueType) {
-        return false;
-      }
-
-      // Filter by user's sub-department for CX users
-      if (user.department === "CX" && user.subDepartment) {
-        const categoryDeptType = (cat as any).departmentType;
-
-        console.log(`[Dept Filter] Category: ${cat.l3}, departmentType: ${categoryDeptType}, User subDept: ${user.subDepartment}`);
-
-        // Seller Support agents see only Seller Support and All categories
-        if (user.subDepartment === "Seller Support") {
-          if (categoryDeptType !== "Seller Support" && categoryDeptType !== "All") {
-            console.log(`[Dept Filter] FILTERED OUT: ${cat.l3} (departmentType: ${categoryDeptType})`);
-            return false;
-          }
-        }
-
-        // Customer Support agents see only Customer Support and All categories
-        if (user.subDepartment === "Customer Support") {
-          if (categoryDeptType !== "Customer Support" && categoryDeptType !== "All") {
-            console.log(`[Dept Filter] FILTERED OUT: ${cat.l3} (departmentType: ${categoryDeptType})`);
-            return false;
-          }
-        }
-      }
-
-      return true;
-    });
-
-    console.log(`[Available Categories] After filtering: ${filtered.length} categories`);
-
-    return filtered;
-  }, [categories, newTicket.issueType, user]);
+    // Categories are already filtered by departmentType at API level
+    // No need for additional filtering here
+    return categories;
+  }, [categories, user]);
 
   const categoryMap = availableCategories.reduce((acc, cat) => {
     acc[cat.id] = cat;
