@@ -266,14 +266,12 @@ export default function MyTicketsPage() {
 
   const filteredCategories = useMemo(() => {
     const filtered = availableCategories.filter((cat) => {
-      // Filter by Department (L1)
+      // Filter by Department (L1) - optional cascading filter
       if (newTicket.department && cat.l1 !== newTicket.department) return false;
 
-      // Filter by Issue Type
-      if (newTicket.issueType && cat.issueType !== newTicket.issueType) return false;
-
-      // This filtering is already done in availableCategories above
-      // No need to duplicate the departmentType filtering here
+      // Note: issueType is a form field but NOT associated with categories in categoryHierarchy
+      // Categories are pre-filtered by departmentType at API level
+      // No issueType filtering needed here
 
       return true;
     });
@@ -284,7 +282,7 @@ export default function MyTicketsPage() {
     }
 
     return filtered;
-  }, [availableCategories, newTicket.department, newTicket.issueType, user]);
+  }, [availableCategories, newTicket.department]);
 
   // Fetch order IDs from BigQuery when vendor is selected
   useEffect(() => {
