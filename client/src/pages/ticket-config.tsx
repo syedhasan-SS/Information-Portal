@@ -53,6 +53,8 @@ import {
   RotateCcw,
   MoreVertical,
   Download,
+  Search,
+  X as ClearIcon,
 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { Alert, AlertDescription } from "@/components/ui/alert";
@@ -116,6 +118,7 @@ export default function TicketConfigPage() {
   const [requestTypeFilter, setRequestTypeFilter] = useState<"All" | "Complaint" | "Request" | "Information">("All");
   const [statusFilter, setStatusFilter] = useState<"All" | "Active" | "Inactive">("All");
   const [slaFilter, setSlaFilter] = useState<"All" | "With Response SLA" | "Resolution Only">("All");
+  const [categorySearchQuery, setCategorySearchQuery] = useState("");
 
   // Tag filter state
   const [tagStatusFilter, setTagStatusFilter] = useState<"All" | "Active" | "Inactive">("All");
@@ -185,9 +188,18 @@ export default function TicketConfigPage() {
                        (slaFilter === "With Response SLA" && config.slaResponseHours) ||
                        (slaFilter === "Resolution Only" && !config.slaResponseHours);
 
-      return deptMatch && requestTypeMatch && statusMatch && slaMatch;
+      // Search filter (searches across all text fields)
+      const searchMatch = categorySearchQuery.trim() === "" ||
+        config.issueType.toLowerCase().includes(categorySearchQuery.toLowerCase()) ||
+        config.l1.toLowerCase().includes(categorySearchQuery.toLowerCase()) ||
+        config.l2.toLowerCase().includes(categorySearchQuery.toLowerCase()) ||
+        config.l3.toLowerCase().includes(categorySearchQuery.toLowerCase()) ||
+        (config.l4 && config.l4.toLowerCase().includes(categorySearchQuery.toLowerCase())) ||
+        (config.description && config.description.toLowerCase().includes(categorySearchQuery.toLowerCase()));
+
+      return deptMatch && requestTypeMatch && statusMatch && slaMatch && searchMatch;
     });
-  }, [configs, departmentFilter, requestTypeFilter, statusFilter, slaFilter]);
+  }, [configs, departmentFilter, requestTypeFilter, statusFilter, slaFilter, categorySearchQuery]);
 
   // Fetch tags
   const { data: tags, isLoading: isLoadingTags } = useQuery({
@@ -1545,6 +1557,28 @@ export default function TicketConfigPage() {
                 </Button>
               </div>
             )}
+          </div>
+
+          {/* Search Bar */}
+          <div className="mb-4">
+            <div className="relative">
+              <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+              <Input
+                type="text"
+                placeholder="Search categories by name, department, or description..."
+                value={categorySearchQuery}
+                onChange={(e) => setCategorySearchQuery(e.target.value)}
+                className="pl-10 pr-10"
+              />
+              {categorySearchQuery && (
+                <button
+                  onClick={() => setCategorySearchQuery("")}
+                  className="absolute right-3 top-1/2 transform -translate-y-1/2 text-muted-foreground hover:text-foreground"
+                >
+                  <ClearIcon className="h-4 w-4" />
+                </button>
+              )}
+            </div>
           </div>
 
           {/* Category Filters */}
