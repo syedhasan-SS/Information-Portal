@@ -141,36 +141,62 @@ export class DatabaseStorage implements IStorage {
     // Get all categories
     const allCategories = await db.select().from(categories).orderBy(categories.path);
 
-    // Get all L3 categoryHierarchy items to map departmentType (since departmentType is stored at L3 level)
+    // Get all L3 AND L4 categoryHierarchy items to map departmentType
+    // Note: departmentType is stored at BOTH L3 and L4 levels in some configurations
     const l3Categories = await db
       .select()
       .from(categoryHierarchy)
       .where(eq(categoryHierarchy.level, 3));
 
-    console.log(`[getCategories] Found ${l3Categories.length} L3 categories in categoryHierarchy`);
-    console.log('[getCategories] Sample L3 categories:', l3Categories.slice(0, 5).map(c => ({
+    const l4Categories = await db
+      .select()
+      .from(categoryHierarchy)
+      .where(eq(categoryHierarchy.level, 4));
+
+    console.log(`[getCategories] Found ${l3Categories.length} L3 and ${l4Categories.length} L4 categories in categoryHierarchy`);
+    console.log('[getCategories] Sample L3 categories:', l3Categories.slice(0, 3).map(c => ({
+      name: c.name,
+      departmentType: c.departmentType
+    })));
+    console.log('[getCategories] Sample L4 categories:', l4Categories.slice(0, 3).map(c => ({
       name: c.name,
       departmentType: c.departmentType
     })));
 
-    // Create a map of L3 name to departmentType
-    const departmentTypeMap = new Map<string, string>();
+    // Create maps for both L3 and L4 names to departmentType
+    const l3TypeMap = new Map<string, string>();
     for (const l3Cat of l3Categories) {
-      departmentTypeMap.set(l3Cat.name, l3Cat.departmentType || "All");
+      if (l3Cat.departmentType && l3Cat.departmentType !== "All") {
+        l3TypeMap.set(l3Cat.name, l3Cat.departmentType);
+      }
     }
 
-    console.log('[getCategories] departmentTypeMap size:', departmentTypeMap.size);
-    console.log('[getCategories] Sample from map:', Array.from(departmentTypeMap.entries()).slice(0, 5));
-
-    // Enhance categories with departmentType from their L3 category
-    const enhancedCategories = allCategories.map(cat => {
-      const mappedType = departmentTypeMap.get(cat.l3);
-      if (!mappedType) {
-        console.log(`[getCategories] WARNING: No departmentType found for L3: "${cat.l3}"`);
+    const l4TypeMap = new Map<string, string>();
+    for (const l4Cat of l4Categories) {
+      if (l4Cat.departmentType && l4Cat.departmentType !== "All") {
+        l4TypeMap.set(l4Cat.name, l4Cat.departmentType);
       }
+    }
+
+    console.log('[getCategories] L3 map size:', l3TypeMap.size, 'L4 map size:', l4TypeMap.size);
+
+    // Enhance categories with departmentType
+    // Priority: L4 match > L3 match > "All"
+    const enhancedCategories = allCategories.map(cat => {
+      let departmentType = "All";
+
+      // Try L4 first (if category has L4)
+      if (cat.l4 && l4TypeMap.has(cat.l4)) {
+        departmentType = l4TypeMap.get(cat.l4)!;
+      }
+      // Fall back to L3
+      else if (l3TypeMap.has(cat.l3)) {
+        departmentType = l3TypeMap.get(cat.l3)!;
+      }
+
       return {
         ...cat,
-        departmentType: mappedType || "All"
+        departmentType
       };
     });
 
