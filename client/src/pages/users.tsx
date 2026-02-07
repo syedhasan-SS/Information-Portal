@@ -920,6 +920,27 @@ export default function UsersPage() {
                   <FileUp className="h-4 w-4 mr-2" />
                   Bulk Upload (CSV)
                 </DropdownMenuItem>
+                <DropdownMenuItem onClick={() => {
+                  // Export users to CSV with IDs
+                  if (!users) return;
+                  const csv = [
+                    "id,name,email,role,department,subDepartment,managerId,managerName",
+                    ...users.map(u => {
+                      const manager = users.find(m => m.id === u.managerId);
+                      return `${u.id},${u.name},${u.email},${u.role},"${u.department || ""}","${u.subDepartment || ""}",${u.managerId || ""},${manager?.name || ""}`;
+                    })
+                  ].join("\n");
+                  const blob = new Blob([csv], { type: 'text/csv' });
+                  const url = URL.createObjectURL(blob);
+                  const a = document.createElement('a');
+                  a.href = url;
+                  a.download = 'users_with_ids.csv';
+                  a.click();
+                  URL.revokeObjectURL(url);
+                }}>
+                  <Upload className="h-4 w-4 mr-2" />
+                  Download User List
+                </DropdownMenuItem>
               </DropdownMenuContent>
             </DropdownMenu>
           </div>
@@ -2731,15 +2752,24 @@ export default function UsersPage() {
               </p>
             </div>
 
-            <div className="bg-muted p-3 rounded-lg text-xs space-y-1">
+            <div className="bg-muted p-3 rounded-lg text-xs space-y-2">
               <p className="font-semibold">CSV Format Guidelines:</p>
               <ul className="list-disc list-inside space-y-0.5 ml-2">
                 <li>First row must contain column headers</li>
                 <li>Required: name, email, password, role</li>
                 <li>Optional: department, subDepartment, managerId</li>
-                <li>Use managerId for the user's ID that this user reports to</li>
                 <li>All fields should be comma-separated</li>
               </ul>
+              <div className="bg-blue-50 dark:bg-blue-950 border border-blue-200 dark:border-blue-800 p-2 rounded">
+                <p className="font-semibold text-blue-900 dark:text-blue-100 mb-1">💡 How to find Manager IDs:</p>
+                <ol className="list-decimal list-inside space-y-0.5 ml-2 text-blue-800 dark:text-blue-200">
+                  <li>Click "Download User List" in the dropdown above</li>
+                  <li>Open the downloaded CSV to see all user IDs</li>
+                  <li>Copy the ID of the manager you want to assign</li>
+                  <li>Paste it in the managerId column for new users</li>
+                  <li>Leave managerId empty if user has no manager</li>
+                </ol>
+              </div>
             </div>
           </div>
 
