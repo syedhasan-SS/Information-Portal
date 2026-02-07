@@ -266,29 +266,49 @@ export default function MyTicketsPage() {
     return acc;
   }, {} as Record<string, typeof availableCategories[0]>) || {};
 
-  const filteredCategories = availableCategories.filter((cat) => {
-    // Filter by Department (L1)
-    if (newTicket.department && cat.l1 !== newTicket.department) return false;
+  const filteredCategories = useMemo(() => {
+    const filtered = availableCategories.filter((cat) => {
+      // Filter by Department (L1)
+      if (newTicket.department && cat.l1 !== newTicket.department) return false;
 
-    // Filter by Issue Type
-    if (newTicket.issueType && cat.issueType !== newTicket.issueType) return false;
+      // Filter by Issue Type
+      if (newTicket.issueType && cat.issueType !== newTicket.issueType) return false;
 
-    // Filter by Sub-Department (L2) for CX users
-    // Map user's sub-department to the corresponding L2 category value
-    if (user?.department === "CX" && user.subDepartment && cat.l1 === "CX") {
-      // For Customer Support agents: only show categories under "Product Quality" L2
-      if (user.subDepartment === "Customer Support") {
-        if (cat.l2 !== "Product Quality") return false;
+      // Filter by Sub-Department (L2) for CX users
+      // Map user's sub-department to the corresponding L2 category value
+      if (user?.department === "CX" && user.subDepartment && cat.l1 === "CX") {
+        // Log for debugging
+        console.log(`[Category Filter] User sub-department: ${user.subDepartment}, Category L2: ${cat.l2}, Category: ${cat.l3}`);
+
+        // For Customer Support agents: only show categories under "Product Quality" L2
+        if (user.subDepartment === "Customer Support") {
+          // Check for various possible L2 values that indicate Customer Support categories
+          const isCustomerSupportL2 = cat.l2 === "Product Quality" ||
+                                       cat.l2 === "Customer Support" ||
+                                       cat.l2 === "Customer Experience" ||
+                                       cat.l2 === "CX";
+          if (!isCustomerSupportL2) return false;
+        }
+
+        // For Seller Support agents: only show categories under "Seller Support" L2
+        if (user.subDepartment === "Seller Support") {
+          const isSellerSupportL2 = cat.l2 === "Seller Support" ||
+                                    cat.l2 === "Vendor Support" ||
+                                    cat.l2 === "Seller Experience";
+          if (!isSellerSupportL2) return false;
+        }
       }
 
-      // For Seller Support agents: only show categories under "Seller Support" L2
-      if (user.subDepartment === "Seller Support") {
-        if (cat.l2 !== "Seller Support") return false;
-      }
+      return true;
+    });
+
+    console.log(`[Category Filter] Total available categories: ${availableCategories.length}, Filtered: ${filtered.length}`);
+    if (filtered.length > 0) {
+      console.log(`[Category Filter] Sample filtered categories:`, filtered.slice(0, 3).map(c => ({ l1: c.l1, l2: c.l2, l3: c.l3 })));
     }
 
-    return true;
-  });
+    return filtered;
+  }, [availableCategories, newTicket.department, newTicket.issueType, user]);
 
   // Fetch order IDs from BigQuery when vendor is selected
   useEffect(() => {
