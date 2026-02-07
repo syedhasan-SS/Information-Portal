@@ -159,11 +159,20 @@ export class DatabaseStorage implements IStorage {
       departmentTypeMap.set(l3Cat.name, l3Cat.departmentType || "All");
     }
 
+    console.log('[getCategories] departmentTypeMap size:', departmentTypeMap.size);
+    console.log('[getCategories] Sample from map:', Array.from(departmentTypeMap.entries()).slice(0, 5));
+
     // Enhance categories with departmentType from their L3 category
-    const enhancedCategories = allCategories.map(cat => ({
-      ...cat,
-      departmentType: departmentTypeMap.get(cat.l3) || "All"
-    }));
+    const enhancedCategories = allCategories.map(cat => {
+      const mappedType = departmentTypeMap.get(cat.l3);
+      if (!mappedType) {
+        console.log(`[getCategories] WARNING: No departmentType found for L3: "${cat.l3}"`);
+      }
+      return {
+        ...cat,
+        departmentType: mappedType || "All"
+      };
+    });
 
     console.log(`[getCategories] Returning ${enhancedCategories.length} categories with departmentType`);
     console.log('[getCategories] Sample enhanced categories:', enhancedCategories.slice(0, 5).map(c => ({
@@ -172,6 +181,13 @@ export class DatabaseStorage implements IStorage {
       l3: c.l3,
       departmentType: c.departmentType
     })));
+
+    // Count by departmentType
+    const typeCounts = enhancedCategories.reduce((acc, cat) => {
+      acc[cat.departmentType] = (acc[cat.departmentType] || 0) + 1;
+      return acc;
+    }, {} as Record<string, number>);
+    console.log('[getCategories] Categories by departmentType:', typeCounts);
 
     return enhancedCategories;
   }
