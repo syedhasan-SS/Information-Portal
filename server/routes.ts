@@ -2410,6 +2410,77 @@ export async function registerRoutes(
     }
   });
 
+  // Utility endpoint to migrate old ticket numbers
+  app.post("/api/admin/migrate-ticket-numbers", async (req, res) => {
+    try {
+      // Check permission
+      const permissionCheck = await checkPermission(req, "edit:config");
+      if (!permissionCheck.hasPermission) {
+        return res.status(403).json({ error: permissionCheck.error || "Forbidden" });
+      }
+
+      console.log("🔄 Starting ticket number migration...");
+
+      // Get all tickets with old ESC- format
+      const allTickets = await storage.getTickets();
+      const oldFormatTickets = allTickets.filter(t => t.ticketNumber.startsWith("ESC-"));
+
+      console.log(`📋 Found ${oldFormatTickets.length} tickets with old ESC- format`);
+
+      if (oldFormatTickets.length === 0) {
+        return res.json({ message: "No tickets to migrate", migrated: 0 });
+      }
+
+      // Sort by creation date to preserve order
+      oldFormatTickets.sort((a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime());
+
+      // Group tickets by type
+      const sellerSupportTickets = oldFormatTickets.filter(t => t.vendorHandle);
+      const customerSupportTickets = oldFormatTickets.filter(t => !t.vendorHandle);
+
+      // Get current highest numbers for SS and CS
+      const allTicketNumbers = allTickets.map(t => t.ticketNumber);
+      const ssNumbers = allTicketNumbers.filter(n => n.startsWith("SS")).map(n => parseInt(n.replace(/[^\d]/g, '')) || 0);
+      const csNumbers = allTicketNumbers.filter(n => n.startsWith("CS")).map(n => parseInt(n.replace(/[^\d]/g, '')) || 0);
+
+      let ssCounter = ssNumbers.length > 0 ? Math.max(...ssNumbers) : 0;
+      let csCounter = csNumbers.length > 0 ? Math.max(...csNumbers) : 0;
+
+      const migrations = [];
+
+      // Migrate Seller Support tickets
+      for (const ticket of sellerSupportTickets) {
+        ssCounter++;
+        const newTicketNumber = `SS${ssCounter.toString().padStart(5, '0')}`;
+        await storage.updateTicket(ticket.id, { ticketNumber: newTicketNumber });
+        migrations.push({ old: ticket.ticketNumber, new: newTicketNumber });
+        console.log(`   ✓ ${ticket.ticketNumber} → ${newTicketNumber}`);
+      }
+
+      // Migrate Customer Support tickets
+      for (const ticket of customerSupportTickets) {
+        csCounter++;
+        const newTicketNumber = `CS${csCounter.toString().padStart(5, '0')}`;
+        await storage.updateTicket(ticket.id, { ticketNumber: newTicketNumber });
+        migrations.push({ old: ticket.ticketNumber, new: newTicketNumber });
+        console.log(`   ✓ ${ticket.ticketNumber} → ${newTicketNumber}`);
+      }
+
+      console.log("✅ Migration complete!");
+
+      res.json({
+        message: "Ticket numbers migrated successfully",
+        migrated: migrations.length,
+        sellerSupport: sellerSupportTickets.length,
+        customerSupport: customerSupportTickets.length,
+        migrations
+      });
+    } catch (error: any) {
+      console.error("❌ Migration failed:", error);
+      res.status(500).json({ error: error.message });
+    }
+  });
+
   // Category Routing Rules - Auto-routing and assignment configuration
   app.get("/api/config/routing-rules", async (_req, res) => {
     try {
