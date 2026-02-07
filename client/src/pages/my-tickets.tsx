@@ -385,7 +385,8 @@ export default function MyTicketsPage() {
       else if (priorityScore >= 30) { priorityTier = "Medium"; priorityBadge = "P2"; }
       else { priorityTier = "Low"; priorityBadge = "P3"; }
 
-      const ticketNumber = `ESC-${Date.now().toString(36).toUpperCase()}`;
+      // Don't generate ticket number on client - let server handle it
+      // const ticketNumber = `ESC-${Date.now().toString(36).toUpperCase()}`;
 
       // Parse comma-separated Fleek Order IDs into array
       const fleekOrderIdsArray = ticketData.fleekOrderIds
@@ -408,10 +409,10 @@ export default function MyTicketsPage() {
           department: ticketData.department,
           issueType: ticketData.issueType,
           categoryId: ticketData.categoryId || undefined,
-          subject: ticketData.subject,
-          description: ticketData.description,
+          subject: ticketData.subject.trim(),
+          description: ticketData.description.trim(),
           fleekOrderIds: fleekOrderIdsArray.length > 0 ? fleekOrderIdsArray : null,
-          ticketNumber,
+          // ticketNumber removed - let server generate it
           status: "New",
           priorityScore,
           priorityTier,

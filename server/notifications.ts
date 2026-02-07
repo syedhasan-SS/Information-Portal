@@ -51,6 +51,12 @@ export async function notifyTicketAssigned(ticket: Ticket, assignee: User, actor
   try {
     if (!ticket.assigneeId) return;
 
+    // Only notify active users
+    if (!assignee.isActive) {
+      console.log(`[Notifications] Skipping notification - assignee ${assignee.name} is inactive`);
+      return;
+    }
+
     await storage.createNotification({
       userId: ticket.assigneeId,
       type: "ticket_assigned",
@@ -78,46 +84,52 @@ export async function notifyTicketAssigned(ticket: Ticket, assignee: User, actor
  */
 export async function notifyTicketSolved(ticket: Ticket, solver: User | undefined) {
   try {
-    // Notify the ticket creator
+    // Notify the ticket creator (only if active)
     if (ticket.createdById && ticket.createdById !== solver?.id) {
-      await storage.createNotification({
-        userId: ticket.createdById,
-        type: "ticket_solved",
-        title: "Ticket Solved",
-        message: `Your ticket has been solved: ${ticket.subject}`,
-        ticketId: ticket.id,
-        actorId: solver?.id,
-        metadata: {
-          ticketNumber: ticket.ticketNumber,
-          vendorHandle: ticket.vendorHandle,
-          solvedBy: solver?.name,
-        },
-        isRead: false,
-      });
+      const creator = await storage.getUserById(ticket.createdById);
+      if (creator?.isActive) {
+        await storage.createNotification({
+          userId: ticket.createdById,
+          type: "ticket_solved",
+          title: "Ticket Solved",
+          message: `Your ticket has been solved: ${ticket.subject}`,
+          ticketId: ticket.id,
+          actorId: solver?.id,
+          metadata: {
+            ticketNumber: ticket.ticketNumber,
+            vendorHandle: ticket.vendorHandle,
+            solvedBy: solver?.name,
+          },
+          isRead: false,
+        });
 
-      console.log(`[Notifications] Notified ticket creator about ticket resolution: ${ticket.ticketNumber}`);
+        console.log(`[Notifications] Notified ticket creator about ticket resolution: ${ticket.ticketNumber}`);
+      }
     }
 
-    // Also notify the assignee if different from creator and solver
+    // Also notify the assignee if different from creator and solver (only if active)
     if (
       ticket.assigneeId &&
       ticket.assigneeId !== ticket.createdById &&
       ticket.assigneeId !== solver?.id
     ) {
-      await storage.createNotification({
-        userId: ticket.assigneeId,
-        type: "ticket_solved",
-        title: "Assigned Ticket Solved",
-        message: `A ticket assigned to you has been solved: ${ticket.subject}`,
-        ticketId: ticket.id,
-        actorId: solver?.id,
-        metadata: {
-          ticketNumber: ticket.ticketNumber,
-          vendorHandle: ticket.vendorHandle,
-          solvedBy: solver?.name,
-        },
-        isRead: false,
-      });
+      const assignee = await storage.getUserById(ticket.assigneeId);
+      if (assignee?.isActive) {
+        await storage.createNotification({
+          userId: ticket.assigneeId,
+          type: "ticket_solved",
+          title: "Assigned Ticket Solved",
+          message: `A ticket assigned to you has been solved: ${ticket.subject}`,
+          ticketId: ticket.id,
+          actorId: solver?.id,
+          metadata: {
+            ticketNumber: ticket.ticketNumber,
+            vendorHandle: ticket.vendorHandle,
+            solvedBy: solver?.name,
+          },
+          isRead: false,
+        });
+      }
     }
   } catch (error) {
     console.error("[Notifications] Failed to create ticket solved notifications:", error);
@@ -135,14 +147,20 @@ export async function notifyCommentAdded(
   try {
     const usersToNotify = new Set<string>();
 
-    // Notify ticket creator
+    // Notify ticket creator (only if active)
     if (ticket.createdById && ticket.createdById !== commenter?.id) {
-      usersToNotify.add(ticket.createdById);
+      const creator = await storage.getUserById(ticket.createdById);
+      if (creator?.isActive) {
+        usersToNotify.add(ticket.createdById);
+      }
     }
 
-    // Notify ticket assignee
+    // Notify ticket assignee (only if active)
     if (ticket.assigneeId && ticket.assigneeId !== commenter?.id) {
-      usersToNotify.add(ticket.assigneeId);
+      const assignee = await storage.getUserById(ticket.assigneeId);
+      if (assignee?.isActive) {
+        usersToNotify.add(ticket.assigneeId);
+      }
     }
 
     // Create notifications

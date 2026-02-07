@@ -5,6 +5,7 @@ import {
   insertVendorSchema,
   insertCategorySchema,
   insertTicketSchema,
+  updateTicketSchema,
   insertCommentSchema,
   insertUserSchema,
   insertNotificationSchema,
@@ -309,12 +310,19 @@ export async function registerRoutes(
 
             if (departmentAgents.length > 0) {
               if (routingRule.assignmentStrategy === 'round_robin') {
-                // Simple round-robin: pick first available agent
-                // TODO: Implement persistent counter for true round-robin
-                const selectedAgent = departmentAgents[0];
+                // True round-robin: use persistent counter
+                const counter = routingRule.roundRobinCounter || 0;
+                const agentIndex = counter % departmentAgents.length;
+                const selectedAgent = departmentAgents[agentIndex];
+
+                // Update counter for next assignment
+                await storage.updateCategoryRoutingRule(routingRule.id, {
+                  roundRobinCounter: counter + 1
+                });
+
                 parsed.data.assigneeId = selectedAgent.id;
                 parsed.data.status = 'Open';
-                console.log('🔄 Round-robin assigned to:', selectedAgent.name);
+                console.log('🔄 Round-robin assigned to:', selectedAgent.name, `(${agentIndex + 1}/${departmentAgents.length})`);
               } else {
                 // Least loaded: find agent with fewest open tickets
                 const allTickets = await storage.getTickets();
@@ -392,24 +400,33 @@ export async function registerRoutes(
         return res.status(404).json({ error: "Ticket not found" });
       }
 
+      // Validate input using update schema
+      const parsed = updateTicketSchema.safeParse(req.body);
+      if (!parsed.success) {
+        return res.status(400).json({
+          error: "Invalid ticket update data",
+          details: parsed.error.issues
+        });
+      }
+
       // Check if category changed and apply routing rules
-      if (req.body.categoryId && req.body.categoryId !== oldTicket.categoryId) {
-        console.log('🔍 Category changed, checking routing rules for:', req.body.categoryId);
-        const routingRule = await storage.getCategoryRoutingRuleByCategoryId(req.body.categoryId);
+      if (parsed.data.categoryId && parsed.data.categoryId !== oldTicket.categoryId) {
+        console.log('🔍 Category changed, checking routing rules for:', parsed.data.categoryId);
+        const routingRule = await storage.getCategoryRoutingRuleByCategoryId(parsed.data.categoryId);
 
         if (routingRule && routingRule.isActive) {
           console.log('✅ Found routing rule for new category');
 
           // Apply department routing
           if (routingRule.targetDepartment) {
-            req.body.department = routingRule.targetDepartment;
-            req.body.ownerTeam = routingRule.targetDepartment;
+            parsed.data.department = routingRule.targetDepartment;
+            parsed.data.ownerTeam = routingRule.targetDepartment;
             console.log('📍 Auto-routed to department:', routingRule.targetDepartment);
           }
 
           // Apply priority boost if configured
-          if (routingRule.priorityBoost && req.body.priorityScore) {
-            req.body.priorityScore += routingRule.priorityBoost;
+          if (routingRule.priorityBoost && parsed.data.priorityScore) {
+            parsed.data.priorityScore += routingRule.priorityBoost;
             console.log('⬆️ Priority boost applied:', routingRule.priorityBoost);
           }
         } else {
@@ -417,7 +434,7 @@ export async function registerRoutes(
         }
       }
 
-      const ticket = await storage.updateTicket(req.params.id, req.body);
+      const ticket = await storage.updateTicket(req.params.id, parsed.data);
       if (!ticket) {
         return res.status(404).json({ error: "Ticket not found" });
       }

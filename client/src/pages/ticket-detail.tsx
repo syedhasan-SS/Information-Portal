@@ -5,6 +5,7 @@ import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Textarea } from "@/components/ui/textarea";
+import { Input } from "@/components/ui/input";
 import { useAuth } from "@/hooks/use-auth";
 import {
   Select,
@@ -36,6 +37,8 @@ import {
   Send,
   ExternalLink,
   Save,
+  Plus,
+  X,
 } from "lucide-react";
 import type { Ticket, Comment, Category, User as UserType } from "@shared/schema";
 
@@ -209,6 +212,11 @@ export default function TicketDetailPage() {
       queryClient.invalidateQueries({ queryKey: ["tickets"] });
       setPendingChanges({});
       setShowConfirmDialog(false);
+    },
+    onError: (error: Error) => {
+      console.error("Failed to update ticket:", error);
+      alert("Failed to save changes: " + error.message);
+      // Don't clear pending changes on error so user can retry
     },
   });
 

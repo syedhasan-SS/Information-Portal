@@ -240,6 +240,14 @@ export const insertTicketSchema = createInsertSchema(tickets).omit({
   snapshotCapturedAt: true,
 });
 
+// Schema for ticket updates (PATCH) - all fields optional except those that should never be updated
+export const updateTicketSchema = insertTicketSchema.partial().omit({
+  ticketNumber: true, // Never allow changing ticket number
+  createdById: true, // Never allow changing creator
+  snapshotVersion: true, // Server-managed
+  snapshotCapturedAt: true, // Server-managed
+});
+
 export const insertCommentSchema = createInsertSchema(comments).omit({
   id: true,
   createdAt: true,
@@ -259,6 +267,7 @@ export const insertNotificationSchema = createInsertSchema(notifications).omit({
 export type InsertVendor = z.infer<typeof insertVendorSchema>;
 export type InsertCategory = z.infer<typeof insertCategorySchema>;
 export type InsertTicket = z.infer<typeof insertTicketSchema>;
+export type UpdateTicket = z.infer<typeof updateTicketSchema>;
 export type InsertComment = z.infer<typeof insertCommentSchema>;
 export type InsertUser = z.infer<typeof insertUserSchema>;
 export type InsertNotification = z.infer<typeof insertNotificationSchema>;
@@ -612,6 +621,9 @@ export const categoryRoutingRules = pgTable("category_routing_rules", {
   autoAssignEnabled: boolean("auto_assign_enabled").notNull().default(false),
   assignmentStrategy: text("assignment_strategy").$type<"round_robin" | "least_loaded" | "specific_agent">().default("round_robin"),
 
+  // Round-robin counter (tracks last assigned agent index)
+  roundRobinCounter: integer("round_robin_counter").default(0),
+
   // Specific agent assignment (for specific_agent strategy)
   assignedAgentId: varchar("assigned_agent_id").references(() => users.id, { onDelete: "set null" }),
 
@@ -633,6 +645,8 @@ export const categoryRoutingRules = pgTable("category_routing_rules", {
 }, (table) => ({
   categoryIdIdx: index("routing_category_id_idx").on(table.categoryId),
   targetDepartmentIdx: index("routing_target_department_idx").on(table.targetDepartment),
+  // Unique constraint: only one active rule per category
+  uniqueActiveCategoryRule: unique("unique_active_category_rule").on(table.categoryId).where(sql`${table.isActive} = true`),
 }));
 
 export const insertCategoryRoutingRuleSchema = createInsertSchema(categoryRoutingRules).omit({
