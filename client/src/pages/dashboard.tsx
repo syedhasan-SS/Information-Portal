@@ -83,13 +83,16 @@ export default function DashboardPage() {
           // CX users without sub-department - deny access
           return false;
         }
-        // Seller Support agents see only Seller Support tickets (tickets with vendorHandle)
+        // Filter based on category departmentType
+        const categoryDepartmentType = ticket.categorySnapshot?.departmentType;
+
+        // Seller Support agents see only Seller Support tickets (based on category)
         if (user.subDepartment === "Seller Support") {
-          return !!(ticket as any).vendorHandle;
+          return categoryDepartmentType === "Seller Support" || categoryDepartmentType === "All";
         }
-        // Customer Support agents see only Customer Support tickets (tickets without vendorHandle)
+        // Customer Support agents see only Customer Support tickets (based on category)
         if (user.subDepartment === "Customer Support") {
-          return !(ticket as any).vendorHandle;
+          return categoryDepartmentType === "Customer Support" || categoryDepartmentType === "All";
         }
         // Other CX sub-departments: deny access
         return false;
@@ -106,13 +109,16 @@ export default function DashboardPage() {
           // CX users without sub-department - deny access
           return false;
         }
-        // Seller Support agents see only Seller Support tickets (tickets with vendorHandle)
+        // Filter based on category departmentType
+        const categoryDepartmentType = ticket.categorySnapshot?.departmentType;
+
+        // Seller Support agents see only Seller Support tickets (based on category)
         if (user.subDepartment === "Seller Support") {
-          return !!(ticket as any).vendorHandle;
+          return categoryDepartmentType === "Seller Support" || categoryDepartmentType === "All";
         }
-        // Customer Support agents see only Customer Support tickets (tickets without vendorHandle)
+        // Customer Support agents see only Customer Support tickets (based on category)
         if (user.subDepartment === "Customer Support") {
-          return !(ticket as any).vendorHandle;
+          return categoryDepartmentType === "Customer Support" || categoryDepartmentType === "All";
         }
         // Other CX sub-departments: deny access
         return false;
@@ -130,13 +136,16 @@ export default function DashboardPage() {
           // CX users without sub-department - only see assigned tickets
           return isAssigned;
         }
-        // Seller Support agents see assigned tickets OR Seller Support tickets (with vendorHandle)
+        // Filter based on category departmentType
+        const categoryDepartmentType = ticket.categorySnapshot?.departmentType;
+
+        // Seller Support agents see assigned tickets OR Seller Support tickets (based on category)
         if (user.subDepartment === "Seller Support") {
-          return isAssigned || !!(ticket as any).vendorHandle;
+          return isAssigned || categoryDepartmentType === "Seller Support" || categoryDepartmentType === "All";
         }
-        // Customer Support agents see assigned tickets OR Customer Support tickets (without vendorHandle)
+        // Customer Support agents see assigned tickets OR Customer Support tickets (based on category)
         if (user.subDepartment === "Customer Support") {
-          return isAssigned || !(ticket as any).vendorHandle;
+          return isAssigned || categoryDepartmentType === "Customer Support" || categoryDepartmentType === "All";
         }
         // Other CX sub-departments: only assigned tickets
         return isAssigned;

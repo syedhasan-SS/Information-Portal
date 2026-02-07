@@ -154,16 +154,17 @@ export default function AllTicketsPage() {
           return false;
         }
 
-        // Seller Support agents see ONLY Seller Support tickets
-        // Seller Support tickets are identified by having a vendorHandle field populated
+        // Filter based on category departmentType
+        const categoryDepartmentType = ticket.categorySnapshot?.departmentType;
+
+        // Seller Support agents see ONLY Seller Support tickets (based on category)
         if (user.subDepartment === "Seller Support") {
-          return !!(ticket as any).vendorHandle; // Only tickets with vendor handle
+          return categoryDepartmentType === "Seller Support" || categoryDepartmentType === "All";
         }
 
-        // Customer Support agents see ONLY Customer Support tickets
-        // Customer Support tickets are identified by having NO vendorHandle
+        // Customer Support agents see ONLY Customer Support tickets (based on category)
         if (user.subDepartment === "Customer Support") {
-          return !(ticket as any).vendorHandle; // Only tickets WITHOUT vendor handle
+          return categoryDepartmentType === "Customer Support" || categoryDepartmentType === "All";
         }
 
         // Any other CX sub-department: deny access (should not happen)

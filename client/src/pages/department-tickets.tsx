@@ -82,13 +82,16 @@ export default function DepartmentTicketsPage() {
         console.warn(`CX user ${user.email} has no sub-department set - denying ticket access`);
         return false;
       }
-      // Seller Support agents see only Seller Support tickets (tickets with vendorHandle)
+      // Filter based on category departmentType
+      const categoryDepartmentType = (ticket as any).categorySnapshot?.departmentType;
+
+      // Seller Support agents see only Seller Support tickets (based on category)
       if (user.subDepartment === "Seller Support") {
-        return !!(ticket as any).vendorHandle;
+        return categoryDepartmentType === "Seller Support" || categoryDepartmentType === "All";
       }
-      // Customer Support agents see only Customer Support tickets (tickets without vendorHandle)
+      // Customer Support agents see only Customer Support tickets (based on category)
       if (user.subDepartment === "Customer Support") {
-        return !(ticket as any).vendorHandle;
+        return categoryDepartmentType === "Customer Support" || categoryDepartmentType === "All";
       }
       // Any other CX sub-department: deny access
       return false;
