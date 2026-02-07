@@ -812,10 +812,31 @@ export default function UsersPage() {
     Agent: "bg-slate-500/10 text-slate-600 border-slate-500/20",
   };
 
+  // Department colors for org chart borders
+  const departmentColors: Record<string, { border: string; bg: string }> = {
+    Finance: { border: "border-blue-400", bg: "bg-blue-50" },
+    HR: { border: "border-purple-400", bg: "bg-purple-50" },
+    IT: { border: "border-green-400", bg: "bg-green-50" },
+    Sales: { border: "border-orange-400", bg: "bg-orange-50" },
+    Marketing: { border: "border-pink-400", bg: "bg-pink-50" },
+    Operations: { border: "border-cyan-400", bg: "bg-cyan-50" },
+    CX: { border: "border-amber-400", bg: "bg-amber-50" },
+    Legal: { border: "border-indigo-400", bg: "bg-indigo-50" },
+    Product: { border: "border-teal-400", bg: "bg-teal-50" },
+  };
+
+  const getDepartmentStyle = (department: string | null) => {
+    if (!department) return { border: "border-gray-300", bg: "bg-white" };
+    return departmentColors[department] || { border: "border-gray-300", bg: "bg-white" };
+  };
+
+  const uniqueDepartments = Array.from(new Set(users?.filter(u => u.department).map(u => u.department) || []));
+
   // Org Chart Node component - Visual hierarchy chart
   const OrgChartNode = ({ user: nodeUser, isRoot = false }: { user: User; isRoot?: boolean }) => {
     const directReports = getDirectReports(nodeUser.id);
     const hasReports = directReports.length > 0;
+    const deptStyle = getDepartmentStyle(nodeUser.department);
 
     return (
       <div className="flex flex-col items-center">
@@ -823,43 +844,35 @@ export default function UsersPage() {
         <div className={`relative ${!isRoot ? 'pt-6' : ''}`}>
           {/* Vertical line from parent */}
           {!isRoot && (
-            <div className="absolute top-0 left-1/2 w-px h-6 bg-border -translate-x-1/2" />
+            <div className="absolute top-0 left-1/2 w-px h-6 bg-gray-300 -translate-x-1/2" />
           )}
 
-          <Card className="w-[160px] p-3 hover:shadow-lg transition-all hover:border-primary/50 bg-card">
-            <div className="flex flex-col items-center text-center">
-              <Avatar className="h-10 w-10 mb-1.5 ring-2 ring-background shadow-md">
+          <Card className={cn(
+            "w-[200px] p-4 hover:shadow-lg transition-all border-2",
+            deptStyle.border,
+            deptStyle.bg
+          )}>
+            <div className="flex items-start gap-3">
+              <Avatar className="h-12 w-12 ring-2 ring-white shadow-md flex-shrink-0">
                 {nodeUser.profilePicture && <AvatarImage src={nodeUser.profilePicture} alt={nodeUser.name} />}
                 <AvatarFallback className="bg-gradient-to-br from-blue-500 to-purple-600 text-white font-semibold text-sm">
                   {nodeUser.name.split(' ').map(n => n[0]).join('').slice(0, 2).toUpperCase()}
                 </AvatarFallback>
               </Avatar>
-              <h3 className="font-semibold text-xs leading-tight">{nodeUser.name}</h3>
-              <Badge
-                variant="outline"
-                className={cn(
-                  "mt-0.5 text-[10px] px-1.5 py-0",
-                  roleColors[nodeUser.role]
+              <div className="flex-1 min-w-0">
+                <h3 className="font-semibold text-sm leading-tight text-gray-900">{nodeUser.name}</h3>
+                <p className="text-xs text-gray-600 mt-0.5">{nodeUser.role}</p>
+                {nodeUser.department && (
+                  <p className="text-xs text-gray-500 mt-0.5 truncate">
+                    {nodeUser.department}
+                  </p>
                 )}
-              >
-                {nodeUser.role}
-              </Badge>
-              {nodeUser.department && (
-                <p className="text-[10px] text-muted-foreground mt-0.5 truncate w-full">
-                  {nodeUser.department}
-                </p>
-              )}
-              {!nodeUser.isActive && (
-                <Badge variant="secondary" className="mt-0.5 text-[10px] px-1.5 py-0">
-                  Inactive
-                </Badge>
-              )}
-              {hasReports && (
-                <p className="text-[10px] text-muted-foreground mt-1 flex items-center gap-0.5">
-                  <Users className="h-2.5 w-2.5" />
-                  {directReports.length}
-                </p>
-              )}
+                {!nodeUser.isActive && (
+                  <Badge variant="secondary" className="mt-1 text-[10px] px-1.5 py-0">
+                    Inactive
+                  </Badge>
+                )}
+              </div>
             </div>
           </Card>
         </div>
@@ -868,14 +881,14 @@ export default function UsersPage() {
         {hasReports && (
           <div className="flex flex-col items-center">
             {/* Vertical line to children */}
-            <div className="w-px h-6 bg-border" />
+            <div className="w-px h-6 bg-gray-300" />
 
             {/* Horizontal connector line */}
             {directReports.length > 1 && (
               <div
-                className="h-px bg-border"
+                className="h-px bg-gray-300"
                 style={{
-                  width: `${(directReports.length - 1) * 176}px` // 160px card + 16px gap
+                  width: `${(directReports.length - 1) * 216}px` // 200px card + 16px gap
                 }}
               />
             )}
@@ -885,7 +898,7 @@ export default function UsersPage() {
               {directReports.map((report, index) => (
                 <div key={report.id} className="flex flex-col items-center">
                   {/* Vertical line from horizontal connector to card */}
-                  <div className="w-px h-6 bg-border" />
+                  <div className="w-px h-6 bg-gray-300" />
                   <OrgChartNode user={report} />
                 </div>
               ))}
@@ -1794,7 +1807,22 @@ export default function UsersPage() {
         <div className="space-y-6">
           <div className="flex items-center justify-between">
             <h2 className="text-xl font-semibold">Organization Chart</h2>
-            <p className="text-sm text-muted-foreground">Scroll horizontally to view full chart</p>
+            <div className="flex items-center gap-4">
+              {/* Legend */}
+              <div className="flex items-center gap-3 px-4 py-2 bg-white rounded-lg border shadow-sm">
+                <span className="text-sm font-medium text-gray-700">Legend:</span>
+                {uniqueDepartments.slice(0, 6).map((dept) => {
+                  const style = getDepartmentStyle(dept);
+                  return (
+                    <div key={dept} className="flex items-center gap-1.5">
+                      <div className={cn("w-4 h-4 rounded border-2", style.border, style.bg)} />
+                      <span className="text-xs text-gray-600">{dept}</span>
+                    </div>
+                  );
+                })}
+              </div>
+              <p className="text-sm text-muted-foreground">Scroll to view full chart</p>
+            </div>
           </div>
 
           {isLoading ? (
