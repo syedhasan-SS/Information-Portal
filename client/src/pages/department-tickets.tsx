@@ -75,8 +75,13 @@ export default function DepartmentTicketsPage() {
   const tickets = allTickets?.filter((ticket) => {
     if (!user) return false;
 
-    // For CX department with sub-departments - strict filtering
-    if (user.department === "CX" && user.subDepartment) {
+    // For CX department - MUST have sub-department specified
+    if (user.department === "CX") {
+      if (!user.subDepartment) {
+        // CX users without sub-department - deny all access
+        console.warn(`CX user ${user.email} has no sub-department set - denying ticket access`);
+        return false;
+      }
       if (user.subDepartment === "Seller Support") {
         return ticket.department === "Seller Support" ||
                (ticket.department === "CX" && (ticket as any).subDepartment === "Seller Support");

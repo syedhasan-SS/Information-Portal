@@ -77,8 +77,12 @@ export default function DashboardPage() {
 
     // Department-based access: Heads/Managers/Leads see only their department tickets
     if (hasPermission("view:department_tickets") && user.department) {
-      // For CX department with sub-departments
-      if (user.department === "CX" && user.subDepartment) {
+      // For CX department - MUST have sub-department specified
+      if (user.department === "CX") {
+        if (!user.subDepartment) {
+          // CX users without sub-department - deny access
+          return false;
+        }
         // Seller Support agents see only Seller Support tickets
         if (user.subDepartment === "Seller Support") {
           return ticket.department === "Seller Support" ||
@@ -89,6 +93,9 @@ export default function DashboardPage() {
           return ticket.department === "Customer Support" ||
                  (ticket.department === "CX" && ticket.subDepartment === "Customer Support");
         }
+        // Other CX sub-departments
+        return ticket.department === user.subDepartment ||
+               (ticket.department === "CX" && ticket.subDepartment === user.subDepartment);
       }
       // All other departments: see only their department tickets
       return ticket.department === user.department;
@@ -96,8 +103,12 @@ export default function DashboardPage() {
 
     // Team-based access: Leads see only their department/team tickets
     if (hasPermission("view:team_tickets") && user.department) {
-      // Same sub-department filtering for CX teams
-      if (user.department === "CX" && user.subDepartment) {
+      // For CX department - MUST have sub-department specified
+      if (user.department === "CX") {
+        if (!user.subDepartment) {
+          // CX users without sub-department - deny access
+          return false;
+        }
         if (user.subDepartment === "Seller Support") {
           return ticket.department === "Seller Support" ||
                  (ticket.department === "CX" && ticket.subDepartment === "Seller Support");
@@ -106,6 +117,9 @@ export default function DashboardPage() {
           return ticket.department === "Customer Support" ||
                  (ticket.department === "CX" && ticket.subDepartment === "Customer Support");
         }
+        // Other CX sub-departments
+        return ticket.department === user.subDepartment ||
+               (ticket.department === "CX" && ticket.subDepartment === user.subDepartment);
       }
       return ticket.department === user.department;
     }
@@ -114,8 +128,12 @@ export default function DashboardPage() {
     if (["Agent", "Associate"].includes(user.role)) {
       const isAssigned = ticket.assigneeId === user.id;
 
-      // For CX agents with sub-departments
-      if (user.department === "CX" && user.subDepartment) {
+      // For CX agents - MUST have sub-department specified
+      if (user.department === "CX") {
+        if (!user.subDepartment) {
+          // CX users without sub-department - only see assigned tickets
+          return isAssigned;
+        }
         if (user.subDepartment === "Seller Support") {
           return isAssigned || ticket.department === "Seller Support" ||
                  (ticket.department === "CX" && ticket.subDepartment === "Seller Support");
@@ -124,6 +142,9 @@ export default function DashboardPage() {
           return isAssigned || ticket.department === "Customer Support" ||
                  (ticket.department === "CX" && ticket.subDepartment === "Customer Support");
         }
+        // Other CX sub-departments
+        return isAssigned || ticket.department === user.subDepartment ||
+               (ticket.department === "CX" && ticket.subDepartment === user.subDepartment);
       }
 
       // All other agents: see assigned or their department tickets
