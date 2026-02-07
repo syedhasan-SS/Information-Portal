@@ -68,7 +68,7 @@ export default function LoginPage() {
         <div className="flex flex-col items-center space-y-4 text-center">
           <img
             src="/fleek-logo.png"
-            alt="Fleek Logo"
+            alt="Flow Logo"
             className="h-20 w-20 rounded-2xl object-cover"
           />
           <div>
@@ -76,7 +76,7 @@ export default function LoginPage() {
               FLOW
             </h1>
             <p className="mt-1 text-sm text-muted-foreground">
-              Fleek Complaint Management Portal
+              Information Management Portal
             </p>
           </div>
         </div>
@@ -96,7 +96,7 @@ export default function LoginPage() {
               <Input
                 id="email"
                 type="email"
-                placeholder="you@joinfleek.com"
+                placeholder="you@flow.com"
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
                 required

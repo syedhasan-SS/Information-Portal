@@ -178,14 +178,14 @@ export default function DashboardPage() {
             <div className="flex items-center gap-3">
               <img
                 src="/fleek-logo.png"
-                alt="Fleek Logo"
+                alt="Flow Logo"
                 className="h-10 w-10 rounded-full object-cover"
               />
               <div>
                 <h1 className="font-serif text-xl font-bold tracking-tight text-black">
                   FLOW
                 </h1>
-                <p className="text-xs text-muted-foreground">Fleek Complaint Management Portal</p>
+                <p className="text-xs text-muted-foreground">Information Management Portal</p>
               </div>
             </div>
 

@@ -1093,7 +1093,7 @@ export default function UsersPage() {
                   <Input
                     id="email"
                     type="email"
-                    placeholder="john@joinfleek.com"
+                    placeholder="john@flow.com"
                     value={formData.email}
                     onChange={(e) => setFormData({ ...formData, email: e.target.value })}
                     data-testid="input-email"
@@ -1866,7 +1866,7 @@ export default function UsersPage() {
               <Input
                 id="edit-email"
                 type="email"
-                placeholder="john@joinfleek.com"
+                placeholder="john@flow.com"
                 value={editFormData.email}
                 onChange={(e) => setEditFormData({ ...editFormData, email: e.target.value })}
               />
