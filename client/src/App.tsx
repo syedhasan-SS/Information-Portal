@@ -22,6 +22,7 @@ import DepartmentTicketsPage from "@/pages/department-tickets";
 import NotificationsPage from "@/pages/notifications";
 import OrgHierarchyPage from "@/pages/org-hierarchy";
 import RolesPage from "@/pages/roles";
+import AdminToolsPage from "@/pages/admin-tools";
 
 function Router() {
   return (
@@ -100,6 +101,11 @@ function Router() {
       <Route path="/roles">
         <ProtectedRoute requiredPermission="view:roles">
           <RolesPage />
+        </ProtectedRoute>
+      </Route>
+      <Route path="/admin-tools">
+        <ProtectedRoute requiredPermission="edit:config">
+          <AdminToolsPage />
         </ProtectedRoute>
       </Route>
       {/* Fallback to 404 */}

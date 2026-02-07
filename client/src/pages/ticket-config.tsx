@@ -1221,6 +1221,14 @@ export default function TicketConfigPage() {
               </div>
               <div className="ml-8 flex gap-2">
                 <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setLocation("/admin-tools")}
+                >
+                  <Settings className="h-4 w-4 mr-2" />
+                  Admin Tools
+                </Button>
+                <Button
                   variant={departmentFilter === "All" ? "default" : "outline"}
                   size="sm"
                   onClick={() => setDepartmentFilter("All")}
