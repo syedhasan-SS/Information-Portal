@@ -147,6 +147,12 @@ export class DatabaseStorage implements IStorage {
       .from(categoryHierarchy)
       .where(eq(categoryHierarchy.level, 1));
 
+    console.log(`[getCategories] Found ${l1Categories.length} L1 categories in categoryHierarchy`);
+    console.log('[getCategories] L1 categories:', l1Categories.map(c => ({
+      name: c.name,
+      departmentType: c.departmentType
+    })));
+
     // Create a map of L1 name to departmentType
     const departmentTypeMap = new Map<string, string>();
     for (const l1Cat of l1Categories) {
@@ -154,10 +160,19 @@ export class DatabaseStorage implements IStorage {
     }
 
     // Enhance categories with departmentType from their L1 category
-    return allCategories.map(cat => ({
+    const enhancedCategories = allCategories.map(cat => ({
       ...cat,
       departmentType: departmentTypeMap.get(cat.l1) || "All"
     }));
+
+    console.log(`[getCategories] Returning ${enhancedCategories.length} categories with departmentType`);
+    console.log('[getCategories] Sample categories:', enhancedCategories.slice(0, 3).map(c => ({
+      l1: c.l1,
+      l3: c.l3,
+      departmentType: c.departmentType
+    })));
+
+    return enhancedCategories;
   }
 
   async getCategoryById(id: string): Promise<Category | undefined> {

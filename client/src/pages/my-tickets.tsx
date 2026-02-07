@@ -232,7 +232,17 @@ export default function MyTicketsPage() {
   const availableCategories = useMemo(() => {
     if (!categories || !user) return [];
 
-    return categories.filter((cat) => {
+    console.log(`[Available Categories] Total categories: ${categories.length}, User: ${user.email}, Dept: ${user.department}, SubDept: ${user.subDepartment}`);
+
+    // Log first 3 categories to see what departmentType values we have
+    if (categories.length > 0) {
+      console.log('[Available Categories] Sample categories:', categories.slice(0, 3).map(cat => ({
+        l3: cat.l3,
+        departmentType: (cat as any).departmentType
+      })));
+    }
+
+    const filtered = categories.filter((cat) => {
       // Filter by issue type if selected
       if (newTicket.issueType && cat.issueType !== newTicket.issueType) {
         return false;
@@ -242,9 +252,12 @@ export default function MyTicketsPage() {
       if (user.department === "CX" && user.subDepartment) {
         const categoryDeptType = (cat as any).departmentType;
 
+        console.log(`[Dept Filter] Category: ${cat.l3}, departmentType: ${categoryDeptType}, User subDept: ${user.subDepartment}`);
+
         // Seller Support agents see only Seller Support and All categories
         if (user.subDepartment === "Seller Support") {
           if (categoryDeptType !== "Seller Support" && categoryDeptType !== "All") {
+            console.log(`[Dept Filter] FILTERED OUT: ${cat.l3} (departmentType: ${categoryDeptType})`);
             return false;
           }
         }
@@ -252,6 +265,7 @@ export default function MyTicketsPage() {
         // Customer Support agents see only Customer Support and All categories
         if (user.subDepartment === "Customer Support") {
           if (categoryDeptType !== "Customer Support" && categoryDeptType !== "All") {
+            console.log(`[Dept Filter] FILTERED OUT: ${cat.l3} (departmentType: ${categoryDeptType})`);
             return false;
           }
         }
@@ -259,6 +273,10 @@ export default function MyTicketsPage() {
 
       return true;
     });
+
+    console.log(`[Available Categories] After filtering: ${filtered.length} categories`);
+
+    return filtered;
   }, [categories, newTicket.issueType, user]);
 
   const categoryMap = availableCategories.reduce((acc, cat) => {

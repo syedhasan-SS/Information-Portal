@@ -37,8 +37,8 @@ export async function createVendor(vendor: Omit<Vendor, "id" | "createdAt" | "up
 }
 
 // Categories
-export async function getCategories(): Promise<Category[]> {
-  return fetchAPI<Category[]>("/api/categories");
+export async function getCategories(): Promise<(Category & { departmentType?: string })[]> {
+  return fetchAPI<(Category & { departmentType?: string })[]>("/api/categories");
 }
 
 export async function createCategory(category: Omit<Category, "id" | "createdAt">): Promise<Category> {
