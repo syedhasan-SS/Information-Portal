@@ -812,22 +812,22 @@ export default function UsersPage() {
     Agent: "bg-slate-500/10 text-slate-600 border-slate-500/20",
   };
 
-  // Department colors for org chart borders
+  // Department colors for org chart - darker cards
   const departmentColors: Record<string, { border: string; bg: string }> = {
-    Finance: { border: "border-blue-400", bg: "bg-blue-50" },
-    HR: { border: "border-purple-400", bg: "bg-purple-50" },
-    IT: { border: "border-green-400", bg: "bg-green-50" },
-    Sales: { border: "border-orange-400", bg: "bg-orange-50" },
-    Marketing: { border: "border-pink-400", bg: "bg-pink-50" },
-    Operations: { border: "border-cyan-400", bg: "bg-cyan-50" },
-    CX: { border: "border-amber-400", bg: "bg-amber-50" },
-    Legal: { border: "border-indigo-400", bg: "bg-indigo-50" },
-    Product: { border: "border-teal-400", bg: "bg-teal-50" },
+    Finance: { border: "border-blue-400", bg: "bg-blue-700" },
+    HR: { border: "border-purple-400", bg: "bg-purple-700" },
+    IT: { border: "border-green-400", bg: "bg-green-700" },
+    Sales: { border: "border-orange-400", bg: "bg-orange-700" },
+    Marketing: { border: "border-pink-400", bg: "bg-pink-700" },
+    Operations: { border: "border-cyan-400", bg: "bg-cyan-700" },
+    CX: { border: "border-amber-400", bg: "bg-amber-700" },
+    Legal: { border: "border-indigo-400", bg: "bg-indigo-700" },
+    Product: { border: "border-teal-400", bg: "bg-teal-700" },
   };
 
   const getDepartmentStyle = (department: string | null) => {
-    if (!department) return { border: "border-gray-300", bg: "bg-white" };
-    return departmentColors[department] || { border: "border-gray-300", bg: "bg-white" };
+    if (!department) return { border: "border-gray-400", bg: "bg-slate-700" };
+    return departmentColors[department] || { border: "border-gray-400", bg: "bg-slate-700" };
   };
 
   const uniqueDepartments = Array.from(new Set(users?.filter(u => u.department).map(u => u.department) || []));
@@ -840,67 +840,58 @@ export default function UsersPage() {
 
     return (
       <div className="flex flex-col items-center">
-        {/* User Card */}
+        {/* Card with Avatar on top */}
         <div className={`relative ${!isRoot ? 'pt-6' : ''}`}>
-          {/* Vertical line from parent */}
+          {/* Vertical line from parent to avatar */}
           {!isRoot && (
-            <div className="absolute top-0 left-1/2 w-px h-6 bg-gray-300 -translate-x-1/2" />
+            <div className="absolute top-0 left-1/2 w-0.5 h-6 bg-blue-400 -translate-x-1/2" />
           )}
 
-          <Card className={cn(
-            "w-[200px] p-4 hover:shadow-lg transition-all border-2",
-            deptStyle.border,
-            deptStyle.bg
-          )}>
-            <div className="flex items-start gap-3">
-              <Avatar className="h-12 w-12 ring-2 ring-white shadow-md flex-shrink-0">
-                {nodeUser.profilePicture && <AvatarImage src={nodeUser.profilePicture} alt={nodeUser.name} />}
-                <AvatarFallback className="bg-gradient-to-br from-blue-500 to-purple-600 text-white font-semibold text-sm">
-                  {nodeUser.name.split(' ').map(n => n[0]).join('').slice(0, 2).toUpperCase()}
-                </AvatarFallback>
-              </Avatar>
-              <div className="flex-1 min-w-0">
-                <h3 className="font-semibold text-sm leading-tight text-gray-900">{nodeUser.name}</h3>
-                <p className="text-xs text-gray-600 mt-0.5">{nodeUser.role}</p>
-                {nodeUser.department && (
-                  <p className="text-xs text-gray-500 mt-0.5 truncate">
-                    {nodeUser.department}
-                  </p>
-                )}
-                {!nodeUser.isActive && (
-                  <Badge variant="secondary" className="mt-1 text-[10px] px-1.5 py-0">
-                    Inactive
-                  </Badge>
-                )}
-              </div>
+          <div className="flex flex-col items-center">
+            {/* Avatar Circle */}
+            <Avatar className="h-16 w-16 ring-4 ring-white shadow-lg border-2 border-blue-400 mb-2">
+              {nodeUser.profilePicture && <AvatarImage src={nodeUser.profilePicture} alt={nodeUser.name} />}
+              <AvatarFallback className="bg-gradient-to-br from-blue-500 to-blue-600 text-white font-semibold text-base">
+                {nodeUser.name.split(' ').map(n => n[0]).join('').slice(0, 2).toUpperCase()}
+              </AvatarFallback>
+            </Avatar>
+
+            {/* Info Card */}
+            <div className={cn(
+              "w-[160px] rounded-lg px-3 py-2.5 shadow-md text-center",
+              deptStyle.bg
+            )}>
+              <h3 className="font-semibold text-sm text-white leading-tight">{nodeUser.name}</h3>
+              <p className="text-xs text-white/90 mt-1">{nodeUser.role}</p>
+              {nodeUser.department && (
+                <p className="text-xs text-white/80 mt-0.5 truncate">
+                  {nodeUser.department}
+                </p>
+              )}
             </div>
-          </Card>
+          </div>
         </div>
 
         {/* Children */}
         {hasReports && (
           <div className="flex flex-col items-center">
-            {/* Vertical line to children */}
-            <div className="w-px h-6 bg-gray-300" />
+            {/* Vertical line down from card */}
+            <div className="w-0.5 h-8 bg-blue-400" />
 
             {/* Horizontal connector line */}
             {directReports.length > 1 && (
               <div
-                className="h-px bg-gray-300"
+                className="h-0.5 bg-blue-400"
                 style={{
-                  width: `${(directReports.length - 1) * 216}px` // 200px card + 16px gap
+                  width: `${(directReports.length - 1) * 176}px` // 160px card + 16px gap
                 }}
               />
             )}
 
             {/* Children nodes with individual vertical connectors */}
             <div className="flex gap-4">
-              {directReports.map((report, index) => (
-                <div key={report.id} className="flex flex-col items-center">
-                  {/* Vertical line from horizontal connector to card */}
-                  <div className="w-px h-6 bg-gray-300" />
-                  <OrgChartNode user={report} />
-                </div>
+              {directReports.map((report) => (
+                <OrgChartNode key={report.id} user={report} />
               ))}
             </div>
           </div>
@@ -1809,18 +1800,22 @@ export default function UsersPage() {
             <h2 className="text-xl font-semibold">Organization Chart</h2>
             <div className="flex items-center gap-4">
               {/* Legend */}
-              <div className="flex items-center gap-3 px-4 py-2 bg-white rounded-lg border shadow-sm">
-                <span className="text-sm font-medium text-gray-700">Legend:</span>
-                {uniqueDepartments.slice(0, 6).map((dept) => {
-                  const style = getDepartmentStyle(dept);
-                  return (
-                    <div key={dept} className="flex items-center gap-1.5">
-                      <div className={cn("w-4 h-4 rounded border-2", style.border, style.bg)} />
-                      <span className="text-xs text-gray-600">{dept}</span>
-                    </div>
-                  );
-                })}
-              </div>
+              {uniqueDepartments.length > 0 && (
+                <Card className="px-3 py-2">
+                  <div className="flex items-center gap-3">
+                    <span className="text-xs font-medium">Legend:</span>
+                    {uniqueDepartments.slice(0, 5).map((dept) => {
+                      const style = getDepartmentStyle(dept);
+                      return (
+                        <div key={dept} className="flex items-center gap-1.5">
+                          <div className={cn("w-3 h-3 rounded-sm border-l-4", style.border)} />
+                          <span className="text-xs text-muted-foreground">{dept}</span>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </Card>
+              )}
               <p className="text-sm text-muted-foreground">Scroll to view full chart</p>
             </div>
           </div>
