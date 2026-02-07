@@ -2388,16 +2388,16 @@ export default function UsersPage() {
                 <SelectTrigger>
                   <SelectValue placeholder="Select department head" />
                 </SelectTrigger>
-                <SelectContent>
+                <SelectContent className="max-h-[300px] overflow-y-auto">
                   <SelectItem value="__none__">None</SelectItem>
-                  {users?.filter(u => u.isActive).map((user) => (
+                  {users?.filter(u => u.isActive && (u.role === "Head" || u.roles?.includes("Head"))).map((user) => (
                     <SelectItem key={user.id} value={user.id}>
                       {user.name} - {user.role}
                     </SelectItem>
                   ))}
                 </SelectContent>
               </Select>
-              <p className="text-xs text-muted-foreground">Assign a user as the head of this department</p>
+              <p className="text-xs text-muted-foreground">Only users with "Head" role can be assigned as department heads</p>
             </div>
             <div className="space-y-2">
               <Label htmlFor="dept-color">Color</Label>
