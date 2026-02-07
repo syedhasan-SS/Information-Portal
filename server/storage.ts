@@ -166,32 +166,36 @@ export class DatabaseStorage implements IStorage {
     // Create maps for both L3 and L4 names to departmentType
     const l3TypeMap = new Map<string, string>();
     for (const l3Cat of l3Categories) {
-      if (l3Cat.departmentType && l3Cat.departmentType !== "All") {
-        l3TypeMap.set(l3Cat.name, l3Cat.departmentType);
-      }
+      // Store departmentType for L3, including "All" since some L3s are explicitly set
+      l3TypeMap.set(l3Cat.name, l3Cat.departmentType || "All");
     }
 
     const l4TypeMap = new Map<string, string>();
     for (const l4Cat of l4Categories) {
-      if (l4Cat.departmentType && l4Cat.departmentType !== "All") {
-        l4TypeMap.set(l4Cat.name, l4Cat.departmentType);
-      }
+      // Store departmentType for L4
+      l4TypeMap.set(l4Cat.name, l4Cat.departmentType || "All");
     }
 
     console.log('[getCategories] L3 map size:', l3TypeMap.size, 'L4 map size:', l4TypeMap.size);
+    console.log('[getCategories] Sample L3 with Customer Support:',
+      Array.from(l3TypeMap.entries()).filter(([_, type]) => type === "Customer Support").slice(0, 3));
+    console.log('[getCategories] Sample L4 with Seller Support:',
+      Array.from(l4TypeMap.entries()).filter(([_, type]) => type === "Seller Support").slice(0, 3));
 
     // Enhance categories with departmentType
-    // Priority: L4 match > L3 match > "All"
+    // Logic:
+    // - If category has L4: Use L4's departmentType from categoryHierarchy
+    // - If category has NO L4 (null/empty): Use L3's departmentType from categoryHierarchy
     const enhancedCategories = allCategories.map(cat => {
       let departmentType = "All";
 
-      // Try L4 first (if category has L4)
-      if (cat.l4 && l4TypeMap.has(cat.l4)) {
-        departmentType = l4TypeMap.get(cat.l4)!;
+      // If category has L4, look up L4's departmentType in categoryHierarchy
+      if (cat.l4 && cat.l4.trim() !== "") {
+        departmentType = l4TypeMap.get(cat.l4) || "All";
       }
-      // Fall back to L3
-      else if (l3TypeMap.has(cat.l3)) {
-        departmentType = l3TypeMap.get(cat.l3)!;
+      // If category has NO L4, use L3's departmentType from categoryHierarchy
+      else {
+        departmentType = l3TypeMap.get(cat.l3) || "All";
       }
 
       return {
