@@ -230,7 +230,7 @@ export default function MyTicketsPage() {
 
   // Use categories from categories table - these have the correct IDs for ticket creation
   const availableCategories = useMemo(() => {
-    if (!categories) return [];
+    if (!categories || !user) return [];
 
     return categories.filter((cat) => {
       // Filter by issue type if selected
@@ -238,9 +238,28 @@ export default function MyTicketsPage() {
         return false;
       }
 
+      // Filter by user's sub-department for CX users
+      if (user.department === "CX" && user.subDepartment) {
+        const categoryDeptType = (cat as any).departmentType;
+
+        // Seller Support agents see only Seller Support and All categories
+        if (user.subDepartment === "Seller Support") {
+          if (categoryDeptType !== "Seller Support" && categoryDeptType !== "All") {
+            return false;
+          }
+        }
+
+        // Customer Support agents see only Customer Support and All categories
+        if (user.subDepartment === "Customer Support") {
+          if (categoryDeptType !== "Customer Support" && categoryDeptType !== "All") {
+            return false;
+          }
+        }
+      }
+
       return true;
     });
-  }, [categories, newTicket.issueType]);
+  }, [categories, newTicket.issueType, user]);
 
   const categoryMap = availableCategories.reduce((acc, cat) => {
     acc[cat.id] = cat;
