@@ -163,51 +163,66 @@ export class DatabaseStorage implements IStorage {
       departmentType: c.departmentType
     })));
 
-    // Create maps for both L3 and L4 names to departmentType
-    const l3TypeMap = new Map<string, string>();
+    // Create ID-based map for L3 categories
+    const l3IdMap = new Map<string, typeof l3Categories[0]>();
     for (const l3Cat of l3Categories) {
-      // Store departmentType for L3, including "All" since some L3s are explicitly set
-      l3TypeMap.set(l3Cat.name, l3Cat.departmentType || "All");
+      l3IdMap.set(l3Cat.id, l3Cat);
     }
 
-    const l4TypeMap = new Map<string, string>();
+    // Create maps for L3 and L4 names to departmentType
+    const l3NameTypeMap = new Map<string, string>();
+    for (const l3Cat of l3Categories) {
+      l3NameTypeMap.set(l3Cat.name, l3Cat.departmentType || "All");
+    }
+
+    const l4NameTypeMap = new Map<string, string>();
     for (const l4Cat of l4Categories) {
-      // Store departmentType for L4
-      l4TypeMap.set(l4Cat.name, l4Cat.departmentType || "All");
+      if (l4Cat.name && l4Cat.name.trim() !== "") {
+        // L4 with a name (Seller Support case)
+        l4NameTypeMap.set(l4Cat.name, l4Cat.departmentType || "All");
+      }
     }
 
-    console.log('[getCategories] L3 map size:', l3TypeMap.size, 'L4 map size:', l4TypeMap.size);
-    console.log('[getCategories] Sample L3 with Customer Support:',
-      Array.from(l3TypeMap.entries()).filter(([_, type]) => type === "Customer Support").slice(0, 3));
+    // CRITICAL: Create map from L3 name to departmentType by checking if L3 has a child L4 with departmentType
+    // This handles Customer Support case where L4 exists but has empty name
+    const l3NameToTypeViaChild = new Map<string, string>();
+    for (const l4Cat of l4Categories) {
+      if (l4Cat.departmentType && l4Cat.departmentType !== "All" && l4Cat.parentId) {
+        const parentL3 = l3IdMap.get(l4Cat.parentId);
+        if (parentL3) {
+          l3NameToTypeViaChild.set(parentL3.name, l4Cat.departmentType);
+        }
+      }
+    }
+
+    console.log('[getCategories] L3 name map size:', l3NameTypeMap.size, 'L4 name map size:', l4NameTypeMap.size);
+    console.log('[getCategories] L3-to-type-via-child map size:', l3NameToTypeViaChild.size);
+    console.log('[getCategories] Sample L3 with Customer Support via child L4:',
+      Array.from(l3NameToTypeViaChild.entries()).filter(([_, type]) => type === "Customer Support").slice(0, 5));
     console.log('[getCategories] Sample L4 with Seller Support:',
-      Array.from(l4TypeMap.entries()).filter(([_, type]) => type === "Seller Support").slice(0, 3));
+      Array.from(l4NameTypeMap.entries()).filter(([_, type]) => type === "Seller Support").slice(0, 3));
 
     // Enhance categories with departmentType
     // Logic:
-    // - If category has L4: Use L4's departmentType from categoryHierarchy
-    // - If category has NO L4 (null/empty): Use L3's departmentType from categoryHierarchy
+    // - If category has L4 with name: Use L4's departmentType (Seller Support case)
+    // - If category has NO L4 or empty L4: Check if L3 has a child L4 with departmentType (Customer Support case)
     const enhancedCategories = allCategories.map(cat => {
       let departmentType = "All";
-      let matchedLevel = "none";
 
-      // If category has L4, look up L4's departmentType in categoryHierarchy
+      // If category has L4 with a name, look up L4's departmentType
       if (cat.l4 && cat.l4.trim() !== "") {
-        const l4Match = l4TypeMap.get(cat.l4);
-        if (l4Match) {
-          departmentType = l4Match;
-          matchedLevel = "L4";
-        } else {
-          console.log(`[getCategories] WARNING: No L4 match for "${cat.l4}" in path: ${cat.path}`);
-        }
+        departmentType = l4NameTypeMap.get(cat.l4) || "All";
       }
-      // If category has NO L4, use L3's departmentType from categoryHierarchy
+      // If category has NO L4, check if the L3 has a child L4 with departmentType
       else {
-        const l3Match = l3TypeMap.get(cat.l3);
-        if (l3Match) {
-          departmentType = l3Match;
-          matchedLevel = "L3";
-        } else {
-          console.log(`[getCategories] WARNING: No L3 match for "${cat.l3}" in path: ${cat.path}`);
+        // First try L3's child L4 (Customer Support case: L4 exists but has empty name)
+        const typeViaChild = l3NameToTypeViaChild.get(cat.l3);
+        if (typeViaChild) {
+          departmentType = typeViaChild;
+        }
+        // Fallback to L3's own departmentType
+        else {
+          departmentType = l3NameTypeMap.get(cat.l3) || "All";
         }
       }
 
