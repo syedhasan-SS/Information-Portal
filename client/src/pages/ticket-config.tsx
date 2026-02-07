@@ -27,6 +27,13 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+  DropdownMenuSeparator,
+} from "@/components/ui/dropdown-menu";
 import { Badge } from "@/components/ui/badge";
 import { Switch } from "@/components/ui/switch";
 import { Checkbox } from "@/components/ui/checkbox";
@@ -44,6 +51,8 @@ import {
   FileText,
   AlertCircle,
   RotateCcw,
+  MoreVertical,
+  Download,
 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { Alert, AlertDescription } from "@/components/ui/alert";
@@ -1221,14 +1230,6 @@ export default function TicketConfigPage() {
               </div>
               <div className="ml-8 flex gap-2">
                 <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={() => setLocation("/admin-tools")}
-                >
-                  <Settings className="h-4 w-4 mr-2" />
-                  Admin Tools
-                </Button>
-                <Button
                   variant={departmentFilter === "All" ? "default" : "outline"}
                   size="sm"
                   onClick={() => setDepartmentFilter("All")}
@@ -1252,76 +1253,84 @@ export default function TicketConfigPage() {
               </div>
             </div>
             <div className="flex gap-2">
-              <Button
-                onClick={() => setLocation("/routing-config")}
-                variant="outline"
-                size="sm"
-                className="border-accent text-accent hover:bg-accent/10"
-              >
-                <Settings className="h-4 w-4" />
-                Routing Rules
-              </Button>
-              <Button onClick={downloadCsvTemplate} variant="outline" size="sm">
-                <FileText className="h-4 w-4" />
-                Download Template
-              </Button>
-              <Button
-                onClick={() => {
-                  if (!filteredConfigs || filteredConfigs.length === 0) {
-                    toast({
-                      title: "No Data",
-                      description: "No configurations to export",
-                      variant: "destructive"
-                    });
-                    return;
-                  }
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <Button variant="outline" size="sm">
+                    <MoreVertical className="h-4 w-4 mr-2" />
+                    Actions
+                  </Button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="end" className="w-56">
+                  <DropdownMenuItem onClick={() => setLocation("/admin-tools")}>
+                    <Settings className="h-4 w-4 mr-2" />
+                    Admin Tools
+                  </DropdownMenuItem>
+                  <DropdownMenuItem onClick={() => setLocation("/routing-config")}>
+                    <Settings className="h-4 w-4 mr-2" />
+                    Routing Rules
+                  </DropdownMenuItem>
+                  <DropdownMenuSeparator />
+                  <DropdownMenuItem onClick={downloadCsvTemplate}>
+                    <Download className="h-4 w-4 mr-2" />
+                    Download Template
+                  </DropdownMenuItem>
+                  <DropdownMenuItem
+                    onClick={() => {
+                      if (!filteredConfigs || filteredConfigs.length === 0) {
+                        toast({
+                          title: "No Data",
+                          description: "No configurations to export",
+                          variant: "destructive"
+                        });
+                        return;
+                      }
 
-                  // Create CSV content
-                  const headers = ['Issue Type', 'L1', 'L2', 'L3', 'L4', 'Description', 'Active', 'SLA Response Hours', 'SLA Resolution Hours'];
-                  const rows = filteredConfigs.map(config => [
-                    config.issueType,
-                    config.l1,
-                    config.l2,
-                    config.l3,
-                    config.l4,
-                    config.description || '',
-                    config.isActive ? 'true' : 'false',
-                    config.slaResponseHours || '',
-                    config.slaResolutionHours
-                  ]);
+                      // Create CSV content
+                      const headers = ['Issue Type', 'L1', 'L2', 'L3', 'L4', 'Description', 'Active', 'SLA Response Hours', 'SLA Resolution Hours'];
+                      const rows = filteredConfigs.map(config => [
+                        config.issueType,
+                        config.l1,
+                        config.l2,
+                        config.l3,
+                        config.l4,
+                        config.description || '',
+                        config.isActive ? 'true' : 'false',
+                        config.slaResponseHours || '',
+                        config.slaResolutionHours
+                      ]);
 
-                  const csvContent = [headers, ...rows]
-                    .map(row => row.map(cell => `"${cell}"`).join(','))
-                    .join('\n');
+                      const csvContent = [headers, ...rows]
+                        .map(row => row.map(cell => `"${cell}"`).join(','))
+                        .join('\n');
 
-                  // Download
-                  const blob = new Blob([csvContent], { type: 'text/csv' });
-                  const url = window.URL.createObjectURL(blob);
-                  const a = document.createElement('a');
-                  a.href = url;
-                  a.download = `ticket-configurations-${new Date().toISOString().split('T')[0]}.csv`;
-                  document.body.appendChild(a);
-                  a.click();
-                  document.body.removeChild(a);
-                  window.URL.revokeObjectURL(url);
+                      // Download
+                      const blob = new Blob([csvContent], { type: 'text/csv' });
+                      const url = window.URL.createObjectURL(blob);
+                      const a = document.createElement('a');
+                      a.href = url;
+                      a.download = `ticket-configurations-${new Date().toISOString().split('T')[0]}.csv`;
+                      document.body.appendChild(a);
+                      a.click();
+                      document.body.removeChild(a);
+                      window.URL.revokeObjectURL(url);
 
-                  toast({
-                    title: "Export Successful",
-                    description: `Exported ${filteredConfigs.length} configurations`
-                  });
-                }}
-                variant="outline"
-                size="sm"
-              >
-                <FileText className="h-4 w-4" />
-                Export CSV
-              </Button>
-              <Button onClick={() => csvFileInputRef.current?.click()} variant="outline" size="sm">
-                <Upload className="h-4 w-4" />
-                Upload CSV
-              </Button>
+                      toast({
+                        title: "Export Successful",
+                        description: `Exported ${filteredConfigs.length} configurations`
+                      });
+                    }}
+                  >
+                    <FileText className="h-4 w-4 mr-2" />
+                    Export CSV
+                  </DropdownMenuItem>
+                  <DropdownMenuItem onClick={() => csvFileInputRef.current?.click()}>
+                    <Upload className="h-4 w-4 mr-2" />
+                    Upload CSV
+                  </DropdownMenuItem>
+                </DropdownMenuContent>
+              </DropdownMenu>
               <Button onClick={() => setShowWizard(true)} size="sm">
-                <Plus className="h-4 w-4" />
+                <Plus className="h-4 w-4 mr-2" />
                 Add Category
               </Button>
             </div>
