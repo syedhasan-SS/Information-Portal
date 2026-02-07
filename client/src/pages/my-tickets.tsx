@@ -173,19 +173,6 @@ export default function MyTicketsPage() {
   const queryClient = useQueryClient();
   const { toast } = useToast();
 
-  // Determine user's department type from their department and sub-department
-  // Role + Department determines access (e.g., Agent in Seller Support vs Agent in Finance)
-  // Seller Support is a sub-department of CX
-  const userDepartmentType = useMemo(() => {
-    if (!user) return "Seller Support"; // Default fallback
-    // Check if user's sub-department is "Seller Support" (under CX)
-    if (user.subDepartment === "Seller Support") return "Seller Support";
-    // Check if user is in Customer Support (via department OR sub-department)
-    if (user.department === "CX" || user.department === "Customer Support" || user.subDepartment === "Customer Support") return "Customer Support";
-    // Default to Seller Support for users without department
-    return "Seller Support";
-  }, [user]);
-
   const { data: tickets, isLoading } = useQuery({
     queryKey: ["tickets"],
     queryFn: getTickets,
