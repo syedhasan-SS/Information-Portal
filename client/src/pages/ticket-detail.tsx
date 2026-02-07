@@ -510,7 +510,7 @@ export default function TicketDetailPage() {
                     <SelectTrigger className="mt-1" data-testid="select-status">
                       <SelectValue />
                     </SelectTrigger>
-                    <SelectContent>
+                    <SelectContent className="max-h-[300px] overflow-y-auto">
                       {STATUSES.map((status) => (
                         <SelectItem key={status} value={status}>{status}</SelectItem>
                       ))}
@@ -527,7 +527,7 @@ export default function TicketDetailPage() {
                     <SelectTrigger className="mt-1" data-testid="select-assignee">
                       <SelectValue placeholder="Unassigned" />
                     </SelectTrigger>
-                    <SelectContent>
+                    <SelectContent className="max-h-[300px] overflow-y-auto">
                       <SelectItem value="unassigned">Unassigned</SelectItem>
                       {users?.map((user) => (
                         <SelectItem key={user.id} value={user.id}>{user.name}</SelectItem>
@@ -545,7 +545,7 @@ export default function TicketDetailPage() {
                     <SelectTrigger className="mt-1" data-testid="select-priority">
                       <SelectValue />
                     </SelectTrigger>
-                    <SelectContent>
+                    <SelectContent className="max-h-[300px] overflow-y-auto">
                       <SelectItem value="Critical">Critical</SelectItem>
                       <SelectItem value="High">High</SelectItem>
                       <SelectItem value="Medium">Medium</SelectItem>
@@ -563,7 +563,7 @@ export default function TicketDetailPage() {
                     <SelectTrigger className="mt-1" data-testid="select-department">
                       <SelectValue />
                     </SelectTrigger>
-                    <SelectContent>
+                    <SelectContent className="max-h-[300px] overflow-y-auto">
                       <SelectItem value="Finance">Finance</SelectItem>
                       <SelectItem value="Operations">Operations</SelectItem>
                       <SelectItem value="Marketplace">Marketplace</SelectItem>
@@ -604,7 +604,7 @@ export default function TicketDetailPage() {
                     <SelectTrigger className="mt-1" data-testid="select-issue-type">
                       <SelectValue />
                     </SelectTrigger>
-                    <SelectContent>
+                    <SelectContent className="max-h-[300px] overflow-y-auto">
                       <SelectItem value="Complaint">Complaint</SelectItem>
                       <SelectItem value="Request">Request</SelectItem>
                       <SelectItem value="Information">Information</SelectItem>

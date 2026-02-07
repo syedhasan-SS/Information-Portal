@@ -940,7 +940,7 @@ export default function TicketConfigPage() {
                 <SelectTrigger>
                   <SelectValue placeholder="Select issue type" />
                 </SelectTrigger>
-                <SelectContent>
+                <SelectContent className="max-h-[300px] overflow-y-auto">
                   <SelectItem value="Complaint">Complaint</SelectItem>
                   <SelectItem value="Request">Request</SelectItem>
                   <SelectItem value="Information">Information</SelectItem>
@@ -956,7 +956,7 @@ export default function TicketConfigPage() {
                 <SelectTrigger>
                   <SelectValue placeholder="Select department" />
                 </SelectTrigger>
-                <SelectContent>
+                <SelectContent className="max-h-[300px] overflow-y-auto">
                   <SelectItem value="Finance">Finance</SelectItem>
                   <SelectItem value="Operations">Operations</SelectItem>
                   <SelectItem value="Marketplace">Marketplace</SelectItem>
@@ -2234,7 +2234,7 @@ export default function TicketConfigPage() {
                   <SelectTrigger id="issueType">
                     <SelectValue placeholder="Select issue type" />
                   </SelectTrigger>
-                  <SelectContent>
+                  <SelectContent className="max-h-[300px] overflow-y-auto">
                     <SelectItem value="Complaint">Complaint</SelectItem>
                     <SelectItem value="Request">Request</SelectItem>
                     <SelectItem value="Information">Information</SelectItem>
@@ -2251,7 +2251,7 @@ export default function TicketConfigPage() {
                   <SelectTrigger id="departmentType">
                     <SelectValue placeholder="Select department type" />
                   </SelectTrigger>
-                  <SelectContent>
+                  <SelectContent className="max-h-[300px] overflow-y-auto">
                     <SelectItem value="All">All</SelectItem>
                     <SelectItem value="Seller Support">Seller Support</SelectItem>
                     <SelectItem value="Customer Support">Customer Support</SelectItem>
@@ -2714,7 +2714,7 @@ export default function TicketConfigPage() {
                 <SelectTrigger id="tagDepartmentType">
                   <SelectValue placeholder="Select department type" />
                 </SelectTrigger>
-                <SelectContent>
+                <SelectContent className="max-h-[300px] overflow-y-auto">
                   <SelectItem value="All">All</SelectItem>
                   <SelectItem value="Seller Support">Seller Support</SelectItem>
                   <SelectItem value="Customer Support">Customer Support</SelectItem>
@@ -2859,7 +2859,7 @@ export default function TicketConfigPage() {
                   <SelectTrigger id="fieldType">
                     <SelectValue placeholder="Select field type" />
                   </SelectTrigger>
-                  <SelectContent>
+                  <SelectContent className="max-h-[300px] overflow-y-auto">
                     <SelectItem value="text">Text</SelectItem>
                     <SelectItem value="textarea">Text Area</SelectItem>
                     <SelectItem value="select">Select (Dropdown)</SelectItem>
@@ -2879,7 +2879,7 @@ export default function TicketConfigPage() {
                   <SelectTrigger id="fieldDepartmentType">
                     <SelectValue placeholder="Select department type" />
                   </SelectTrigger>
-                  <SelectContent>
+                  <SelectContent className="max-h-[300px] overflow-y-auto">
                     <SelectItem value="All">All</SelectItem>
                     <SelectItem value="Seller Support">Seller Support</SelectItem>
                     <SelectItem value="Customer Support">Customer Support</SelectItem>

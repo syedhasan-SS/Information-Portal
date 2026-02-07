@@ -1103,7 +1103,7 @@ export default function UsersPage() {
                     <SelectTrigger data-testid="select-role">
                       <SelectValue placeholder="Select primary role" />
                     </SelectTrigger>
-                    <SelectContent>
+                    <SelectContent className="max-h-[300px] overflow-y-auto">
                       {ROLES.map((role) => (
                         <SelectItem key={role} value={role}>
                           {role}
@@ -1146,7 +1146,7 @@ export default function UsersPage() {
                     <SelectTrigger data-testid="select-department">
                       <SelectValue placeholder="Select department" />
                     </SelectTrigger>
-                    <SelectContent>
+                    <SelectContent className="max-h-[300px] overflow-y-auto">
                       {departmentsData?.filter(d => d.isActive).map((dept) => (
                         <SelectItem key={dept.id} value={dept.name}>
                           {dept.name}
@@ -1166,7 +1166,7 @@ export default function UsersPage() {
                     <SelectTrigger data-testid="select-sub-department">
                       <SelectValue placeholder={formData.department ? "Select sub-department" : "Select department first"} />
                     </SelectTrigger>
-                    <SelectContent>
+                    <SelectContent className="max-h-[300px] overflow-y-auto">
                       <SelectItem value="__none__">None</SelectItem>
                       {departmentsData
                         ?.find(d => d.name === formData.department)
@@ -1216,7 +1216,7 @@ export default function UsersPage() {
                           value={managerSearchValue}
                           onValueChange={setManagerSearchValue}
                         />
-                        <CommandList>
+                        <CommandList className="max-h-[300px] overflow-y-auto">
                           <CommandEmpty>
                             <p className="text-sm text-muted-foreground p-2">
                               No users found
@@ -1796,7 +1796,7 @@ export default function UsersPage() {
 
       {/* Edit User Dialog */}
       <Dialog open={!!editingUser} onOpenChange={(open) => !open && setEditingUser(null)}>
-        <DialogContent>
+        <DialogContent className="max-h-[90vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle>Edit User</DialogTitle>
             <DialogDescription>Update user information and permissions.</DialogDescription>
@@ -1848,7 +1848,7 @@ export default function UsersPage() {
                 <SelectTrigger>
                   <SelectValue placeholder="Select primary role" />
                 </SelectTrigger>
-                <SelectContent>
+                <SelectContent className="max-h-[300px] overflow-y-auto">
                   {ROLES.map((role) => (
                     <SelectItem key={role} value={role}>
                       {role}
@@ -1891,7 +1891,7 @@ export default function UsersPage() {
                 <SelectTrigger>
                   <SelectValue placeholder="Select department" />
                 </SelectTrigger>
-                <SelectContent>
+                <SelectContent className="max-h-[300px] overflow-y-auto">
                   {departmentsData?.filter(d => d.isActive).map((dept) => (
                     <SelectItem key={dept.id} value={dept.name}>
                       {dept.name}
@@ -1911,7 +1911,7 @@ export default function UsersPage() {
                 <SelectTrigger>
                   <SelectValue placeholder={editFormData.department ? "Select sub-department" : "Select department first"} />
                 </SelectTrigger>
-                <SelectContent>
+                <SelectContent className="max-h-[300px] overflow-y-auto">
                   <SelectItem value="__none__">None</SelectItem>
                   {departmentsData
                     ?.find(d => d.name === editFormData.department)
@@ -1960,7 +1960,7 @@ export default function UsersPage() {
                       value={editManagerSearchValue}
                       onValueChange={setEditManagerSearchValue}
                     />
-                    <CommandList>
+                    <CommandList className="max-h-[300px] overflow-y-auto">
                       <CommandEmpty>
                         <p className="text-sm text-muted-foreground p-2">
                           No users found

@@ -918,7 +918,7 @@ export default function MyTicketsPage() {
                       <SelectTrigger data-testid="select-department">
                         <SelectValue placeholder="Select department" />
                       </SelectTrigger>
-                      <SelectContent>
+                      <SelectContent className="max-h-[300px] overflow-y-auto">
                         {DEPARTMENTS.map((d) => (
                           <SelectItem key={d} value={d}>{d}</SelectItem>
                         ))}
@@ -942,7 +942,7 @@ export default function MyTicketsPage() {
                       <SelectTrigger data-testid="select-issue-type">
                         <SelectValue placeholder="Select issue type" />
                       </SelectTrigger>
-                      <SelectContent>
+                      <SelectContent className="max-h-[300px] overflow-y-auto">
                         {ISSUE_TYPES.map((t) => (
                           <SelectItem key={t} value={t}>{t}</SelectItem>
                         ))}
@@ -1147,7 +1147,7 @@ export default function MyTicketsPage() {
                             value={orderIdSearchValue}
                             onValueChange={setOrderIdSearchValue}
                           />
-                          <CommandList>
+                          <CommandList className="max-h-[300px] overflow-y-auto">
                             <CommandEmpty>
                               <div className="p-2">
                                 <p className="text-sm text-muted-foreground mb-2">
