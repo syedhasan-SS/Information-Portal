@@ -188,14 +188,27 @@ export class DatabaseStorage implements IStorage {
     // - If category has NO L4 (null/empty): Use L3's departmentType from categoryHierarchy
     const enhancedCategories = allCategories.map(cat => {
       let departmentType = "All";
+      let matchedLevel = "none";
 
       // If category has L4, look up L4's departmentType in categoryHierarchy
       if (cat.l4 && cat.l4.trim() !== "") {
-        departmentType = l4TypeMap.get(cat.l4) || "All";
+        const l4Match = l4TypeMap.get(cat.l4);
+        if (l4Match) {
+          departmentType = l4Match;
+          matchedLevel = "L4";
+        } else {
+          console.log(`[getCategories] WARNING: No L4 match for "${cat.l4}" in path: ${cat.path}`);
+        }
       }
       // If category has NO L4, use L3's departmentType from categoryHierarchy
       else {
-        departmentType = l3TypeMap.get(cat.l3) || "All";
+        const l3Match = l3TypeMap.get(cat.l3);
+        if (l3Match) {
+          departmentType = l3Match;
+          matchedLevel = "L3";
+        } else {
+          console.log(`[getCategories] WARNING: No L3 match for "${cat.l3}" in path: ${cat.path}`);
+        }
       }
 
       return {
