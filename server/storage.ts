@@ -954,12 +954,30 @@ export class DatabaseStorage implements IStorage {
   }
 
   async getTicketFieldConfigurationsByDepartment(departmentType: "Seller Support" | "Customer Support" | "All"): Promise<TicketFieldConfiguration[]> {
-    return await db.select().from(ticketFieldConfigurations)
-      .where(and(
-        eq(ticketFieldConfigurations.departmentType, departmentType),
-        isNull(ticketFieldConfigurations.deletedAt)
-      ))
+    // Get fields for the specific department OR "All" departments
+    // BUT exclude fields from the opposite department
+    const allFields = await db.select().from(ticketFieldConfigurations)
+      .where(isNull(ticketFieldConfigurations.deletedAt))
       .orderBy(ticketFieldConfigurations.displayOrder, ticketFieldConfigurations.fieldName);
+
+    // Filter logic:
+    // - Include fields matching the requested departmentType
+    // - Include fields with departmentType="All"
+    // - Exclude fields from the opposite department
+    const filteredFields = allFields.filter(field => {
+      const fieldDept = field.departmentType || "All";
+
+      // Always include "All" fields
+      if (fieldDept === "All") return true;
+
+      // Include if matches requested department
+      if (fieldDept === departmentType) return true;
+
+      // Exclude if it's from a different specific department
+      return false;
+    });
+
+    return filteredFields;
   }
 
   async getTicketFieldConfigurationById(id: string): Promise<TicketFieldConfiguration | undefined> {

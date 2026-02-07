@@ -323,9 +323,18 @@ export default function MyTicketsPage() {
       if (newTicket.categoryId) {
         setIsLoadingFields(true);
         try {
-          const res = await fetch(`/api/config/categories/${encodeURIComponent(newTicket.categoryId)}/resolved-fields`);
+          // Pass departmentType to get department-specific fields
+          const params = new URLSearchParams();
+          if (userDepartmentType) {
+            params.append('departmentType', userDepartmentType);
+          }
+          const url = `/api/config/categories/${encodeURIComponent(newTicket.categoryId)}/resolved-fields${params.toString() ? '?' + params.toString() : ''}`;
+
+          console.log(`[Resolved Fields] Fetching for category ${newTicket.categoryId}, departmentType: ${userDepartmentType}`);
+          const res = await fetch(url);
           if (res.ok) {
             const fields = await res.json();
+            console.log(`[Resolved Fields] Received ${fields.length} fields`);
             setResolvedFields(fields);
           } else {
             setResolvedFields([]);
@@ -342,7 +351,7 @@ export default function MyTicketsPage() {
     };
 
     fetchResolvedFields();
-  }, [newTicket.categoryId]);
+  }, [newTicket.categoryId, userDepartmentType]);
 
   // Helper function to check if a field should be visible
   // Priority: 1) Category override (if category selected), 2) User department type default
