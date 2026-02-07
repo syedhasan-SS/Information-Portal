@@ -137,8 +137,27 @@ export class DatabaseStorage implements IStorage {
   }
 
   // Categories
-  async getCategories(): Promise<Category[]> {
-    return await db.select().from(categories).orderBy(categories.path);
+  async getCategories(): Promise<(Category & { departmentType?: string })[]> {
+    // Get all categories
+    const allCategories = await db.select().from(categories).orderBy(categories.path);
+
+    // Get all L1 categoryHierarchy items to map departmentType
+    const l1Categories = await db
+      .select()
+      .from(categoryHierarchy)
+      .where(eq(categoryHierarchy.level, 1));
+
+    // Create a map of L1 name to departmentType
+    const departmentTypeMap = new Map<string, string>();
+    for (const l1Cat of l1Categories) {
+      departmentTypeMap.set(l1Cat.name, l1Cat.departmentType || "All");
+    }
+
+    // Enhance categories with departmentType from their L1 category
+    return allCategories.map(cat => ({
+      ...cat,
+      departmentType: departmentTypeMap.get(cat.l1) || "All"
+    }));
   }
 
   async getCategoryById(id: string): Promise<Category | undefined> {
