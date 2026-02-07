@@ -869,30 +869,27 @@ export default function UsersPage() {
             {/* Vertical line down from card */}
             <div className="w-px h-8 bg-border" />
 
-            {/* Children container with proper line positioning */}
-            <div className="relative">
-              {/* Horizontal connector line */}
+            {/* Children container */}
+            <div className="flex gap-4 relative">
+              {/* Horizontal connector line spanning from first to last child center */}
               {directReports.length > 1 && (
                 <div
                   className="h-px bg-border absolute top-0"
                   style={{
-                    left: '80px', // Half of 160px card width
-                    right: '80px',
-                    width: `${(directReports.length - 1) * 176}px` // 160px card + 16px gap
+                    left: '80px', // Center of first card (half of 160px)
+                    width: `${(directReports.length - 1) * 176}px` // Distance from first center to last center
                   }}
                 />
               )}
 
-              {/* Children nodes */}
-              <div className="flex gap-4">
-                {directReports.map((report) => (
-                  <div key={report.id} className="flex flex-col items-center">
-                    {/* Vertical line from horizontal to child */}
-                    <div className="w-px h-8 bg-border" />
-                    <OrgChartNode user={report} />
-                  </div>
-                ))}
-              </div>
+              {/* Children nodes with vertical connectors */}
+              {directReports.map((report) => (
+                <div key={report.id} className="flex flex-col items-center">
+                  {/* Vertical line from horizontal to child */}
+                  <div className="w-px h-8 bg-border" />
+                  <OrgChartNode user={report} />
+                </div>
+              ))}
             </div>
           </div>
         )}
