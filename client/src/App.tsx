@@ -23,6 +23,7 @@ import NotificationsPage from "@/pages/notifications";
 import OrgHierarchyPage from "@/pages/org-hierarchy";
 import RolesPage from "@/pages/roles";
 import AdminToolsPage from "@/pages/admin-tools";
+import ProductRequestsPage from "@/pages/product-requests";
 
 function Router() {
   return (
@@ -106,6 +107,11 @@ function Router() {
       <Route path="/admin-tools">
         <ProtectedRoute requiredPermission="edit:config">
           <AdminToolsPage />
+        </ProtectedRoute>
+      </Route>
+      <Route path="/product-requests">
+        <ProtectedRoute>
+          <ProductRequestsPage />
         </ProtectedRoute>
       </Route>
       {/* Fallback to 404 */}

@@ -22,6 +22,8 @@ import {
   roles,
   rolePermissions,
   categoryRoutingRules,
+  productRequests,
+  productRequestComments,
   type Vendor,
   type Category,
   type Ticket,
@@ -43,6 +45,8 @@ import {
   type Role,
   type RolePermission,
   type CategoryRoutingRule,
+  type ProductRequest,
+  type ProductRequestComment,
   type InsertVendor,
   type InsertCategory,
   type InsertTicket,
@@ -62,6 +66,8 @@ import {
   type InsertRole,
   type InsertRolePermission,
   type InsertCategoryRoutingRule,
+  type InsertProductRequest,
+  type InsertProductRequestComment,
 } from "@shared/schema";
 
 export interface IStorage {
@@ -1386,6 +1392,78 @@ export class DatabaseStorage implements IStorage {
     }
 
     return Array.from(effectivePermissions);
+  }
+
+  // ============================================
+  // Product Request Methods
+  // ============================================
+
+  async getProductRequests(): Promise<ProductRequest[]> {
+    return await db.select().from(productRequests).orderBy(desc(productRequests.createdAt));
+  }
+
+  async getProductRequestById(id: string): Promise<ProductRequest | undefined> {
+    const result = await db.select().from(productRequests).where(eq(productRequests.id, id));
+    return result[0];
+  }
+
+  async getProductRequestsByStatus(status: ProductRequest['status']): Promise<ProductRequest[]> {
+    return await db.select()
+      .from(productRequests)
+      .where(eq(productRequests.status, status))
+      .orderBy(desc(productRequests.createdAt));
+  }
+
+  async getProductRequestsByRequestedBy(userId: string): Promise<ProductRequest[]> {
+    return await db.select()
+      .from(productRequests)
+      .where(eq(productRequests.requestedById, userId))
+      .orderBy(desc(productRequests.createdAt));
+  }
+
+  async createProductRequest(data: InsertProductRequest): Promise<ProductRequest> {
+    // Generate request number: PR-YYYYMMDD-XXXX
+    const date = new Date();
+    const dateStr = date.toISOString().split('T')[0].replace(/-/g, '');
+    const count = await db.select().from(productRequests);
+    const requestNumber = `PR-${dateStr}-${String(count.length + 1).padStart(4, '0')}`;
+
+    const result = await db.insert(productRequests)
+      .values({ ...data, requestNumber })
+      .returning();
+    return result[0];
+  }
+
+  async updateProductRequest(id: string, updates: Partial<InsertProductRequest>): Promise<ProductRequest | undefined> {
+    const result = await db.update(productRequests)
+      .set({ ...updates, updatedAt: new Date() })
+      .where(eq(productRequests.id, id))
+      .returning();
+    return result[0];
+  }
+
+  async deleteProductRequest(id: string): Promise<void> {
+    await db.delete(productRequests).where(eq(productRequests.id, id));
+  }
+
+  // Product Request Comments
+
+  async getProductRequestComments(requestId: string): Promise<ProductRequestComment[]> {
+    return await db.select()
+      .from(productRequestComments)
+      .where(eq(productRequestComments.requestId, requestId))
+      .orderBy(asc(productRequestComments.createdAt));
+  }
+
+  async createProductRequestComment(data: InsertProductRequestComment): Promise<ProductRequestComment> {
+    const result = await db.insert(productRequestComments)
+      .values(data)
+      .returning();
+    return result[0];
+  }
+
+  async deleteProductRequestComment(id: string): Promise<void> {
+    await db.delete(productRequestComments).where(eq(productRequestComments.id, id));
   }
 }
 

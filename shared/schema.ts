@@ -655,15 +655,111 @@ export const insertCategoryRoutingRuleSchema = createInsertSchema(categoryRoutin
   updatedAt: true,
 });
 
+// Product Requests
+export const productRequests = pgTable("product_requests", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  requestNumber: text("request_number").notNull().unique(),
+  title: text("title").notNull(),
+  description: text("description").notNull(),
+  requestType: text("request_type").notNull().$type<
+    | "User Management"
+    | "Category Management"
+    | "Tag Management"
+    | "Ticket Flow"
+    | "Department Management"
+    | "Role & Permissions"
+    | "Integration"
+    | "Other"
+  >(),
+  priority: text("priority").notNull().$type<"Low" | "Medium" | "High" | "Critical">().default("Medium"),
+  status: text("status").notNull().$type<
+    | "Draft"
+    | "Pending Approval"
+    | "Approved"
+    | "In Progress"
+    | "Completed"
+    | "Rejected"
+    | "Cancelled"
+  >().default("Draft"),
+
+  // Requester information
+  requestedById: varchar("requested_by_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+
+  // Approval workflow
+  approvedByManagerId: varchar("approved_by_manager_id").references(() => users.id, { onDelete: "set null" }),
+  managerApprovalDate: timestamp("manager_approval_date"),
+  managerComments: text("manager_comments"),
+
+  approvedByAdminId: varchar("approved_by_admin_id").references(() => users.id, { onDelete: "set null" }),
+  adminApprovalDate: timestamp("admin_approval_date"),
+  adminComments: text("admin_comments"),
+
+  // Assignment
+  assignedToId: varchar("assigned_to_id").references(() => users.id, { onDelete: "set null" }),
+
+  // Rejection reason
+  rejectedById: varchar("rejected_by_id").references(() => users.id, { onDelete: "set null" }),
+  rejectedDate: timestamp("rejected_date"),
+  rejectionReason: text("rejection_reason"),
+
+  // Completion
+  completedById: varchar("completed_by_id").references(() => users.id, { onDelete: "set null" }),
+  completedDate: timestamp("completed_date"),
+  completionNotes: text("completion_notes"),
+
+  // Metadata
+  attachments: jsonb("attachments").$type<Array<{
+    type: "image" | "file" | "document";
+    name: string;
+    url: string;
+    size: number;
+  }>>(),
+
+  // Timestamps
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+  updatedAt: timestamp("updated_at").notNull().defaultNow(),
+}, (table) => ({
+  requestedByIdx: index("pr_requested_by_idx").on(table.requestedById),
+  statusIdx: index("pr_status_idx").on(table.status),
+  requestTypeIdx: index("pr_request_type_idx").on(table.requestType),
+}));
+
+export const productRequestComments = pgTable("product_request_comments", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  requestId: varchar("request_id").notNull().references(() => productRequests.id, { onDelete: "cascade" }),
+  userId: varchar("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+  comment: text("comment").notNull(),
+  isInternal: boolean("is_internal").notNull().default(false), // Internal notes vs public comments
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+}, (table) => ({
+  requestIdIdx: index("prc_request_id_idx").on(table.requestId),
+}));
+
+export const insertProductRequestSchema = createInsertSchema(productRequests).omit({
+  id: true,
+  requestNumber: true,
+  createdAt: true,
+  updatedAt: true,
+});
+
+export const insertProductRequestCommentSchema = createInsertSchema(productRequestComments).omit({
+  id: true,
+  createdAt: true,
+});
+
 export type InsertPermission = z.infer<typeof insertPermissionSchema>;
 export type InsertRole = z.infer<typeof insertRoleSchema>;
 export type InsertRolePermission = z.infer<typeof insertRolePermissionSchema>;
 export type InsertCategoryRoutingRule = z.infer<typeof insertCategoryRoutingRuleSchema>;
+export type InsertProductRequest = z.infer<typeof insertProductRequestSchema>;
+export type InsertProductRequestComment = z.infer<typeof insertProductRequestCommentSchema>;
 
 export type Permission = typeof permissions.$inferSelect;
 export type Role = typeof roles.$inferSelect;
 export type RolePermission = typeof rolePermissions.$inferSelect;
 export type CategoryRoutingRule = typeof categoryRoutingRules.$inferSelect;
+export type ProductRequest = typeof productRequests.$inferSelect;
+export type ProductRequestComment = typeof productRequestComments.$inferSelect;
 
 export type Vendor = typeof vendors.$inferSelect;
 export type Category = typeof categories.$inferSelect;

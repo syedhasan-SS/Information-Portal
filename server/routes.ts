@@ -3661,5 +3661,351 @@ roles: ${JSON.stringify(updated.roles, null, 2)}</pre>
     }
   });
 
+  // ============================================
+  // Product Request Routes
+  // ============================================
+
+  // Get all product requests (filtered by user role)
+  app.get("/api/product-requests", async (req, res) => {
+    try {
+      const userEmail = req.headers["x-user-email"] as string;
+      if (!userEmail) {
+        return res.status(401).json({ error: "Authentication required" });
+      }
+
+      const user = await storage.getUserByEmail(userEmail);
+      if (!user) {
+        return res.status(401).json({ error: "User not found" });
+      }
+
+      // Check if user has access (Lead and above)
+      const allowedRoles = ["Owner", "Admin", "Head", "Manager", "Lead"];
+      if (!allowedRoles.includes(user.role) && !user.roles?.some(r => allowedRoles.includes(r))) {
+        return res.status(403).json({ error: "Access denied" });
+      }
+
+      const requests = await storage.getProductRequests();
+      res.json(requests);
+    } catch (error: any) {
+      res.status(500).json({ error: error.message });
+    }
+  });
+
+  // Get single product request
+  app.get("/api/product-requests/:id", async (req, res) => {
+    try {
+      const userEmail = req.headers["x-user-email"] as string;
+      if (!userEmail) {
+        return res.status(401).json({ error: "Authentication required" });
+      }
+
+      const user = await storage.getUserByEmail(userEmail);
+      if (!user) {
+        return res.status(401).json({ error: "User not found" });
+      }
+
+      const request = await storage.getProductRequestById(req.params.id);
+      if (!request) {
+        return res.status(404).json({ error: "Request not found" });
+      }
+
+      res.json(request);
+    } catch (error: any) {
+      res.status(500).json({ error: error.message });
+    }
+  });
+
+  // Create product request
+  app.post("/api/product-requests", async (req, res) => {
+    try {
+      const userEmail = req.headers["x-user-email"] as string;
+      if (!userEmail) {
+        return res.status(401).json({ error: "Authentication required" });
+      }
+
+      const user = await storage.getUserByEmail(userEmail);
+      if (!user) {
+        return res.status(401).json({ error: "User not found" });
+      }
+
+      // Check if user has access (Lead and above)
+      const allowedRoles = ["Owner", "Admin", "Head", "Manager", "Lead"];
+      if (!allowedRoles.includes(user.role) && !user.roles?.some(r => allowedRoles.includes(r))) {
+        return res.status(403).json({ error: "Access denied" });
+      }
+
+      const requestData = {
+        ...req.body,
+        requestedById: user.id,
+        status: req.body.status || "Draft",
+      };
+
+      const request = await storage.createProductRequest(requestData);
+      res.status(201).json(request);
+    } catch (error: any) {
+      res.status(500).json({ error: error.message });
+    }
+  });
+
+  // Update product request
+  app.patch("/api/product-requests/:id", async (req, res) => {
+    try {
+      const userEmail = req.headers["x-user-email"] as string;
+      if (!userEmail) {
+        return res.status(401).json({ error: "Authentication required" });
+      }
+
+      const user = await storage.getUserByEmail(userEmail);
+      if (!user) {
+        return res.status(401).json({ error: "User not found" });
+      }
+
+      const request = await storage.getProductRequestById(req.params.id);
+      if (!request) {
+        return res.status(404).json({ error: "Request not found" });
+      }
+
+      // Permission check: Owner/Admin can edit anything, others can only edit their own drafts
+      const isAdmin = user.role === "Owner" || user.role === "Admin";
+      const isOwner = request.requestedById === user.id;
+
+      if (!isAdmin && !isOwner) {
+        return res.status(403).json({ error: "Access denied" });
+      }
+
+      if (!isAdmin && request.status !== "Draft") {
+        return res.status(403).json({ error: "Can only edit draft requests" });
+      }
+
+      const updated = await storage.updateProductRequest(req.params.id, req.body);
+      res.json(updated);
+    } catch (error: any) {
+      res.status(500).json({ error: error.message });
+    }
+  });
+
+  // Approve request (Manager/Head)
+  app.post("/api/product-requests/:id/approve-manager", async (req, res) => {
+    try {
+      const userEmail = req.headers["x-user-email"] as string;
+      if (!userEmail) {
+        return res.status(401).json({ error: "Authentication required" });
+      }
+
+      const user = await storage.getUserByEmail(userEmail);
+      if (!user) {
+        return res.status(401).json({ error: "User not found" });
+      }
+
+      // Only Manager/Head can approve
+      const canApprove = ["Head", "Manager"].includes(user.role) || user.roles?.some(r => ["Head", "Manager"].includes(r));
+      if (!canApprove) {
+        return res.status(403).json({ error: "Only Managers and Heads can approve" });
+      }
+
+      const request = await storage.getProductRequestById(req.params.id);
+      if (!request) {
+        return res.status(404).json({ error: "Request not found" });
+      }
+
+      if (request.status !== "Pending Approval") {
+        return res.status(400).json({ error: "Request is not pending approval" });
+      }
+
+      const updated = await storage.updateProductRequest(req.params.id, {
+        status: "Approved",
+        approvedByManagerId: user.id,
+        managerApprovalDate: new Date(),
+        managerComments: req.body.comments,
+      });
+
+      res.json(updated);
+    } catch (error: any) {
+      res.status(500).json({ error: error.message });
+    }
+  });
+
+  // Assign and start work (Admin/Owner)
+  app.post("/api/product-requests/:id/assign", async (req, res) => {
+    try {
+      const userEmail = req.headers["x-user-email"] as string;
+      if (!userEmail) {
+        return res.status(401).json({ error: "Authentication required" });
+      }
+
+      const user = await storage.getUserByEmail(userEmail);
+      if (!user) {
+        return res.status(401).json({ error: "User not found" });
+      }
+
+      // Only Admin/Owner can assign
+      const canAssign = ["Owner", "Admin"].includes(user.role) || user.roles?.some(r => ["Owner", "Admin"].includes(r));
+      if (!canAssign) {
+        return res.status(403).json({ error: "Only Admins and Owners can assign" });
+      }
+
+      const request = await storage.getProductRequestById(req.params.id);
+      if (!request) {
+        return res.status(404).json({ error: "Request not found" });
+      }
+
+      if (request.status !== "Approved") {
+        return res.status(400).json({ error: "Request must be approved first" });
+      }
+
+      const updated = await storage.updateProductRequest(req.params.id, {
+        status: "In Progress",
+        assignedToId: req.body.assignedToId || user.id,
+        approvedByAdminId: user.id,
+        adminApprovalDate: new Date(),
+        adminComments: req.body.comments,
+      });
+
+      res.json(updated);
+    } catch (error: any) {
+      res.status(500).json({ error: error.message });
+    }
+  });
+
+  // Complete request
+  app.post("/api/product-requests/:id/complete", async (req, res) => {
+    try {
+      const userEmail = req.headers["x-user-email"] as string;
+      if (!userEmail) {
+        return res.status(401).json({ error: "Authentication required" });
+      }
+
+      const user = await storage.getUserByEmail(userEmail);
+      if (!user) {
+        return res.status(401).json({ error: "User not found" });
+      }
+
+      const request = await storage.getProductRequestById(req.params.id);
+      if (!request) {
+        return res.status(404).json({ error: "Request not found" });
+      }
+
+      // Only assigned user or admin can complete
+      const canComplete =
+        request.assignedToId === user.id ||
+        user.role === "Owner" ||
+        user.role === "Admin";
+
+      if (!canComplete) {
+        return res.status(403).json({ error: "Access denied" });
+      }
+
+      if (request.status !== "In Progress") {
+        return res.status(400).json({ error: "Request must be in progress" });
+      }
+
+      const updated = await storage.updateProductRequest(req.params.id, {
+        status: "Completed",
+        completedById: user.id,
+        completedDate: new Date(),
+        completionNotes: req.body.notes,
+      });
+
+      res.json(updated);
+    } catch (error: any) {
+      res.status(500).json({ error: error.message });
+    }
+  });
+
+  // Reject request
+  app.post("/api/product-requests/:id/reject", async (req, res) => {
+    try {
+      const userEmail = req.headers["x-user-email"] as string;
+      if (!userEmail) {
+        return res.status(401).json({ error: "Authentication required" });
+      }
+
+      const user = await storage.getUserByEmail(userEmail);
+      if (!user) {
+        return res.status(401).json({ error: "User not found" });
+      }
+
+      // Manager/Head/Admin/Owner can reject
+      const canReject = ["Owner", "Admin", "Head", "Manager"].includes(user.role) ||
+        user.roles?.some(r => ["Owner", "Admin", "Head", "Manager"].includes(r));
+
+      if (!canReject) {
+        return res.status(403).json({ error: "Access denied" });
+      }
+
+      const updated = await storage.updateProductRequest(req.params.id, {
+        status: "Rejected",
+        rejectedById: user.id,
+        rejectedDate: new Date(),
+        rejectionReason: req.body.reason,
+      });
+
+      res.json(updated);
+    } catch (error: any) {
+      res.status(500).json({ error: error.message });
+    }
+  });
+
+  // Get comments for a request
+  app.get("/api/product-requests/:id/comments", async (req, res) => {
+    try {
+      const comments = await storage.getProductRequestComments(req.params.id);
+      res.json(comments);
+    } catch (error: any) {
+      res.status(500).json({ error: error.message });
+    }
+  });
+
+  // Add comment to request
+  app.post("/api/product-requests/:id/comments", async (req, res) => {
+    try {
+      const userEmail = req.headers["x-user-email"] as string;
+      if (!userEmail) {
+        return res.status(401).json({ error: "Authentication required" });
+      }
+
+      const user = await storage.getUserByEmail(userEmail);
+      if (!user) {
+        return res.status(401).json({ error: "User not found" });
+      }
+
+      const comment = await storage.createProductRequestComment({
+        requestId: req.params.id,
+        userId: user.id,
+        comment: req.body.comment,
+        isInternal: req.body.isInternal || false,
+      });
+
+      res.status(201).json(comment);
+    } catch (error: any) {
+      res.status(500).json({ error: error.message });
+    }
+  });
+
+  // Delete product request (Admin/Owner only)
+  app.delete("/api/product-requests/:id", async (req, res) => {
+    try {
+      const userEmail = req.headers["x-user-email"] as string;
+      if (!userEmail) {
+        return res.status(401).json({ error: "Authentication required" });
+      }
+
+      const user = await storage.getUserByEmail(userEmail);
+      if (!user) {
+        return res.status(401).json({ error: "User not found" });
+      }
+
+      // Only Admin/Owner can delete
+      if (user.role !== "Owner" && user.role !== "Admin") {
+        return res.status(403).json({ error: "Access denied" });
+      }
+
+      await storage.deleteProductRequest(req.params.id);
+      res.status(204).send();
+    } catch (error: any) {
+      res.status(500).json({ error: error.message });
+    }
+  });
+
   return httpServer;
 }

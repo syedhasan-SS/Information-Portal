@@ -34,6 +34,7 @@ import {
   Shield,
   FlaskConical,
   ChevronDown,
+  FileText,
 } from "lucide-react";
 import type { Ticket as TicketType, User as UserType } from "@shared/schema";
 
@@ -234,6 +235,14 @@ export default function DashboardPage() {
                           Roles Management
                         </DropdownMenuItem>
                       )}
+                      {/* Product Requests - accessible to Lead and above */}
+                      {["Owner", "Admin", "Head", "Manager", "Lead"].includes(user?.role || "") ||
+                        user?.roles?.some((r) => ["Owner", "Admin", "Head", "Manager", "Lead"].includes(r)) ? (
+                        <DropdownMenuItem onClick={() => setLocation("/product-requests")}>
+                          <FileText className="mr-2 h-4 w-4" />
+                          Product Requests
+                        </DropdownMenuItem>
+                      ) : null}
                     </DropdownMenuContent>
                   </DropdownMenu>
                 )}
