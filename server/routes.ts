@@ -830,7 +830,26 @@ export async function registerRoutes(
   app.get("/api/departments/with-sub-departments", async (_req, res) => {
     try {
       const departments = await storage.getDepartmentsWithSubDepartments();
-      res.json(departments);
+      const users = await storage.getUsers();
+
+      // Auto-sync department heads: Find users with "Head" role assigned to each department
+      const enrichedDepartments = departments.map(dept => {
+        // Find user with Head role in this department
+        const autoHead = users.find(u =>
+          u.isActive &&
+          u.department === dept.name &&
+          (u.role === "Head" || u.roles?.includes("Head"))
+        );
+
+        // Use auto-detected head if no manual head is set, or if auto-head exists
+        return {
+          ...dept,
+          headId: autoHead?.id || dept.headId,
+          autoDetectedHead: !!autoHead, // Flag to show it was auto-detected
+        };
+      });
+
+      res.json(enrichedDepartments);
     } catch (error: any) {
       res.status(500).json({ error: error.message });
     }
@@ -901,6 +920,37 @@ export async function registerRoutes(
     try {
       await storage.deleteDepartment(req.params.id);
       res.status(204).send();
+    } catch (error: any) {
+      res.status(500).json({ error: error.message });
+    }
+  });
+
+  // Auto-sync department heads from user assignments
+  app.post("/api/departments/sync-heads", async (_req, res) => {
+    try {
+      const departments = await storage.getDepartments();
+      const users = await storage.getUsers();
+      let syncedCount = 0;
+
+      for (const dept of departments) {
+        // Find user with Head role in this department
+        const headUser = users.find(u =>
+          u.isActive &&
+          u.department === dept.name &&
+          (u.role === "Head" || u.roles?.includes("Head"))
+        );
+
+        // Update department if head found and different from current
+        if (headUser && dept.headId !== headUser.id) {
+          await storage.updateDepartment(dept.id, { headId: headUser.id });
+          syncedCount++;
+        }
+      }
+
+      res.json({
+        message: `Successfully synced ${syncedCount} department heads`,
+        syncedCount,
+      });
     } catch (error: any) {
       res.status(500).json({ error: error.message });
     }

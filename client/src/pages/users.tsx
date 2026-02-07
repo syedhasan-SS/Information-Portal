@@ -40,6 +40,7 @@ import {
   Check,
   Upload,
   FileUp,
+  UserCheck,
 } from "lucide-react";
 import {
   DropdownMenu,
@@ -371,6 +372,22 @@ export default function UsersPage() {
     onSuccess: (data) => {
       queryClient.invalidateQueries({ queryKey: ["departments-with-subs"] });
       setSuccess(`Seeded ${data.departments?.length || 0} departments (${data.skipped || 0} already existed)`);
+      setTimeout(() => setSuccess(""), 3000);
+    },
+    onError: (err: Error) => {
+      setError(err.message);
+    },
+  });
+
+  const syncDeptHeadsMutation = useMutation({
+    mutationFn: async () => {
+      const res = await fetch("/api/departments/sync-heads", { method: "POST" });
+      if (!res.ok) throw new Error("Failed to sync department heads");
+      return res.json();
+    },
+    onSuccess: (data) => {
+      queryClient.invalidateQueries({ queryKey: ["departments-with-subs"] });
+      setSuccess(`Synced ${data.syncedCount} department heads from user assignments`);
       setTimeout(() => setSuccess(""), 3000);
     },
     onError: (err: Error) => {
@@ -1485,6 +1502,16 @@ export default function UsersPage() {
               <Button
                 variant="outline"
                 size="sm"
+                onClick={() => syncDeptHeadsMutation.mutate()}
+                disabled={syncDeptHeadsMutation.isPending}
+                title="Auto-sync department heads from user role assignments"
+              >
+                {syncDeptHeadsMutation.isPending ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : <UserCheck className="h-4 w-4 mr-2" />}
+                Sync Heads
+              </Button>
+              <Button
+                variant="outline"
+                size="sm"
                 onClick={() => seedDeptsMutation.mutate()}
                 disabled={seedDeptsMutation.isPending}
               >
@@ -1532,6 +1559,11 @@ export default function UsersPage() {
                               <p className="text-xs text-muted-foreground flex items-center gap-1 mt-0.5">
                                 <Shield className="h-3 w-3" />
                                 Head: {users.find(u => u.id === (dept as any).headId)?.name}
+                                {(dept as any).autoDetectedHead && (
+                                  <Badge variant="secondary" className="text-[10px] px-1 py-0 ml-1">
+                                    Auto
+                                  </Badge>
+                                )}
                               </p>
                             )}
                           </div>
