@@ -645,8 +645,8 @@ export const categoryRoutingRules = pgTable("category_routing_rules", {
 }, (table) => ({
   categoryIdIdx: index("routing_category_id_idx").on(table.categoryId),
   targetDepartmentIdx: index("routing_target_department_idx").on(table.targetDepartment),
-  // Unique constraint: only one active rule per category
-  uniqueActiveCategoryRule: unique("unique_active_category_rule").on(table.categoryId).where(sql`${table.isActive} = true`),
+  // Note: Partial unique constraint (WHERE is_active = true) must be created via raw SQL migration
+  // This would prevent multiple active rules per category, but Drizzle doesn't support partial unique constraints
 }));
 
 export const insertCategoryRoutingRuleSchema = createInsertSchema(categoryRoutingRules).omit({
