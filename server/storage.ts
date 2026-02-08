@@ -325,63 +325,66 @@ export class DatabaseStorage implements IStorage {
   }
 
   async createTicket(ticket: InsertTicket): Promise<Ticket> {
-    // Generate ticket number if not provided
-    if (!ticket.ticketNumber) {
-      // Determine department prefix based on ticket type
-      // SS = Seller Support (has vendorHandle)
-      // CS = Customer Support (has customer field but no vendorHandle)
-      const prefix = ticket.vendorHandle ? 'SS' : 'CS';
+    // Use transaction to prevent race conditions in ticket number generation
+    return await db.transaction(async (tx) => {
+      // Generate ticket number if not provided
+      if (!ticket.ticketNumber) {
+        // Determine department prefix based on ticket type
+        // SS = Seller Support (has vendorHandle)
+        // CS = Customer Support (has customer field but no vendorHandle)
+        const prefix = ticket.vendorHandle ? 'SS' : 'CS';
 
-      // Get the last ticket number for this prefix
-      const lastTicket = await db.select({ ticketNumber: tickets.ticketNumber })
-        .from(tickets)
-        .where(sql`${tickets.ticketNumber} LIKE ${prefix + '%'}`)
-        .orderBy(sql`${tickets.ticketNumber} DESC`)
-        .limit(1);
+        // Get the last ticket number for this prefix (within transaction)
+        const lastTicket = await tx.select({ ticketNumber: tickets.ticketNumber })
+          .from(tickets)
+          .where(sql`${tickets.ticketNumber} LIKE ${prefix + '%'}`)
+          .orderBy(sql`${tickets.ticketNumber} DESC`)
+          .limit(1);
 
-      const lastNumber = lastTicket[0]?.ticketNumber
-        ? parseInt(lastTicket[0].ticketNumber.replace(/[^\d]/g, ''))
-        : 0;
+        const lastNumber = lastTicket[0]?.ticketNumber
+          ? parseInt(lastTicket[0].ticketNumber.replace(/[^\d]/g, ''))
+          : 0;
 
-      ticket.ticketNumber = `${prefix}${(lastNumber + 1).toString().padStart(5, '0')}`;
-    }
+        ticket.ticketNumber = `${prefix}${(lastNumber + 1).toString().padStart(5, '0')}`;
+      }
 
-    // Set default ownerTeam if not provided
-    if (!ticket.ownerTeam) {
-      ticket.ownerTeam = ticket.department || 'Seller Support';
-    }
+      // Set default ownerTeam if not provided
+      if (!ticket.ownerTeam) {
+        ticket.ownerTeam = ticket.department || 'Seller Support';
+      }
 
-    // Set default priority fields if not provided
-    if (!ticket.priorityScore) {
-      ticket.priorityScore = 0;
-    }
-    if (!ticket.priorityTier) {
-      ticket.priorityTier = 'Low';
-    }
-    if (!ticket.priorityBadge) {
-      ticket.priorityBadge = 'P3';
-    }
-    if (!ticket.priorityBreakdown) {
-      ticket.priorityBreakdown = {
-        vendorTicketVolume: 0,
-        vendorGmvTier: "Unknown",
-        issuePriorityPoints: 0,
-        gmvPoints: 0,
-        ticketHistoryPoints: 0,
-        issuePoints: 0,
-      };
-    }
+      // Set default priority fields if not provided
+      if (!ticket.priorityScore) {
+        ticket.priorityScore = 0;
+      }
+      if (!ticket.priorityTier) {
+        ticket.priorityTier = 'Low';
+      }
+      if (!ticket.priorityBadge) {
+        ticket.priorityBadge = 'P3';
+      }
+      if (!ticket.priorityBreakdown) {
+        ticket.priorityBreakdown = {
+          vendorTicketVolume: 0,
+          vendorGmvTier: "Unknown",
+          issuePriorityPoints: 0,
+          gmvPoints: 0,
+          ticketHistoryPoints: 0,
+          issuePoints: 0,
+        };
+      }
 
-    // Capture configuration snapshots
-    const snapshots = await this.captureConfigurationSnapshots(ticket);
+      // Capture configuration snapshots
+      const snapshots = await this.captureConfigurationSnapshots(ticket);
 
-    // Insert ticket with snapshots
-    const results = await db.insert(tickets).values({
-      ...ticket,
-      ...snapshots,
-    }).returning();
+      // Insert ticket with snapshots (within transaction)
+      const results = await tx.insert(tickets).values({
+        ...ticket,
+        ...snapshots,
+      }).returning();
 
-    return results[0];
+      return results[0];
+    });
   }
 
   /**
@@ -1322,12 +1325,11 @@ export class DatabaseStorage implements IStorage {
       priorityTier: tickets.priorityTier,
       categoryId: tickets.categoryId,
       createdAt: tickets.createdAt,
-      slaDueDate: tickets.slaDueDate,
+      slaResolveTarget: tickets.slaResolveTarget,
     }).from(tickets);
 
-    // Get all categories for L1/L2/L3/L4 breakdown
-    const allCategories = await db.select().from(categories);
-    const categoryMap = new Map(allCategories.map(c => [c.id, c]));
+    // Use categorySnapshot for analytics (immutable, already contains L1/L2/L3/L4)
+    // This is more reliable than looking up categories which may have been deleted/changed
 
     // Count by issue type
     const byIssueType = Object.entries(
@@ -1361,21 +1363,19 @@ export class DatabaseStorage implements IStorage {
       }, {} as Record<string, number>)
     ).map(([priority, count]) => ({ priority, count }));
 
-    // Count by L1/L2/L3/L4
+    // Count by L1/L2/L3/L4 using categorySnapshot
     const l1Counts: Record<string, number> = {};
     const l2Counts: Record<string, number> = {};
     const l3Counts: Record<string, number> = {};
     const l4Counts: Record<string, number> = {};
 
     allTickets.forEach(ticket => {
-      const category = categoryMap.get(ticket.categoryId);
-      if (category) {
-        l1Counts[category.l1] = (l1Counts[category.l1] || 0) + 1;
-        l2Counts[category.l2] = (l2Counts[category.l2] || 0) + 1;
-        l3Counts[category.l3] = (l3Counts[category.l3] || 0) + 1;
-        if (category.l4) {
-          l4Counts[category.l4] = (l4Counts[category.l4] || 0) + 1;
-        }
+      if (ticket.categorySnapshot) {
+        const snap = ticket.categorySnapshot as any;
+        if (snap.l1) l1Counts[snap.l1] = (l1Counts[snap.l1] || 0) + 1;
+        if (snap.l2) l2Counts[snap.l2] = (l2Counts[snap.l2] || 0) + 1;
+        if (snap.l3) l3Counts[snap.l3] = (l3Counts[snap.l3] || 0) + 1;
+        if (snap.l4) l4Counts[snap.l4] = (l4Counts[snap.l4] || 0) + 1;
       }
     });
 
@@ -1393,13 +1393,13 @@ export class DatabaseStorage implements IStorage {
     };
 
     allTickets.forEach(ticket => {
-      if (!ticket.slaDueDate) {
+      if (!ticket.slaResolveTarget) {
         slaCounts["No SLA"]++;
       } else if (ticket.status === "Solved" || ticket.status === "Closed") {
         // For solved/closed tickets, we'd need to check if they were solved before SLA due date
-        // For now, we'll just count them as within SLA if slaDueDate exists
+        // For now, we'll just count them as within SLA if slaResolveTarget exists
         slaCounts["Within SLA"]++;
-      } else if (new Date(ticket.slaDueDate) < now) {
+      } else if (new Date(ticket.slaResolveTarget) < now) {
         slaCounts["Breached"]++;
       } else {
         slaCounts["Within SLA"]++;
