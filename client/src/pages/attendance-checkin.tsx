@@ -90,7 +90,11 @@ export default function AttendanceCheckInPage() {
   const { data: activeSession, isLoading } = useQuery<AttendanceRecord | null>({
     queryKey: ["/api/attendance/current", user?.id],
     queryFn: async () => {
+      if (!user?.email) return null;
       const res = await fetch(`/api/attendance/current/${user?.id}`, {
+        headers: {
+          "x-user-email": user.email,
+        },
         credentials: "include",
       });
       if (!res.ok) return null;
@@ -144,10 +148,16 @@ export default function AttendanceCheckInPage() {
 
   const loginMutation = useMutation({
     mutationFn: async () => {
+      if (!user?.email) {
+        throw new Error("User email not found");
+      }
       const location = await captureLocation();
       const response = await fetch("/api/attendance/login", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: {
+          "Content-Type": "application/json",
+          "x-user-email": user.email,
+        },
         credentials: "include",
         body: JSON.stringify({
           loginTime: new Date().toISOString(),
@@ -179,10 +189,16 @@ export default function AttendanceCheckInPage() {
 
   const logoutMutation = useMutation({
     mutationFn: async () => {
+      if (!user?.email) {
+        throw new Error("User email not found");
+      }
       const location = await captureLocation();
       const response = await fetch("/api/attendance/logout", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: {
+          "Content-Type": "application/json",
+          "x-user-email": user.email,
+        },
         credentials: "include",
         body: JSON.stringify({
           logoutTime: new Date().toISOString(),
