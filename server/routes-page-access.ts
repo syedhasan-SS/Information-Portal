@@ -211,4 +211,121 @@ export function registerPageAccessRoutes(app: Express) {
       res.status(500).json({ error: error.message });
     }
   });
+
+  // Get specific user's access (with overrides marked)
+  app.get("/api/page-access/users/:userId/access", async (req, res) => {
+    try {
+      const userEmail = req.headers["x-user-email"] as string;
+      if (!userEmail) {
+        return res.status(401).json({ error: "Authentication required" });
+      }
+
+      const user = await storage.getUserByEmail(userEmail);
+      if (!user || (user.role !== "Owner" && user.role !== "Admin")) {
+        return res.status(403).json({ error: "Access denied. Owner/Admin only." });
+      }
+
+      const pageOverrides = await storage.getUserPageOverrides(req.params.userId);
+      const featureOverrides = await storage.getUserFeatureOverrides(req.params.userId);
+
+      // Convert arrays to objects for easier lookup
+      const pages: Record<string, boolean> = {};
+      pageOverrides.forEach((override: any) => {
+        pages[override.pageKey] = override.isEnabled;
+      });
+
+      const features: Record<string, Record<string, boolean>> = {};
+      featureOverrides.forEach((override: any) => {
+        if (!features[override.pageKey]) {
+          features[override.pageKey] = {};
+        }
+        features[override.pageKey][override.featureKey] = override.isEnabled;
+      });
+
+      res.json({ pages, features });
+    } catch (error: any) {
+      console.error("Get user access error:", error);
+      res.status(500).json({ error: error.message });
+    }
+  });
+
+  // Update user's page access (bulk)
+  app.put("/api/page-access/users/:userId/pages", async (req, res) => {
+    try {
+      const userEmail = req.headers["x-user-email"] as string;
+      if (!userEmail) {
+        return res.status(401).json({ error: "Authentication required" });
+      }
+
+      const user = await storage.getUserByEmail(userEmail);
+      if (!user || (user.role !== "Owner" && user.role !== "Admin")) {
+        return res.status(403).json({ error: "Access denied. Owner/Admin only." });
+      }
+
+      const { pages } = req.body; // { pageKey: boolean }
+
+      for (const [pageKey, isEnabled] of Object.entries(pages)) {
+        await storage.setUserPageOverride(req.params.userId, pageKey, isEnabled as boolean, "Set by admin", user.id);
+      }
+
+      res.json({ message: "User page access updated successfully" });
+    } catch (error: any) {
+      console.error("Update user page access error:", error);
+      res.status(500).json({ error: error.message });
+    }
+  });
+
+  // Get user's feature access for a specific page
+  app.get("/api/page-access/users/:userId/features/:pageKey", async (req, res) => {
+    try {
+      const userEmail = req.headers["x-user-email"] as string;
+      if (!userEmail) {
+        return res.status(401).json({ error: "Authentication required" });
+      }
+
+      const user = await storage.getUserByEmail(userEmail);
+      if (!user || (user.role !== "Owner" && user.role !== "Admin")) {
+        return res.status(403).json({ error: "Access denied. Owner/Admin only." });
+      }
+
+      const featureOverrides = await storage.getUserFeatureOverrides(req.params.userId);
+      const filtered = featureOverrides.filter((f: any) => f.pageKey === req.params.pageKey);
+
+      const features: Record<string, boolean> = {};
+      filtered.forEach((override: any) => {
+        features[override.featureKey] = override.isEnabled;
+      });
+
+      res.json({ features });
+    } catch (error: any) {
+      console.error("Get user features error:", error);
+      res.status(500).json({ error: error.message });
+    }
+  });
+
+  // Update user's feature access (bulk)
+  app.put("/api/page-access/users/:userId/features", async (req, res) => {
+    try {
+      const userEmail = req.headers["x-user-email"] as string;
+      if (!userEmail) {
+        return res.status(401).json({ error: "Authentication required" });
+      }
+
+      const user = await storage.getUserByEmail(userEmail);
+      if (!user || (user.role !== "Owner" && user.role !== "Admin")) {
+        return res.status(403).json({ error: "Access denied. Owner/Admin only." });
+      }
+
+      const { pageKey, features } = req.body; // { featureKey: boolean }
+
+      for (const [featureKey, isEnabled] of Object.entries(features)) {
+        await storage.setUserFeatureOverride(req.params.userId, pageKey, featureKey, isEnabled as boolean, "Set by admin", user.id);
+      }
+
+      res.json({ message: "User feature access updated successfully" });
+    } catch (error: any) {
+      console.error("Update user feature access error:", error);
+      res.status(500).json({ error: error.message });
+    }
+  });
 }

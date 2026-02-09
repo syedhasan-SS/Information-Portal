@@ -24,6 +24,7 @@ import OrgHierarchyPage from "@/pages/org-hierarchy";
 import RolesPage from "@/pages/roles";
 import AdminToolsPage from "@/pages/admin-tools";
 import PagePermissionsPage from "@/pages/admin/page-permissions";
+import UserPermissionsPage from "@/pages/admin/user-permissions";
 import ProductRequestsPage from "@/pages/product-requests";
 import AttendancePage from "@/pages/attendance";
 import AttendanceCheckInPage from "@/pages/attendance-checkin";
@@ -117,6 +118,11 @@ function Router() {
       <Route path="/admin/page-permissions">
         <ProtectedRoute requiredRoles={["Owner", "Admin"]}>
           <PagePermissionsPage />
+        </ProtectedRoute>
+      </Route>
+      <Route path="/admin/user-permissions">
+        <ProtectedRoute requiredRoles={["Owner", "Admin"]}>
+          <UserPermissionsPage />
         </ProtectedRoute>
       </Route>
       <Route path="/product-requests">
