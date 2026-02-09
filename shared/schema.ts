@@ -838,3 +838,97 @@ export type Notification = typeof notifications.$inferSelect;
 export type Department = typeof departments.$inferSelect;
 export type SubDepartment = typeof subDepartments.$inferSelect;
 export type AttendanceRecord = typeof attendanceRecords.$inferSelect;
+
+// Page Access Control System
+export const pagePermissions = pgTable("page_permissions", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  pageKey: varchar("page_key").notNull().unique(),
+  displayName: varchar("display_name").notNull(),
+  description: text("description"),
+  category: varchar("category"),
+  isActive: boolean("is_active").default(true),
+  defaultEnabled: boolean("default_enabled").default(true),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+  updatedAt: timestamp("updated_at").notNull().defaultNow(),
+});
+
+export const pageFeatures = pgTable("page_features", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  pageKey: varchar("page_key").notNull(),
+  featureKey: varchar("feature_key").notNull(),
+  displayName: varchar("display_name").notNull(),
+  description: text("description"),
+  featureType: varchar("feature_type").notNull().$type<"crud" | "export" | "ui_section" | "custom">(),
+  isActive: boolean("is_active").default(true),
+  defaultEnabled: boolean("default_enabled").default(true),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+  updatedAt: timestamp("updated_at").notNull().defaultNow(),
+}, (table) => ({
+  uniquePageFeature: index("unique_page_feature_idx").on(table.pageKey, table.featureKey),
+}));
+
+export const rolePageAccess = pgTable("role_page_access", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  roleId: varchar("role_id").notNull().references(() => roles.id, { onDelete: "cascade" }),
+  pageKey: varchar("page_key").notNull(),
+  isEnabled: boolean("is_enabled").default(true),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+}, (table) => ({
+  roleIdIdx: index("role_page_access_role_idx").on(table.roleId),
+  pageKeyIdx: index("role_page_access_page_idx").on(table.pageKey),
+  uniqueRolePage: index("unique_role_page_idx").on(table.roleId, table.pageKey),
+}));
+
+export const roleFeatureAccess = pgTable("role_feature_access", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  roleId: varchar("role_id").notNull().references(() => roles.id, { onDelete: "cascade" }),
+  pageKey: varchar("page_key").notNull(),
+  featureKey: varchar("feature_key").notNull(),
+  isEnabled: boolean("is_enabled").default(true),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+}, (table) => ({
+  roleIdIdx: index("role_feature_access_role_idx").on(table.roleId),
+  pageFeatureIdx: index("role_feature_access_page_feature_idx").on(table.pageKey, table.featureKey),
+  uniqueRolePageFeature: index("unique_role_page_feature_idx").on(table.roleId, table.pageKey, table.featureKey),
+}));
+
+export const userPageAccessOverrides = pgTable("user_page_access_overrides", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  userId: varchar("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+  pageKey: varchar("page_key").notNull(),
+  isEnabled: boolean("is_enabled").notNull(),
+  reason: text("reason"),
+  createdBy: varchar("created_by").references(() => users.id),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+}, (table) => ({
+  userIdIdx: index("user_page_overrides_user_idx").on(table.userId),
+  uniqueUserPage: index("unique_user_page_idx").on(table.userId, table.pageKey),
+}));
+
+export const userFeatureAccessOverrides = pgTable("user_feature_access_overrides", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  userId: varchar("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+  pageKey: varchar("page_key").notNull(),
+  featureKey: varchar("feature_key").notNull(),
+  isEnabled: boolean("is_enabled").notNull(),
+  reason: text("reason"),
+  createdBy: varchar("created_by").references(() => users.id),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+}, (table) => ({
+  userIdIdx: index("user_feature_overrides_user_idx").on(table.userId),
+  uniqueUserPageFeature: index("unique_user_page_feature_idx").on(table.userId, table.pageKey, table.featureKey),
+}));
+
+// Type exports
+export type PagePermission = typeof pagePermissions.$inferSelect;
+export type InsertPagePermission = typeof pagePermissions.$inferInsert;
+export type PageFeature = typeof pageFeatures.$inferSelect;
+export type InsertPageFeature = typeof pageFeatures.$inferInsert;
+export type RolePageAccess = typeof rolePageAccess.$inferSelect;
+export type InsertRolePageAccess = typeof rolePageAccess.$inferInsert;
+export type RoleFeatureAccess = typeof roleFeatureAccess.$inferSelect;
+export type InsertRoleFeatureAccess = typeof roleFeatureAccess.$inferInsert;
+export type UserPageAccessOverride = typeof userPageAccessOverrides.$inferSelect;
+export type InsertUserPageAccessOverride = typeof userPageAccessOverrides.$inferInsert;
+export type UserFeatureAccessOverride = typeof userFeatureAccessOverrides.$inferSelect;
+export type InsertUserFeatureAccessOverride = typeof userFeatureAccessOverrides.$inferInsert;

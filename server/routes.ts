@@ -1,6 +1,7 @@
 import type { Express } from "express";
 import { createServer, type Server } from "http";
 import { storage } from "./storage";
+import { registerPageAccessRoutes } from "./routes-page-access";
 import {
   insertVendorSchema,
   insertCategorySchema,
@@ -4629,6 +4630,9 @@ roles: ${JSON.stringify(updated.roles, null, 2)}</pre>
       res.status(500).json({ error: error.message });
     }
   });
+
+  // Register page access control routes
+  registerPageAccessRoutes(app);
 
   return httpServer;
 }

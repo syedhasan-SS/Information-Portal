@@ -26,6 +26,12 @@ import {
   productRequestComments,
   userColumnPreferences,
   attendanceRecords,
+  pagePermissions,
+  pageFeatures,
+  rolePageAccess,
+  roleFeatureAccess,
+  userPageAccessOverrides,
+  userFeatureAccessOverrides,
   type Vendor,
   type Category,
   type Ticket,
@@ -1944,6 +1950,222 @@ export class DatabaseStorage implements IStorage {
       .where(eq(attendanceRecords.id, recordId))
       .returning();
     return result[0];
+  }
+
+  // Page Access Control Methods
+  async getAllPages() {
+    return db.select().from(pagePermissions).where(eq(pagePermissions.isActive, true));
+  }
+
+  async getPageFeatures(pageKey: string) {
+    return db.select().from(pageFeatures)
+      .where(and(
+        eq(pageFeatures.pageKey, pageKey),
+        eq(pageFeatures.isActive, true)
+      ));
+  }
+
+  async getRolePageAccess(roleId: string) {
+    return db.select().from(rolePageAccess).where(eq(rolePageAccess.roleId, roleId));
+  }
+
+  async getRoleFeatureAccess(roleId: string) {
+    return db.select().from(roleFeatureAccess).where(eq(roleFeatureAccess.roleId, roleId));
+  }
+
+  async setRolePageAccess(roleId: string, pageKey: string, isEnabled: boolean) {
+    const existing = await db.select().from(rolePageAccess)
+      .where(and(
+        eq(rolePageAccess.roleId, roleId),
+        eq(rolePageAccess.pageKey, pageKey)
+      ))
+      .limit(1);
+
+    if (existing.length > 0) {
+      return db.update(rolePageAccess)
+        .set({ isEnabled })
+        .where(and(
+          eq(rolePageAccess.roleId, roleId),
+          eq(rolePageAccess.pageKey, pageKey)
+        ))
+        .returning();
+    } else {
+      return db.insert(rolePageAccess)
+        .values({ roleId, pageKey, isEnabled })
+        .returning();
+    }
+  }
+
+  async setRoleFeatureAccess(roleId: string, pageKey: string, featureKey: string, isEnabled: boolean) {
+    const existing = await db.select().from(roleFeatureAccess)
+      .where(and(
+        eq(roleFeatureAccess.roleId, roleId),
+        eq(roleFeatureAccess.pageKey, pageKey),
+        eq(roleFeatureAccess.featureKey, featureKey)
+      ))
+      .limit(1);
+
+    if (existing.length > 0) {
+      return db.update(roleFeatureAccess)
+        .set({ isEnabled })
+        .where(and(
+          eq(roleFeatureAccess.roleId, roleId),
+          eq(roleFeatureAccess.pageKey, pageKey),
+          eq(roleFeatureAccess.featureKey, featureKey)
+        ))
+        .returning();
+    } else {
+      return db.insert(roleFeatureAccess)
+        .values({ roleId, pageKey, featureKey, isEnabled })
+        .returning();
+    }
+  }
+
+  async getUserPageOverrides(userId: string) {
+    return db.select().from(userPageAccessOverrides).where(eq(userPageAccessOverrides.userId, userId));
+  }
+
+  async getUserFeatureOverrides(userId: string) {
+    return db.select().from(userFeatureAccessOverrides).where(eq(userFeatureAccessOverrides.userId, userId));
+  }
+
+  async setUserPageOverride(userId: string, pageKey: string, isEnabled: boolean, reason?: string, createdBy?: string) {
+    const existing = await db.select().from(userPageAccessOverrides)
+      .where(and(
+        eq(userPageAccessOverrides.userId, userId),
+        eq(userPageAccessOverrides.pageKey, pageKey)
+      ))
+      .limit(1);
+
+    if (existing.length > 0) {
+      return db.update(userPageAccessOverrides)
+        .set({ isEnabled, reason })
+        .where(and(
+          eq(userPageAccessOverrides.userId, userId),
+          eq(userPageAccessOverrides.pageKey, pageKey)
+        ))
+        .returning();
+    } else {
+      return db.insert(userPageAccessOverrides)
+        .values({ userId, pageKey, isEnabled, reason, createdBy })
+        .returning();
+    }
+  }
+
+  async deleteUserPageOverride(userId: string, pageKey: string) {
+    return db.delete(userPageAccessOverrides)
+      .where(and(
+        eq(userPageAccessOverrides.userId, userId),
+        eq(userPageAccessOverrides.pageKey, pageKey)
+      ));
+  }
+
+  async resolveUserPageAccess(userId: string, pageKey: string): Promise<boolean> {
+    // 1. Check user override
+    const override = await db.select().from(userPageAccessOverrides)
+      .where(and(
+        eq(userPageAccessOverrides.userId, userId),
+        eq(userPageAccessOverrides.pageKey, pageKey)
+      ))
+      .limit(1);
+
+    if (override.length > 0) {
+      return override[0].isEnabled;
+    }
+
+    // 2. Check role access
+    const user = await this.getUser(userId);
+    if (!user) return false;
+
+    const roleAccess = await db.select().from(rolePageAccess)
+      .where(and(
+        eq(rolePageAccess.roleId, user.role),
+        eq(rolePageAccess.pageKey, pageKey)
+      ))
+      .limit(1);
+
+    if (roleAccess.length > 0) {
+      return roleAccess[0].isEnabled;
+    }
+
+    // 3. Use page default
+    const page = await db.select().from(pagePermissions)
+      .where(eq(pagePermissions.pageKey, pageKey))
+      .limit(1);
+
+    return page.length > 0 ? (page[0].defaultEnabled ?? true) : true;
+  }
+
+  async resolveUserFeatureAccess(userId: string, pageKey: string, featureKey: string): Promise<boolean> {
+    // 1. Check user override
+    const override = await db.select().from(userFeatureAccessOverrides)
+      .where(and(
+        eq(userFeatureAccessOverrides.userId, userId),
+        eq(userFeatureAccessOverrides.pageKey, pageKey),
+        eq(userFeatureAccessOverrides.featureKey, featureKey)
+      ))
+      .limit(1);
+
+    if (override.length > 0) {
+      return override[0].isEnabled;
+    }
+
+    // 2. Check role access
+    const user = await this.getUser(userId);
+    if (!user) return false;
+
+    const roleAccess = await db.select().from(roleFeatureAccess)
+      .where(and(
+        eq(roleFeatureAccess.roleId, user.role),
+        eq(roleFeatureAccess.pageKey, pageKey),
+        eq(roleFeatureAccess.featureKey, featureKey)
+      ))
+      .limit(1);
+
+    if (roleAccess.length > 0) {
+      return roleAccess[0].isEnabled;
+    }
+
+    // 3. Use feature default
+    const feature = await db.select().from(pageFeatures)
+      .where(and(
+        eq(pageFeatures.pageKey, pageKey),
+        eq(pageFeatures.featureKey, featureKey)
+      ))
+      .limit(1);
+
+    return feature.length > 0 ? (feature[0].defaultEnabled ?? true) : true;
+  }
+
+  async getUserEffectivePageAccess(userId: string) {
+    const pages = await this.getAllPages();
+    const result: Record<string, boolean> = {};
+
+    for (const page of pages) {
+      result[page.pageKey] = await this.resolveUserPageAccess(userId, page.pageKey);
+    }
+
+    return result;
+  }
+
+  async getUserEffectiveFeatureAccess(userId: string) {
+    const pages = await this.getAllPages();
+    const result: Record<string, Record<string, boolean>> = {};
+
+    for (const page of pages) {
+      const features = await this.getPageFeatures(page.pageKey);
+      result[page.pageKey] = {};
+
+      for (const feature of features) {
+        result[page.pageKey][feature.featureKey] = await this.resolveUserFeatureAccess(
+          userId,
+          page.pageKey,
+          feature.featureKey
+        );
+      }
+    }
+
+    return result;
   }
 }
 
