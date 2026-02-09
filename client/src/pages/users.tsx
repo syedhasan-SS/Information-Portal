@@ -477,9 +477,9 @@ export default function UsersPage() {
       setFormData({ name: "", email: "", password: "", role: "", department: "", subDepartment: "", managerId: "__none__" });
       setSelectedRoles([]);
       setShowForm(false);
-      setSuccess("User created successfully!");
+      setSuccess("User created successfully! Welcome email with login credentials has been sent.");
       setError("");
-      setTimeout(() => setSuccess(""), 3000);
+      setTimeout(() => setSuccess(""), 5000);
     },
     onError: (err: Error) => {
       setError(err.message);
@@ -1302,6 +1302,16 @@ export default function UsersPage() {
                   </Popover>
                   <p className="text-xs text-muted-foreground">Search and select the direct manager for this user</p>
                 </div>
+              </div>
+
+              {/* Email notification info */}
+              <div className="mt-4 p-3 bg-blue-50 dark:bg-blue-950/20 border border-blue-200 dark:border-blue-900 rounded-lg">
+                <p className="text-sm text-blue-900 dark:text-blue-100 flex items-center gap-2">
+                  <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                  </svg>
+                  <span>An email with login credentials will be automatically sent to the user's email address</span>
+                </p>
               </div>
 
               <div className="flex justify-end gap-3 pt-4">
@@ -2745,6 +2755,9 @@ export default function UsersPage() {
                 </div>
                 <div className="text-sm space-y-1">
                   <p>✓ Successfully created: {bulkUploadResult.created} users</p>
+                  {bulkUploadResult.created > 0 && (
+                    <p className="text-muted-foreground">📧 Welcome emails with login credentials have been sent to all created users</p>
+                  )}
                   {bulkUploadResult.failed > 0 && (
                     <p className="text-destructive">✗ Failed: {bulkUploadResult.failed} users</p>
                   )}
@@ -2813,6 +2826,18 @@ export default function UsersPage() {
                 </ol>
               </div>
             </div>
+
+            {/* Email notification info */}
+            {!bulkUploadResult && (
+              <div className="p-3 bg-blue-50 dark:bg-blue-950/20 border border-blue-200 dark:border-blue-900 rounded-lg">
+                <p className="text-sm text-blue-900 dark:text-blue-100 flex items-center gap-2">
+                  <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                  </svg>
+                  <span>Welcome emails with login credentials will be automatically sent to all successfully created users</span>
+                </p>
+              </div>
+            )}
           </div>
 
           <DialogFooter>
