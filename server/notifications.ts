@@ -1,5 +1,11 @@
 import { storage } from "./storage";
 import type { Ticket, Comment, User } from "@shared/schema";
+import {
+  notifySlackTicketCreated,
+  notifySlackTicketAssigned,
+  notifySlackCommentAdded,
+  notifySlackTicketResolved,
+} from "./slack-integration";
 
 /**
  * Helper functions for creating notifications based on ticket events
@@ -38,6 +44,12 @@ export async function notifyTicketCreated(ticket: Ticket, creator: User | undefi
 
     await Promise.all(notificationPromises);
     console.log(`[Notifications] Created ${notificationPromises.length} notifications for new ticket ${ticket.ticketNumber}`);
+
+    // Send Slack notification
+    const assignee = ticket.assigneeId ? await storage.getUserById(ticket.assigneeId) : undefined;
+    notifySlackTicketCreated(ticket, creator, assignee).catch(err => {
+      console.error('[Slack] Failed to send ticket created notification:', err);
+    });
   } catch (error) {
     console.error("[Notifications] Failed to create ticket creation notifications:", error);
   }
@@ -73,6 +85,11 @@ export async function notifyTicketAssigned(ticket: Ticket, assignee: User, actor
     });
 
     console.log(`[Notifications] Notified user ${assignee.name} about ticket assignment: ${ticket.ticketNumber}`);
+
+    // Send Slack notification
+    notifySlackTicketAssigned(ticket, assignee, actor).catch(err => {
+      console.error('[Slack] Failed to send ticket assigned notification:', err);
+    });
   } catch (error) {
     console.error("[Notifications] Failed to create ticket assignment notification:", error);
   }
@@ -129,6 +146,13 @@ export async function notifyTicketSolved(ticket: Ticket, solver: User | undefine
     });
 
     await Promise.all(notificationPromises);
+
+    // Send Slack notification
+    if (solver) {
+      notifySlackTicketResolved(ticket, solver).catch(err => {
+        console.error('[Slack] Failed to send ticket resolved notification:', err);
+      });
+    }
   } catch (error) {
     console.error("[Notifications] Failed to create ticket solved notifications:", error);
   }
@@ -254,6 +278,13 @@ export async function notifyMentions(
 
     await Promise.all(notificationPromises);
     console.log(`[Notifications] Created ${notificationPromises.length} mention notifications for ticket ${ticket.ticketNumber}`);
+
+    // Send Slack notification for mentions
+    if (mentionedUsers.length > 0 && commenter) {
+      notifySlackCommentAdded(ticket, comment, commenter, mentionedUsers).catch(err => {
+        console.error('[Slack] Failed to send comment mention notification:', err);
+      });
+    }
   } catch (error) {
     console.error("[Notifications] Failed to create mention notifications:", error);
   }
