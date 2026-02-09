@@ -19,7 +19,8 @@ import {
 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { cn } from "@/lib/utils";
-import { GoogleMapLocation } from "@/components/GoogleMapLocation";
+// Google Maps removed due to billing requirements
+// import { GoogleMapLocation } from "@/components/GoogleMapLocation";
 
 interface LocationData {
   latitude: number;
@@ -359,32 +360,47 @@ export default function AttendanceCheckInPage() {
           </div>
         </Card>
 
-        {/* Google Maps Card */}
+        {/* Location Card */}
         {userLocation && (
-          <Card className="p-0 overflow-hidden">
-            <div className="relative h-96">
-              <GoogleMapLocation
-                latitude={userLocation.latitude}
-                longitude={userLocation.longitude}
-                accuracy={userLocation.accuracy}
-                onLocationUpdate={(location) => {
-                  setUserLocation(location);
-                }}
-              />
-              <div className="absolute top-4 left-4 right-4 bg-white rounded-lg shadow-lg p-3 z-10">
-                <div className="flex items-center gap-2">
-                  <MapPin className="h-4 w-4 text-blue-600" />
-                  <div className="flex-1">
-                    <p className="text-xs font-semibold">Your Current Location</p>
-                    <p className="text-xs text-muted-foreground">
-                      {userLocation.latitude.toFixed(6)}, {userLocation.longitude.toFixed(6)}
-                    </p>
+          <Card className="p-6">
+            <div className="flex items-start gap-4">
+              <div className="p-3 bg-blue-50 rounded-lg">
+                <MapPin className="h-6 w-6 text-blue-600" />
+              </div>
+              <div className="flex-1">
+                <h3 className="font-semibold mb-2">Your Current Location</h3>
+                <div className="space-y-2">
+                  <div className="flex items-center gap-2">
+                    <span className="text-sm text-muted-foreground">Latitude:</span>
+                    <code className="text-sm font-mono bg-gray-100 px-2 py-1 rounded">
+                      {userLocation.latitude.toFixed(6)}
+                    </code>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <span className="text-sm text-muted-foreground">Longitude:</span>
+                    <code className="text-sm font-mono bg-gray-100 px-2 py-1 rounded">
+                      {userLocation.longitude.toFixed(6)}
+                    </code>
                   </div>
                   {userLocation.accuracy && (
-                    <Badge variant="secondary" className="text-xs">
-                      ±{Math.round(userLocation.accuracy)}m
-                    </Badge>
+                    <div className="flex items-center gap-2">
+                      <span className="text-sm text-muted-foreground">Accuracy:</span>
+                      <Badge variant="secondary" className="text-xs">
+                        ±{Math.round(userLocation.accuracy)} meters
+                      </Badge>
+                    </div>
                   )}
+                  <a
+                    href={`https://www.google.com/maps?q=${userLocation.latitude},${userLocation.longitude}`}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="inline-flex items-center gap-1 text-sm text-blue-600 hover:text-blue-700 mt-2"
+                  >
+                    View on Google Maps
+                    <svg className="h-3 w-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
+                    </svg>
+                  </a>
                 </div>
               </div>
             </div>
