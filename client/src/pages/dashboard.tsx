@@ -38,6 +38,8 @@ import {
   Info,
   TrendingDown,
   Minus,
+  UserCog,
+  Lock,
 } from "lucide-react";
 import {
   Tooltip,
@@ -359,6 +361,19 @@ export default function DashboardPage() {
                           <Shield className="mr-2 h-4 w-4" />
                           Roles Management
                         </DropdownMenuItem>
+                      )}
+                      {/* Page Permissions - Owner/Admin only */}
+                      {["Owner", "Admin"].includes(user?.role || "") && (
+                        <>
+                          <DropdownMenuItem onClick={() => setLocation("/admin/page-permissions")}>
+                            <Lock className="mr-2 h-4 w-4" />
+                            Page Permissions
+                          </DropdownMenuItem>
+                          <DropdownMenuItem onClick={() => setLocation("/admin/user-permissions")}>
+                            <UserCog className="mr-2 h-4 w-4" />
+                            User Permissions
+                          </DropdownMenuItem>
+                        </>
                       )}
                       {/* Product Requests - accessible to Lead and above */}
                       {["Owner", "Admin", "Head", "Manager", "Lead"].includes(user?.role || "") ||
