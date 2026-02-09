@@ -77,8 +77,11 @@ interface AttendanceAnalytics {
   byDepartment: Record<string, any>;
 }
 
-async function getUsers(): Promise<UserType[]> {
+async function getUsers(userEmail: string): Promise<UserType[]> {
   const res = await fetch("/api/users", {
+    headers: {
+      "x-user-email": userEmail,
+    },
     credentials: 'include'
   });
   if (!res.ok) throw new Error("Failed to fetch users");
@@ -108,8 +111,8 @@ export default function AttendancePage() {
   // Fetch users for dropdown (managers and above)
   const { data: users } = useQuery<UserType[]>({
     queryKey: ["users"],
-    queryFn: getUsers,
-    enabled: isManager,
+    queryFn: () => getUsers(user?.email || ""),
+    enabled: isManager && !!user?.email,
   });
 
   // Filter users based on access level
@@ -144,6 +147,9 @@ export default function AttendancePage() {
       }
 
       const res = await fetch(`/api/attendance/history?${params}`, {
+        headers: {
+          "x-user-email": user?.email || "",
+        },
         credentials: 'include'
       });
       if (!res.ok) {
@@ -171,6 +177,9 @@ export default function AttendancePage() {
       }
 
       const res = await fetch(`/api/attendance/reports?${params}`, {
+        headers: {
+          "x-user-email": user?.email || "",
+        },
         credentials: 'include'
       });
       if (!res.ok) throw new Error("Failed to fetch attendance reports");

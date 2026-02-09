@@ -172,14 +172,18 @@ export default function AttendanceCheckInPage() {
       }
       return response.json();
     },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["/api/attendance/current", user?.id] });
-      toast({
-        title: "Checked In Successfully",
-        description: "Have a productive day!",
-      });
+    onSuccess: (data) => {
+      // Only invalidate if we actually got a record back
+      if (data && data.id) {
+        queryClient.invalidateQueries({ queryKey: ["/api/attendance/current", user?.id] });
+        toast({
+          title: "Checked In Successfully",
+          description: "Have a productive day!",
+        });
+      }
     },
     onError: (error: Error) => {
+      // Don't invalidate queries on error - this prevents false "checked in" state
       toast({
         title: "Check-In Failed",
         description: error.message,
@@ -213,14 +217,18 @@ export default function AttendanceCheckInPage() {
       }
       return response.json();
     },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["/api/attendance/current", user?.id] });
-      toast({
-        title: "Checked Out Successfully",
-        description: "See you tomorrow!",
-      });
+    onSuccess: (data) => {
+      // Only invalidate if we actually got a record back
+      if (data && data.id) {
+        queryClient.invalidateQueries({ queryKey: ["/api/attendance/current", user?.id] });
+        toast({
+          title: "Checked Out Successfully",
+          description: "See you tomorrow!",
+        });
+      }
     },
     onError: (error: Error) => {
+      // Don't invalidate queries on error - prevents false state changes
       toast({
         title: "Check-Out Failed",
         description: error.message,
