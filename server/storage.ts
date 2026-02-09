@@ -25,6 +25,7 @@ import {
   productRequests,
   productRequestComments,
   userColumnPreferences,
+  attendanceRecords,
   type Vendor,
   type Category,
   type Ticket,
