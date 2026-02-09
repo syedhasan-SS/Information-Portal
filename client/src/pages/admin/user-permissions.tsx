@@ -212,8 +212,8 @@ export default function UserPermissionsPage() {
 
   // Filter and search
   const filteredUsers = users.filter(u =>
-    u.username.toLowerCase().includes(searchQuery.toLowerCase()) ||
-    u.email.toLowerCase().includes(searchQuery.toLowerCase())
+    (u.username?.toLowerCase() || '').includes(searchQuery.toLowerCase()) ||
+    (u.email?.toLowerCase() || '').includes(searchQuery.toLowerCase())
   );
 
   const filteredPages = pages.filter(page => {
