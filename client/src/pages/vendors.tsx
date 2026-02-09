@@ -74,8 +74,13 @@ export default function VendorsPage() {
   const vendorsWithTickets = vendors?.filter((v) => ticketsByVendor[v.handle]?.total > 0) || [];
 
   const filteredVendors = vendorsWithTickets.filter((vendor) => {
-    if (searchQuery && !vendor.handle.toLowerCase().includes(searchQuery.toLowerCase())) {
-      return false;
+    if (searchQuery) {
+      const query = searchQuery.toLowerCase();
+      const matchesHandle = vendor.handle.toLowerCase().includes(query);
+      const matchesName = vendor.name?.toLowerCase().includes(query);
+      if (!matchesHandle && !matchesName) {
+        return false;
+      }
     }
 
     if (activeTab !== "all") {

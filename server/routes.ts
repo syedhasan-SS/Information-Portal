@@ -309,6 +309,12 @@ export async function registerRoutes(
         console.log('✅ Vendor validated:', vendor.name);
       }
 
+      // Check creator's department for CX special handling
+      let ticketCreator = null;
+      if (parsed.data.createdById) {
+        ticketCreator = await storage.getUserById(parsed.data.createdById);
+      }
+
       // Check for routing rules for this category
       console.log('🔍 Checking routing rules for category:', parsed.data.categoryId);
       const routingRule = await storage.getCategoryRoutingRuleByCategoryId(parsed.data.categoryId);
@@ -317,10 +323,19 @@ export async function registerRoutes(
         console.log('✅ Found routing rule:', routingRule);
 
         // Apply department routing
+        // SPECIAL CASE: For CX users, keep department as "CX" to maintain visibility within CX team
         if (routingRule.targetDepartment) {
-          parsed.data.department = routingRule.targetDepartment;
-          parsed.data.ownerTeam = routingRule.targetDepartment;
-          console.log('📍 Auto-routed to department:', routingRule.targetDepartment);
+          if (ticketCreator && ticketCreator.department === "CX") {
+            // CX users' tickets stay in CX department for visibility
+            parsed.data.department = "CX";
+            parsed.data.ownerTeam = routingRule.targetDepartment; // But route to target team
+            console.log('📍 CX user ticket: keeping department=CX, routing team to:', routingRule.targetDepartment);
+          } else {
+            // Non-CX users: apply standard routing
+            parsed.data.department = routingRule.targetDepartment;
+            parsed.data.ownerTeam = routingRule.targetDepartment;
+            console.log('📍 Auto-routed to department:', routingRule.targetDepartment);
+          }
         }
 
         // Apply priority boost if configured

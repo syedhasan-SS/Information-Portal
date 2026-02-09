@@ -578,12 +578,16 @@ export default function TicketDetailPage() {
 
                 <div>
                   <label className="text-xs font-medium text-muted-foreground">Category</label>
+                  {/* Display current category path */}
+                  <p className="mt-1 text-sm font-medium mb-2 p-2 bg-muted/50 rounded-md">
+                    {getCategoryDisplay(ticket, categoryMap)}
+                  </p>
                   <Select
                     value={pendingChanges.categoryId ?? ticket.categoryId}
                     onValueChange={(val) => setPendingChanges({ ...pendingChanges, categoryId: val })}
                   >
                     <SelectTrigger className="mt-1" data-testid="select-category">
-                      <SelectValue />
+                      <SelectValue placeholder="Change category..." />
                     </SelectTrigger>
                     <SelectContent className="max-h-[300px] overflow-y-auto">
                       {categories?.map((cat) => (
