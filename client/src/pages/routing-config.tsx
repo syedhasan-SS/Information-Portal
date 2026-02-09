@@ -114,7 +114,11 @@ export default function RoutingConfigPage() {
   const { data: routingRules, isLoading: rulesLoading } = useQuery<RoutingRule[]>({
     queryKey: ["routingRules"],
     queryFn: async () => {
-      const res = await fetch("/api/config/routing-rules");
+      const res = await fetch("/api/config/routing-rules", {
+        headers: {
+          "x-user-email": localStorage.getItem("userEmail") || "",
+        },
+      });
       if (!res.ok) throw new Error("Failed to fetch routing rules");
       return res.json();
     },
@@ -150,7 +154,10 @@ export default function RoutingConfigPage() {
     mutationFn: async (data: any) => {
       const res = await fetch("/api/config/routing-rules", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: {
+          "Content-Type": "application/json",
+          "x-user-email": localStorage.getItem("userEmail") || "",
+        },
         body: JSON.stringify(data),
       });
       if (!res.ok) {
@@ -175,7 +182,10 @@ export default function RoutingConfigPage() {
     mutationFn: async ({ id, data }: { id: string; data: any }) => {
       const res = await fetch(`/api/config/routing-rules/${id}`, {
         method: "PUT",
-        headers: { "Content-Type": "application/json" },
+        headers: {
+          "Content-Type": "application/json",
+          "x-user-email": localStorage.getItem("userEmail") || "",
+        },
         body: JSON.stringify(data),
       });
       if (!res.ok) throw new Error("Failed to update routing rule");
@@ -197,6 +207,9 @@ export default function RoutingConfigPage() {
     mutationFn: async (id: string) => {
       const res = await fetch(`/api/config/routing-rules/${id}`, {
         method: "DELETE",
+        headers: {
+          "x-user-email": localStorage.getItem("userEmail") || "",
+        },
       });
       if (!res.ok) throw new Error("Failed to delete routing rule");
     },
