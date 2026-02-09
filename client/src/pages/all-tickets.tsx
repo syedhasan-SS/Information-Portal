@@ -1,10 +1,25 @@
 import { useState, useMemo } from "react";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useLocation } from "wouter";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
+import { Label } from "@/components/ui/label";
+import { Textarea } from "@/components/ui/textarea";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
+import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/hooks/use-auth";
 import {
   Select,
@@ -33,6 +48,9 @@ import {
   CheckCircle,
   Clock,
   X,
+  ChevronDown,
+  MessageSquare,
+  UserPlus,
 } from "lucide-react";
 import type { Ticket, Category, Department, SubDepartment } from "@shared/schema";
 
@@ -91,6 +109,7 @@ function getCategoryDisplay(ticket: Ticket, categoryMap: Record<string, Category
 export default function AllTicketsPage() {
   const [, setLocation] = useLocation();
   const { user, hasPermission } = useAuth();
+  const [activeTab, setActiveTab] = useState<"open" | "solved">("open");
   const [searchQuery, setSearchQuery] = useState("");
   const [showFilters, setShowFilters] = useState(false);
   const [statusFilter, setStatusFilter] = useState<string[]>([]);
@@ -102,6 +121,14 @@ export default function AllTicketsPage() {
   const [sortDirection, setSortDirection] = useState<SortDirection>("desc");
   const [currentPage, setCurrentPage] = useState(1);
   const [pageSize, setPageSize] = useState(25);
+  const [selectedTickets, setSelectedTickets] = useState<Set<string>>(new Set());
+  const [showBulkTransferDialog, setShowBulkTransferDialog] = useState(false);
+  const [bulkTransferAssignee, setBulkTransferAssignee] = useState("");
+  const [showBulkCommentDialog, setShowBulkCommentDialog] = useState(false);
+  const [bulkComment, setBulkComment] = useState("");
+  const [showBulkSolveDialog, setShowBulkSolveDialog] = useState(false);
+  const queryClient = useQueryClient();
+  const { toast } = useToast();
 
   // Check if user can view all tickets or only department tickets
   const canViewAllTickets = hasPermission("view:all_tickets");
@@ -131,6 +158,180 @@ export default function AllTicketsPage() {
     return acc;
   }, {} as Record<string, Category>) || {};
 
+  // Bulk transfer mutation
+  const bulkTransferMutation = useMutation({
+    mutationFn: async ({ ticketIds, assigneeId }: { ticketIds: string[], assigneeId: string }) => {
+      const results = await Promise.all(
+        ticketIds.map(async (ticketId) => {
+          const res = await fetch(`/api/tickets/${ticketId}`, {
+            method: "PATCH",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              assigneeId,
+              status: "Open",
+            }),
+          });
+          if (!res.ok) throw new Error(`Failed to transfer ticket ${ticketId}`);
+          return res.json();
+        })
+      );
+      return results;
+    },
+    onSuccess: (_, variables) => {
+      queryClient.invalidateQueries({ queryKey: ["tickets"] });
+      setSelectedTickets(new Set());
+      setShowBulkTransferDialog(false);
+      setBulkTransferAssignee("");
+      toast({
+        title: "Success",
+        description: `Successfully transferred ${variables.ticketIds.length} ticket(s)`,
+      });
+    },
+    onError: (error: Error) => {
+      toast({ title: "Error", description: error.message, variant: "destructive" });
+    },
+  });
+
+  // Bulk comment mutation
+  const bulkCommentMutation = useMutation({
+    mutationFn: async ({ ticketIds, comment }: { ticketIds: string[], comment: string }) => {
+      const results = await Promise.all(
+        ticketIds.map(async (ticketId) => {
+          const res = await fetch("/api/comments", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              ticketId,
+              userId: user?.id,
+              comment,
+              isInternal: false,
+            }),
+          });
+          if (!res.ok) throw new Error(`Failed to add comment to ticket ${ticketId}`);
+          return res.json();
+        })
+      );
+      return results;
+    },
+    onSuccess: (_, variables) => {
+      queryClient.invalidateQueries({ queryKey: ["tickets"] });
+      setSelectedTickets(new Set());
+      setShowBulkCommentDialog(false);
+      setBulkComment("");
+      toast({
+        title: "Success",
+        description: `Added comment to ${variables.ticketIds.length} ticket(s)`,
+      });
+    },
+    onError: (error: Error) => {
+      toast({ title: "Error", description: error.message, variant: "destructive" });
+    },
+  });
+
+  // Bulk solve mutation
+  const bulkSolveMutation = useMutation({
+    mutationFn: async (ticketIds: string[]) => {
+      // Get current ticket data to check statuses
+      const ticketsToSolve = tickets?.filter(t => ticketIds.includes(t.id)) || [];
+
+      const results = await Promise.all(
+        ticketsToSolve.map(async (ticket) => {
+          try {
+            // If ticket is "New", first transition to "Open", then to "Solved"
+            if (ticket.status === "New") {
+              // First update to Open
+              const openRes = await fetch(`/api/tickets/${ticket.id}`, {
+                method: "PATCH",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ status: "Open" }),
+              });
+              if (!openRes.ok) {
+                const errorData = await openRes.json();
+                console.error(`Failed to open ticket ${ticket.id}:`, errorData);
+                throw new Error(`Failed to open ticket ${ticket.ticketNumber}: ${errorData.error || 'Unknown error'}`);
+              }
+            }
+
+            // Then update to Solved (works for all status types now)
+            const res = await fetch(`/api/tickets/${ticket.id}`, {
+              method: "PATCH",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({
+                status: "Solved",
+              }),
+            });
+
+            if (!res.ok) {
+              const errorData = await res.json();
+              console.error(`Failed to solve ticket ${ticket.id}:`, errorData);
+              throw new Error(`Failed to solve ticket ${ticket.ticketNumber}: ${errorData.error || 'Unknown error'}`);
+            }
+            return res.json();
+          } catch (error: any) {
+            console.error(`Error processing ticket ${ticket.id}:`, error);
+            throw error;
+          }
+        })
+      );
+      return results;
+    },
+    onSuccess: (_, ticketIds) => {
+      queryClient.invalidateQueries({ queryKey: ["tickets"] });
+      setSelectedTickets(new Set());
+      setShowBulkSolveDialog(false);
+      toast({
+        title: "Success",
+        description: `Marked ${ticketIds.length} ticket(s) as solved`,
+      });
+    },
+    onError: (error: Error) => {
+      toast({ title: "Error", description: error.message, variant: "destructive" });
+    },
+  });
+
+  // Bulk selection handlers
+  const handleSelectTicket = (ticketId: string) => {
+    const newSelected = new Set(selectedTickets);
+    if (newSelected.has(ticketId)) {
+      newSelected.delete(ticketId);
+    } else {
+      newSelected.add(ticketId);
+    }
+    setSelectedTickets(newSelected);
+  };
+
+  const handleSelectAll = (ticketIds: string[]) => {
+    if (selectedTickets.size === ticketIds.length) {
+      setSelectedTickets(new Set());
+    } else {
+      setSelectedTickets(new Set(ticketIds));
+    }
+  };
+
+  const handleBulkTransfer = () => {
+    if (selectedTickets.size === 0) {
+      toast({ title: "No tickets selected", description: "Please select tickets to transfer", variant: "destructive" });
+      return;
+    }
+    setShowBulkTransferDialog(true);
+  };
+
+  const handleBulkComment = () => {
+    if (selectedTickets.size === 0) {
+      toast({ title: "No tickets selected", description: "Please select tickets to add comment", variant: "destructive" });
+      return;
+    }
+    setShowBulkCommentDialog(true);
+  };
+
+  const handleBulkSolve = () => {
+    if (selectedTickets.size === 0) {
+      toast({ title: "No tickets selected", description: "Please select tickets to solve", variant: "destructive" });
+      return;
+    }
+    setShowBulkSolveDialog(true);
+  };
+
   // Department-based ticket access filtering
   // Each agent/department can ONLY see their own department's tickets
   // This includes strict separation between Customer Support and Seller Support within CX
@@ -147,6 +348,13 @@ export default function AllTicketsPage() {
     return tickets.filter((ticket) => {
       const ticketDept = ticket.department as string;
 
+      // VALIDATION: Exclude malformed tickets with empty/invalid department
+      // These are likely test data or corrupted entries
+      if (!ticketDept || ticketDept.trim() === "") {
+        console.warn(`Ticket ${ticket.ticketNumber} has empty department - excluding from view`);
+        return false;
+      }
+
       // For CX department users - MUST have sub-department specified
       // IMPORTANT: CX filtering CANNOT be bypassed by view:all_tickets permission
       if (user.department === "CX") {
@@ -156,17 +364,38 @@ export default function AllTicketsPage() {
           return false;
         }
 
-        // Filter based on category departmentType
-        const categoryDepartmentType = ticket.categorySnapshot?.departmentType;
-
-        // Seller Support agents see ONLY Seller Support tickets (based on category)
+        // For Seller Support users
         if (user.subDepartment === "Seller Support") {
-          return categoryDepartmentType === "Seller Support" || categoryDepartmentType === "All";
+          // Option 1: Ticket has department "Seller Support" (legacy tickets)
+          if (ticketDept === "Seller Support") {
+            return true;
+          }
+
+          // Option 2: Ticket has department "CX" with Seller Support category (new tickets)
+          if (ticketDept === "CX") {
+            const categoryDepartmentType = ticket.categorySnapshot?.departmentType;
+            return categoryDepartmentType === "Seller Support" || categoryDepartmentType === "All";
+          }
+
+          // Not a Seller Support ticket
+          return false;
         }
 
-        // Customer Support agents see ONLY Customer Support tickets (based on category)
+        // For Customer Support users
         if (user.subDepartment === "Customer Support") {
-          return categoryDepartmentType === "Customer Support" || categoryDepartmentType === "All";
+          // Option 1: Ticket has department "Customer Support" (legacy tickets)
+          if (ticketDept === "Customer Support") {
+            return true;
+          }
+
+          // Option 2: Ticket has department "CX" with Customer Support category (new tickets)
+          if (ticketDept === "CX") {
+            const categoryDepartmentType = ticket.categorySnapshot?.departmentType;
+            return categoryDepartmentType === "Customer Support" || categoryDepartmentType === "All";
+          }
+
+          // Not a Customer Support ticket
+          return false;
         }
 
         // Any other CX sub-department: deny access (should not happen)
@@ -184,6 +413,19 @@ export default function AllTicketsPage() {
   }, [tickets, user, canViewAllTickets]);
 
   const filteredTickets = departmentFilteredTickets.filter((ticket) => {
+    // Tab-based filtering: Open vs Solved
+    if (activeTab === "open") {
+      // Open tab: exclude Solved and Closed tickets
+      if (ticket.status === "Solved" || ticket.status === "Closed") {
+        return false;
+      }
+    } else if (activeTab === "solved") {
+      // Solved tab: only show Solved and Closed tickets
+      if (ticket.status !== "Solved" && ticket.status !== "Closed") {
+        return false;
+      }
+    }
+
     if (searchQuery) {
       const query = searchQuery.toLowerCase();
       if (
@@ -194,27 +436,27 @@ export default function AllTicketsPage() {
         return false;
       }
     }
-    
+
     if (statusFilter.length > 0 && !statusFilter.includes(ticket.status)) {
       return false;
     }
-    
+
     if (priorityFilter.length > 0 && !priorityFilter.includes(ticket.priorityTier)) {
       return false;
     }
-    
+
     if (departmentFilter && ticket.department !== departmentFilter) {
       return false;
     }
-    
+
     if (issueTypeFilter && ticket.issueType !== issueTypeFilter) {
       return false;
     }
-    
+
     if (slaStatusFilter && ticket.slaStatus !== slaStatusFilter) {
       return false;
     }
-    
+
     return true;
   }) || [];
 
@@ -369,6 +611,42 @@ export default function AllTicketsPage() {
             </div>
 
             <div className="flex items-center gap-3">
+              {selectedTickets.size > 0 && (
+                <>
+                  <Badge variant="secondary" className="px-3 py-1">
+                    {selectedTickets.size} selected
+                  </Badge>
+                  <DropdownMenu>
+                    <DropdownMenuTrigger asChild>
+                      <Button variant="outline" size="sm">
+                        Bulk Actions
+                        <ChevronDown className="ml-2 h-4 w-4" />
+                      </Button>
+                    </DropdownMenuTrigger>
+                    <DropdownMenuContent align="end">
+                      <DropdownMenuItem onClick={handleBulkTransfer}>
+                        <UserPlus className="mr-2 h-4 w-4" />
+                        Transfer to Assignee
+                      </DropdownMenuItem>
+                      <DropdownMenuItem onClick={handleBulkComment}>
+                        <MessageSquare className="mr-2 h-4 w-4" />
+                        Add Comment
+                      </DropdownMenuItem>
+                      <DropdownMenuItem onClick={handleBulkSolve}>
+                        <CheckCircle className="mr-2 h-4 w-4" />
+                        Mark as Solved
+                      </DropdownMenuItem>
+                    </DropdownMenuContent>
+                  </DropdownMenu>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => setSelectedTickets(new Set())}
+                  >
+                    Clear
+                  </Button>
+                </>
+              )}
               <div className="relative">
                 <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
                 <Input
@@ -402,6 +680,34 @@ export default function AllTicketsPage() {
       </header>
 
       <main className="mx-auto max-w-[1600px] px-6 py-6">
+        {/* Tab Navigation */}
+        <div className="mb-6 flex gap-2 border-b">
+          <Button
+            variant={activeTab === "open" ? "default" : "ghost"}
+            onClick={() => {
+              setActiveTab("open");
+              setCurrentPage(1);
+              setSelectedTickets(new Set());
+            }}
+            className="rounded-b-none border-b-2 border-transparent data-[active=true]:border-primary"
+            data-active={activeTab === "open"}
+          >
+            Open Tickets
+          </Button>
+          <Button
+            variant={activeTab === "solved" ? "default" : "ghost"}
+            onClick={() => {
+              setActiveTab("solved");
+              setCurrentPage(1);
+              setSelectedTickets(new Set());
+            }}
+            className="rounded-b-none border-b-2 border-transparent data-[active=true]:border-primary"
+            data-active={activeTab === "solved"}
+          >
+            Solved Tickets
+          </Button>
+        </div>
+
         {showFilters && (
           <Card className="mb-6 p-4">
             <div className="flex flex-wrap items-end gap-4">
@@ -511,6 +817,14 @@ export default function AllTicketsPage() {
                 <Table>
                   <TableHeader>
                     <TableRow>
+                      <TableHead className="w-12">
+                        <input
+                          type="checkbox"
+                          checked={paginatedTickets.length > 0 && selectedTickets.size === paginatedTickets.length}
+                          onChange={() => handleSelectAll(paginatedTickets.map(t => t.id))}
+                          className="h-4 w-4 rounded border-gray-300"
+                        />
+                      </TableHead>
                       <TableHead className="w-32">
                         <Button variant="ghost" size="sm" onClick={() => handleSort("ticketNumber")} className="-ml-3 h-8">
                           Ticket ID
@@ -568,6 +882,15 @@ export default function AllTicketsPage() {
 
                       return (
                       <TableRow key={ticket.id} data-testid={`row-ticket-${ticket.id}`}>
+                        <TableCell>
+                          <input
+                            type="checkbox"
+                            checked={selectedTickets.has(ticket.id)}
+                            onChange={() => handleSelectTicket(ticket.id)}
+                            className="h-4 w-4 rounded border-gray-300"
+                            onClick={(e) => e.stopPropagation()}
+                          />
+                        </TableCell>
                         <TableCell className="font-mono text-sm">
                           {ticket.ticketNumber || ticket.id.slice(0, 8)}
                         </TableCell>
@@ -688,6 +1011,173 @@ export default function AllTicketsPage() {
           )}
         </Card>
       </main>
+
+      {/* Bulk Transfer Dialog */}
+      <Dialog open={showBulkTransferDialog} onOpenChange={setShowBulkTransferDialog}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>Transfer Tickets</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4">
+            <p className="text-sm text-muted-foreground">
+              Transfer {selectedTickets.size} selected ticket(s) to:
+            </p>
+            <div className="space-y-2">
+              <Label htmlFor="bulk-assignee">Assign to</Label>
+              <Select value={bulkTransferAssignee} onValueChange={setBulkTransferAssignee}>
+                <SelectTrigger id="bulk-assignee">
+                  <SelectValue placeholder="Select assignee" />
+                </SelectTrigger>
+                <SelectContent>
+                  {users?.map((u: any) => (
+                    <SelectItem key={u.id} value={u.id}>
+                      {u.name} ({u.email})
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="flex justify-end gap-2 pt-4">
+              <Button
+                variant="outline"
+                onClick={() => {
+                  setShowBulkTransferDialog(false);
+                  setBulkTransferAssignee("");
+                }}
+              >
+                Cancel
+              </Button>
+              <Button
+                onClick={() => {
+                  if (!bulkTransferAssignee) {
+                    toast({
+                      title: "No assignee selected",
+                      description: "Please select an assignee",
+                      variant: "destructive",
+                    });
+                    return;
+                  }
+                  bulkTransferMutation.mutate({
+                    ticketIds: Array.from(selectedTickets),
+                    assigneeId: bulkTransferAssignee,
+                  });
+                }}
+                disabled={bulkTransferMutation.isPending || !bulkTransferAssignee}
+              >
+                {bulkTransferMutation.isPending ? (
+                  <>
+                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                    Transferring...
+                  </>
+                ) : (
+                  "Transfer"
+                )}
+              </Button>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* Bulk Comment Dialog */}
+      <Dialog open={showBulkCommentDialog} onOpenChange={setShowBulkCommentDialog}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>Add Comment to Tickets</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4">
+            <p className="text-sm text-muted-foreground">
+              Add a comment to {selectedTickets.size} selected ticket(s):
+            </p>
+            <div className="space-y-2">
+              <Label htmlFor="bulk-comment">Comment</Label>
+              <Textarea
+                id="bulk-comment"
+                value={bulkComment}
+                onChange={(e) => setBulkComment(e.target.value)}
+                placeholder="Enter your comment..."
+                rows={4}
+              />
+            </div>
+            <div className="flex justify-end gap-2 pt-4">
+              <Button
+                variant="outline"
+                onClick={() => {
+                  setShowBulkCommentDialog(false);
+                  setBulkComment("");
+                }}
+              >
+                Cancel
+              </Button>
+              <Button
+                onClick={() => {
+                  if (!bulkComment.trim()) {
+                    toast({
+                      title: "Comment required",
+                      description: "Please enter a comment",
+                      variant: "destructive",
+                    });
+                    return;
+                  }
+                  bulkCommentMutation.mutate({
+                    ticketIds: Array.from(selectedTickets),
+                    comment: bulkComment,
+                  });
+                }}
+                disabled={bulkCommentMutation.isPending || !bulkComment.trim()}
+              >
+                {bulkCommentMutation.isPending ? (
+                  <>
+                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                    Adding...
+                  </>
+                ) : (
+                  "Add Comment"
+                )}
+              </Button>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* Bulk Solve Dialog */}
+      <Dialog open={showBulkSolveDialog} onOpenChange={setShowBulkSolveDialog}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>Mark Tickets as Solved</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4">
+            <p className="text-sm text-muted-foreground">
+              Are you sure you want to mark {selectedTickets.size} ticket(s) as solved?
+            </p>
+            <p className="text-sm text-muted-foreground">
+              This will update the status to "Solved" and set the resolved date.
+            </p>
+            <div className="flex justify-end gap-2 pt-4">
+              <Button
+                variant="outline"
+                onClick={() => setShowBulkSolveDialog(false)}
+              >
+                Cancel
+              </Button>
+              <Button
+                onClick={() => {
+                  bulkSolveMutation.mutate(Array.from(selectedTickets));
+                }}
+                disabled={bulkSolveMutation.isPending}
+              >
+                {bulkSolveMutation.isPending ? (
+                  <>
+                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                    Solving...
+                  </>
+                ) : (
+                  "Mark as Solved"
+                )}
+              </Button>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

@@ -16,6 +16,12 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
+import {
   Command,
   CommandEmpty,
   CommandGroup,
@@ -53,8 +59,14 @@ import {
   Check,
   ChevronsUpDown,
   X,
+  Settings,
+  ChevronDown,
+  MessageSquare,
+  CheckCircle,
+  UserPlus,
 } from "lucide-react";
 import type { Ticket, Category, Vendor, TicketFieldConfiguration } from "@shared/schema";
+import { getUserColumnPreferences, updateUserColumnPreferences } from "@/lib/api";
 
 interface ResolvedField extends TicketFieldConfiguration {
   override?: {
@@ -170,12 +182,27 @@ export default function MyTicketsPage() {
   const [categorySearchValue, setCategorySearchValue] = useState("");
   const [resolvedFields, setResolvedFields] = useState<ResolvedField[]>([]);
   const [isLoadingFields, setIsLoadingFields] = useState(false);
+  const [showColumnSettings, setShowColumnSettings] = useState(false);
+  const [tempColumns, setTempColumns] = useState<string[]>([]);
+  const [selectedTickets, setSelectedTickets] = useState<Set<string>>(new Set());
+  const [showBulkTransferDialog, setShowBulkTransferDialog] = useState(false);
+  const [bulkTransferAssignee, setBulkTransferAssignee] = useState("");
+  const [showBulkCommentDialog, setShowBulkCommentDialog] = useState(false);
+  const [bulkComment, setBulkComment] = useState("");
+  const [showBulkSolveDialog, setShowBulkSolveDialog] = useState(false);
   const queryClient = useQueryClient();
-  const { toast } = useToast();
+  const { toast} = useToast();
 
   const { data: tickets, isLoading } = useQuery({
     queryKey: ["tickets"],
     queryFn: getTickets,
+  });
+
+  // Fetch user's column preferences
+  const { data: columnPreferences } = useQuery({
+    queryKey: ["column-preferences", user?.id],
+    queryFn: () => getUserColumnPreferences(user!.id),
+    enabled: !!user,
   });
 
   // Fetch categories from categoryHierarchy filtered by user's departmentType
@@ -487,6 +514,153 @@ export default function MyTicketsPage() {
     },
   });
 
+  // Column preferences mutation
+  const updateColumnsMutation = useMutation({
+    mutationFn: async (visibleColumns: string[]) => {
+      if (!user) throw new Error("User not found");
+      return updateUserColumnPreferences(user.id, visibleColumns);
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["column-preferences", user?.id] });
+      setShowColumnSettings(false);
+      toast({ title: "Success", description: "Column preferences saved" });
+    },
+    onError: (error: Error) => {
+      toast({ title: "Error", description: error.message, variant: "destructive" });
+    },
+  });
+
+  // Bulk transfer mutation
+  const bulkTransferMutation = useMutation({
+    mutationFn: async ({ ticketIds, assigneeId }: { ticketIds: string[], assigneeId: string }) => {
+      const results = await Promise.all(
+        ticketIds.map(async (ticketId) => {
+          const res = await fetch(`/api/tickets/${ticketId}`, {
+            method: "PATCH",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              assigneeId,
+              status: "Open", // Set to Open when assigning
+            }),
+          });
+          if (!res.ok) throw new Error(`Failed to transfer ticket ${ticketId}`);
+          return res.json();
+        })
+      );
+      return results;
+    },
+    onSuccess: (_, variables) => {
+      queryClient.invalidateQueries({ queryKey: ["tickets"] });
+      setSelectedTickets(new Set());
+      setShowBulkTransferDialog(false);
+      setBulkTransferAssignee("");
+      toast({
+        title: "Success",
+        description: `Successfully transferred ${variables.ticketIds.length} ticket(s)`,
+      });
+    },
+    onError: (error: Error) => {
+      toast({ title: "Error", description: error.message, variant: "destructive" });
+    },
+  });
+
+  // Bulk comment mutation
+  const bulkCommentMutation = useMutation({
+    mutationFn: async ({ ticketIds, comment }: { ticketIds: string[], comment: string }) => {
+      const results = await Promise.all(
+        ticketIds.map(async (ticketId) => {
+          const res = await fetch("/api/comments", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              ticketId,
+              userId: user?.id,
+              comment,
+              isInternal: false,
+            }),
+          });
+          if (!res.ok) throw new Error(`Failed to add comment to ticket ${ticketId}`);
+          return res.json();
+        })
+      );
+      return results;
+    },
+    onSuccess: (_, variables) => {
+      queryClient.invalidateQueries({ queryKey: ["tickets"] });
+      setSelectedTickets(new Set());
+      setShowBulkCommentDialog(false);
+      setBulkComment("");
+      toast({
+        title: "Success",
+        description: `Added comment to ${variables.ticketIds.length} ticket(s)`,
+      });
+    },
+    onError: (error: Error) => {
+      toast({ title: "Error", description: error.message, variant: "destructive" });
+    },
+  });
+
+  // Bulk solve mutation
+  const bulkSolveMutation = useMutation({
+    mutationFn: async (ticketIds: string[]) => {
+      // Get current ticket data to check statuses
+      const ticketsToSolve = tickets?.filter(t => ticketIds.includes(t.id)) || [];
+
+      const results = await Promise.all(
+        ticketsToSolve.map(async (ticket) => {
+          try {
+            // If ticket is "New", first transition to "Open", then to "Solved"
+            if (ticket.status === "New") {
+              // First update to Open
+              const openRes = await fetch(`/api/tickets/${ticket.id}`, {
+                method: "PATCH",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ status: "Open" }),
+              });
+              if (!openRes.ok) {
+                const errorData = await openRes.json();
+                console.error(`Failed to open ticket ${ticket.id}:`, errorData);
+                throw new Error(`Failed to open ticket ${ticket.ticketNumber}: ${errorData.error || 'Unknown error'}`);
+              }
+            }
+
+            // Then update to Solved (works for all status types now)
+            const res = await fetch(`/api/tickets/${ticket.id}`, {
+              method: "PATCH",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({
+                status: "Solved",
+              }),
+            });
+
+            if (!res.ok) {
+              const errorData = await res.json();
+              console.error(`Failed to solve ticket ${ticket.id}:`, errorData);
+              throw new Error(`Failed to solve ticket ${ticket.ticketNumber}: ${errorData.error || 'Unknown error'}`);
+            }
+            return res.json();
+          } catch (error: any) {
+            console.error(`Error processing ticket ${ticket.id}:`, error);
+            throw error;
+          }
+        })
+      );
+      return results;
+    },
+    onSuccess: (_, ticketIds) => {
+      queryClient.invalidateQueries({ queryKey: ["tickets"] });
+      setSelectedTickets(new Set());
+      setShowBulkSolveDialog(false);
+      toast({
+        title: "Success",
+        description: `Marked ${ticketIds.length} ticket(s) as solved`,
+      });
+    },
+    onError: (error: Error) => {
+      toast({ title: "Error", description: error.message, variant: "destructive" });
+    },
+  });
+
   // Filter tickets by current logged-in user
   const createdTickets = tickets?.filter((t) => t.createdById === user?.id) || [];
 
@@ -566,6 +740,53 @@ export default function MyTicketsPage() {
     return <Badge className={cn("border", colors[status])} variant="outline">{status}</Badge>;
   };
 
+  // Bulk selection handlers
+  const handleSelectTicket = (ticketId: string) => {
+    const newSelected = new Set(selectedTickets);
+    if (newSelected.has(ticketId)) {
+      newSelected.delete(ticketId);
+    } else {
+      newSelected.add(ticketId);
+    }
+    setSelectedTickets(newSelected);
+  };
+
+  const handleSelectAll = (ticketIds: string[]) => {
+    if (selectedTickets.size === ticketIds.length) {
+      setSelectedTickets(new Set());
+    } else {
+      setSelectedTickets(new Set(ticketIds));
+    }
+  };
+
+  const handleBulkTransfer = () => {
+    if (selectedTickets.size === 0) {
+      toast({ title: "No tickets selected", description: "Please select tickets to transfer", variant: "destructive" });
+      return;
+    }
+    setShowBulkTransferDialog(true);
+  };
+
+  const handleBulkComment = () => {
+    if (selectedTickets.size === 0) {
+      toast({ title: "No tickets selected", description: "Please select tickets to add comment", variant: "destructive" });
+      return;
+    }
+    setShowBulkCommentDialog(true);
+  };
+
+  const handleBulkSolve = () => {
+    if (selectedTickets.size === 0) {
+      toast({ title: "No tickets selected", description: "Please select tickets to solve", variant: "destructive" });
+      return;
+    }
+    setShowBulkSolveDialog(true);
+  };
+
+  // Column configuration
+  const visibleColumns = columnPreferences?.visibleColumns || [];
+  const isColumnVisible = (columnId: string) => visibleColumns.includes(columnId);
+
   return (
     <div className="min-h-screen bg-background">
       <header className="sticky top-0 z-50 border-b border-border bg-card/95 backdrop-blur supports-[backdrop-filter]:bg-card/80">
@@ -596,17 +817,66 @@ export default function MyTicketsPage() {
               </div>
             </div>
 
-            {hasPermission("create:tickets") && (
+            <div className="flex gap-2">
+              {selectedTickets.size > 0 && (
+                <>
+                  <Badge variant="secondary" className="px-3 py-1">
+                    {selectedTickets.size} selected
+                  </Badge>
+                  <DropdownMenu>
+                    <DropdownMenuTrigger asChild>
+                      <Button variant="outline" size="sm">
+                        Bulk Actions
+                        <ChevronDown className="ml-2 h-4 w-4" />
+                      </Button>
+                    </DropdownMenuTrigger>
+                    <DropdownMenuContent align="end">
+                      <DropdownMenuItem onClick={handleBulkTransfer}>
+                        <UserPlus className="mr-2 h-4 w-4" />
+                        Transfer to Assignee
+                      </DropdownMenuItem>
+                      <DropdownMenuItem onClick={handleBulkComment}>
+                        <MessageSquare className="mr-2 h-4 w-4" />
+                        Add Comment
+                      </DropdownMenuItem>
+                      <DropdownMenuItem onClick={handleBulkSolve}>
+                        <CheckCircle className="mr-2 h-4 w-4" />
+                        Mark as Solved
+                      </DropdownMenuItem>
+                    </DropdownMenuContent>
+                  </DropdownMenu>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => setSelectedTickets(new Set())}
+                  >
+                    Clear
+                  </Button>
+                </>
+              )}
               <Button
+                variant="outline"
                 size="sm"
-                className="bg-accent text-accent-foreground hover:bg-accent/90"
-                onClick={() => setShowNewTicketDialog(true)}
-                data-testid="button-create-ticket"
+                onClick={() => {
+                  setTempColumns(columnPreferences?.visibleColumns || []);
+                  setShowColumnSettings(true);
+                }}
               >
-                <Plus className="h-4 w-4" />
-                New Ticket
+                <Settings className="h-4 w-4 mr-2" />
+                Columns
               </Button>
-            )}
+              {hasPermission("create:tickets") && (
+                <Button
+                  size="sm"
+                  className="bg-accent text-accent-foreground hover:bg-accent/90"
+                  onClick={() => setShowNewTicketDialog(true)}
+                  data-testid="button-create-ticket"
+                >
+                  <Plus className="h-4 w-4" />
+                  New Ticket
+                </Button>
+              )}
+            </div>
           </div>
         </div>
       </header>
@@ -711,19 +981,28 @@ export default function MyTicketsPage() {
               <Table>
                 <TableHeader>
                   <TableRow>
-                    <TableHead className="w-32">Ticket ID</TableHead>
-                    <TableHead>Vendor</TableHead>
-                    <TableHead>Department</TableHead>
-                    <TableHead>Category</TableHead>
-                    <TableHead>Issue Type</TableHead>
-                    <TableHead>Priority</TableHead>
-                    <TableHead>Status</TableHead>
-                    <TableHead>Assignee</TableHead>
-                    <TableHead>SLA Due</TableHead>
-                    <TableHead>Aging</TableHead>
-                    <TableHead>Last Updated</TableHead>
-                    <TableHead>Source</TableHead>
-                    <TableHead className="text-right">Actions</TableHead>
+                    <TableHead className="w-12">
+                      <input
+                        type="checkbox"
+                        checked={displayedTickets.length > 0 && selectedTickets.size === displayedTickets.length}
+                        onChange={() => handleSelectAll(displayedTickets.map(t => t.id))}
+                        className="h-4 w-4 rounded border-gray-300"
+                      />
+                    </TableHead>
+                    {isColumnVisible("ticketId") && <TableHead className="w-32">Ticket ID</TableHead>}
+                    {isColumnVisible("vendor") && <TableHead>Vendor</TableHead>}
+                    {isColumnVisible("customer") && <TableHead>Customer</TableHead>}
+                    {isColumnVisible("department") && <TableHead>Department</TableHead>}
+                    {isColumnVisible("category") && <TableHead>Category</TableHead>}
+                    {isColumnVisible("issueType") && <TableHead>Issue Type</TableHead>}
+                    {isColumnVisible("priority") && <TableHead>Priority</TableHead>}
+                    {isColumnVisible("status") && <TableHead>Status</TableHead>}
+                    {isColumnVisible("assignee") && <TableHead>Assignee</TableHead>}
+                    {isColumnVisible("slaDue") && <TableHead>SLA Due</TableHead>}
+                    {isColumnVisible("aging") && <TableHead>Aging</TableHead>}
+                    {isColumnVisible("lastUpdated") && <TableHead>Last Updated</TableHead>}
+                    {isColumnVisible("source") && <TableHead>Source</TableHead>}
+                    {isColumnVisible("actions") && <TableHead className="text-right">Actions</TableHead>}
                   </TableRow>
                 </TableHeader>
                 <TableBody>
@@ -732,62 +1011,102 @@ export default function MyTicketsPage() {
 
                     return (
                     <TableRow key={ticket.id} data-testid={`row-ticket-${ticket.id}`}>
-                      <TableCell className="font-mono text-sm">
-                        {ticket.ticketNumber || ticket.id.slice(0, 8)}
-                      </TableCell>
-                      <TableCell className="font-mono text-sm text-muted-foreground">
-                        {ticket.vendorHandle}
-                      </TableCell>
                       <TableCell>
-                        <Badge variant="secondary">{ticket.department}</Badge>
+                        <input
+                          type="checkbox"
+                          checked={selectedTickets.has(ticket.id)}
+                          onChange={() => handleSelectTicket(ticket.id)}
+                          className="h-4 w-4 rounded border-gray-300"
+                          onClick={(e) => e.stopPropagation()}
+                        />
                       </TableCell>
-                      <TableCell className="text-sm">
-                        {getCategoryDisplay(ticket, categoryMap)}
-                      </TableCell>
-                      <TableCell>
-                        <Badge variant="outline">{ticket.issueType}</Badge>
-                      </TableCell>
-                      <TableCell>{getPriorityBadge(ticket.priorityTier)}</TableCell>
-                      <TableCell>{getStatusBadge(ticket.status)}</TableCell>
-                      <TableCell className="text-sm">
-                        {ticket.assigneeId ? (
-                          <span className="text-muted-foreground">
-                            {users?.find(u => u.id === ticket.assigneeId)?.name || ticket.assigneeId.slice(0, 8)}
+                      {isColumnVisible("ticketId") && (
+                        <TableCell className="font-mono text-sm">
+                          {ticket.ticketNumber || ticket.id.slice(0, 8)}
+                        </TableCell>
+                      )}
+                      {isColumnVisible("vendor") && (
+                        <TableCell className="font-mono text-sm text-muted-foreground">
+                          {ticket.vendorHandle || <span className="italic">N/A</span>}
+                        </TableCell>
+                      )}
+                      {isColumnVisible("customer") && (
+                        <TableCell className="text-sm text-muted-foreground">
+                          {ticket.customer || <span className="italic">N/A</span>}
+                        </TableCell>
+                      )}
+                      {isColumnVisible("department") && (
+                        <TableCell>
+                          <Badge variant="secondary">{ticket.department}</Badge>
+                        </TableCell>
+                      )}
+                      {isColumnVisible("category") && (
+                        <TableCell className="text-sm">
+                          {getCategoryDisplay(ticket, categoryMap)}
+                        </TableCell>
+                      )}
+                      {isColumnVisible("issueType") && (
+                        <TableCell>
+                          <Badge variant="outline">{ticket.issueType}</Badge>
+                        </TableCell>
+                      )}
+                      {isColumnVisible("priority") && (
+                        <TableCell>{getPriorityBadge(ticket.priorityTier)}</TableCell>
+                      )}
+                      {isColumnVisible("status") && (
+                        <TableCell>{getStatusBadge(ticket.status)}</TableCell>
+                      )}
+                      {isColumnVisible("assignee") && (
+                        <TableCell className="text-sm">
+                          {ticket.assigneeId ? (
+                            <span className="text-muted-foreground">
+                              {users?.find(u => u.id === ticket.assigneeId)?.name || ticket.assigneeId.slice(0, 8)}
+                            </span>
+                          ) : (
+                            <span className="text-muted-foreground italic">Unassigned</span>
+                          )}
+                        </TableCell>
+                      )}
+                      {isColumnVisible("slaDue") && (
+                        <TableCell className="text-sm">
+                          {ticket.slaResolveTarget ? (
+                            <span className={new Date(ticket.slaResolveTarget) < new Date() ? 'text-red-600 font-medium' : 'text-muted-foreground'}>
+                              {new Date(ticket.slaResolveTarget).toLocaleDateString()}
+                            </span>
+                          ) : (
+                            <span className="text-muted-foreground italic">No SLA</span>
+                          )}
+                        </TableCell>
+                      )}
+                      {isColumnVisible("aging") && (
+                        <TableCell className="text-sm">
+                          <span className={agingDays > 7 ? 'text-amber-600 font-medium' : 'text-muted-foreground'}>
+                            {agingDays}d
                           </span>
-                        ) : (
-                          <span className="text-muted-foreground italic">Unassigned</span>
-                        )}
-                      </TableCell>
-                      <TableCell className="text-sm">
-                        {ticket.slaResolveTarget ? (
-                          <span className={new Date(ticket.slaResolveTarget) < new Date() ? 'text-red-600 font-medium' : 'text-muted-foreground'}>
-                            {new Date(ticket.slaResolveTarget).toLocaleDateString()}
-                          </span>
-                        ) : (
-                          <span className="text-muted-foreground italic">No SLA</span>
-                        )}
-                      </TableCell>
-                      <TableCell className="text-sm">
-                        <span className={agingDays > 7 ? 'text-amber-600 font-medium' : 'text-muted-foreground'}>
-                          {agingDays}d
-                        </span>
-                      </TableCell>
-                      <TableCell className="text-sm text-muted-foreground">
-                        {new Date(ticket.updatedAt).toLocaleDateString()}
-                      </TableCell>
-                      <TableCell className="text-sm text-muted-foreground">
-                        Portal
-                      </TableCell>
-                      <TableCell className="text-right">
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          onClick={() => setLocation(`/tickets/${ticket.id}?from=my-tickets`)}
-                          data-testid={`button-view-${ticket.id}`}
-                        >
-                          View
-                        </Button>
-                      </TableCell>
+                        </TableCell>
+                      )}
+                      {isColumnVisible("lastUpdated") && (
+                        <TableCell className="text-sm text-muted-foreground">
+                          {new Date(ticket.updatedAt).toLocaleDateString()}
+                        </TableCell>
+                      )}
+                      {isColumnVisible("source") && (
+                        <TableCell className="text-sm text-muted-foreground">
+                          Portal
+                        </TableCell>
+                      )}
+                      {isColumnVisible("actions") && (
+                        <TableCell className="text-right">
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => setLocation(`/tickets/${ticket.id}?from=my-tickets`)}
+                            data-testid={`button-view-${ticket.id}`}
+                          >
+                            View
+                          </Button>
+                        </TableCell>
+                      )}
                     </TableRow>
                     );
                   })}
@@ -1301,6 +1620,239 @@ export default function MyTicketsPage() {
               </Button>
             </div>
           </form>
+        </DialogContent>
+      </Dialog>
+
+      {/* Column Settings Dialog */}
+      <Dialog open={showColumnSettings} onOpenChange={setShowColumnSettings}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>Customize Columns</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4">
+            <p className="text-sm text-muted-foreground">
+              Select which columns you want to see in the ticket list:
+            </p>
+            <div className="space-y-2">
+              {[
+                { id: "ticketId", label: "Ticket ID" },
+                { id: "vendor", label: "Vendor" },
+                { id: "customer", label: "Customer" },
+                { id: "department", label: "Department" },
+                { id: "category", label: "Category" },
+                { id: "issueType", label: "Issue Type" },
+                { id: "priority", label: "Priority" },
+                { id: "status", label: "Status" },
+                { id: "assignee", label: "Assignee" },
+                { id: "slaDue", label: "SLA Due" },
+                { id: "aging", label: "Aging" },
+                { id: "lastUpdated", label: "Last Updated" },
+                { id: "source", label: "Source" },
+                { id: "actions", label: "Actions" },
+              ].map((column) => (
+                <label key={column.id} className="flex items-center gap-2 cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={tempColumns.includes(column.id)}
+                    onChange={(e) => {
+                      if (e.target.checked) {
+                        setTempColumns([...tempColumns, column.id]);
+                      } else {
+                        setTempColumns(tempColumns.filter((c) => c !== column.id));
+                      }
+                    }}
+                    className="h-4 w-4 rounded border-gray-300"
+                  />
+                  <span className="text-sm">{column.label}</span>
+                </label>
+              ))}
+            </div>
+            <div className="flex justify-end gap-2 pt-4">
+              <Button variant="outline" onClick={() => setShowColumnSettings(false)}>
+                Cancel
+              </Button>
+              <Button
+                onClick={() => updateColumnsMutation.mutate(tempColumns)}
+                disabled={updateColumnsMutation.isPending}
+              >
+                {updateColumnsMutation.isPending ? (
+                  <>
+                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                    Saving...
+                  </>
+                ) : (
+                  "Save"
+                )}
+              </Button>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* Bulk Transfer Dialog */}
+      <Dialog open={showBulkTransferDialog} onOpenChange={setShowBulkTransferDialog}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>Transfer Tickets</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4">
+            <p className="text-sm text-muted-foreground">
+              Transfer {selectedTickets.size} selected ticket(s) to:
+            </p>
+            <div className="space-y-2">
+              <Label htmlFor="bulk-assignee">Assign to</Label>
+              <Select value={bulkTransferAssignee} onValueChange={setBulkTransferAssignee}>
+                <SelectTrigger id="bulk-assignee">
+                  <SelectValue placeholder="Select assignee" />
+                </SelectTrigger>
+                <SelectContent>
+                  {users?.map((u) => (
+                    <SelectItem key={u.id} value={u.id}>
+                      {u.name} ({u.email})
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="flex justify-end gap-2 pt-4">
+              <Button
+                variant="outline"
+                onClick={() => {
+                  setShowBulkTransferDialog(false);
+                  setBulkTransferAssignee("");
+                }}
+              >
+                Cancel
+              </Button>
+              <Button
+                onClick={() => {
+                  if (!bulkTransferAssignee) {
+                    toast({
+                      title: "No assignee selected",
+                      description: "Please select an assignee",
+                      variant: "destructive",
+                    });
+                    return;
+                  }
+                  bulkTransferMutation.mutate({
+                    ticketIds: Array.from(selectedTickets),
+                    assigneeId: bulkTransferAssignee,
+                  });
+                }}
+                disabled={bulkTransferMutation.isPending || !bulkTransferAssignee}
+              >
+                {bulkTransferMutation.isPending ? (
+                  <>
+                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                    Transferring...
+                  </>
+                ) : (
+                  "Transfer"
+                )}
+              </Button>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* Bulk Comment Dialog */}
+      <Dialog open={showBulkCommentDialog} onOpenChange={setShowBulkCommentDialog}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>Add Comment to Tickets</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4">
+            <p className="text-sm text-muted-foreground">
+              Add a comment to {selectedTickets.size} selected ticket(s):
+            </p>
+            <div className="space-y-2">
+              <Label htmlFor="bulk-comment">Comment</Label>
+              <Textarea
+                id="bulk-comment"
+                value={bulkComment}
+                onChange={(e) => setBulkComment(e.target.value)}
+                placeholder="Enter your comment..."
+                rows={4}
+              />
+            </div>
+            <div className="flex justify-end gap-2 pt-4">
+              <Button
+                variant="outline"
+                onClick={() => {
+                  setShowBulkCommentDialog(false);
+                  setBulkComment("");
+                }}
+              >
+                Cancel
+              </Button>
+              <Button
+                onClick={() => {
+                  if (!bulkComment.trim()) {
+                    toast({
+                      title: "Comment required",
+                      description: "Please enter a comment",
+                      variant: "destructive",
+                    });
+                    return;
+                  }
+                  bulkCommentMutation.mutate({
+                    ticketIds: Array.from(selectedTickets),
+                    comment: bulkComment,
+                  });
+                }}
+                disabled={bulkCommentMutation.isPending || !bulkComment.trim()}
+              >
+                {bulkCommentMutation.isPending ? (
+                  <>
+                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                    Adding...
+                  </>
+                ) : (
+                  "Add Comment"
+                )}
+              </Button>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* Bulk Solve Dialog */}
+      <Dialog open={showBulkSolveDialog} onOpenChange={setShowBulkSolveDialog}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>Mark Tickets as Solved</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4">
+            <p className="text-sm text-muted-foreground">
+              Are you sure you want to mark {selectedTickets.size} ticket(s) as solved?
+            </p>
+            <p className="text-sm text-muted-foreground">
+              This will update the status to "Solved" and set the resolved date.
+            </p>
+            <div className="flex justify-end gap-2 pt-4">
+              <Button
+                variant="outline"
+                onClick={() => setShowBulkSolveDialog(false)}
+              >
+                Cancel
+              </Button>
+              <Button
+                onClick={() => {
+                  bulkSolveMutation.mutate(Array.from(selectedTickets));
+                }}
+                disabled={bulkSolveMutation.isPending}
+              >
+                {bulkSolveMutation.isPending ? (
+                  <>
+                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                    Solving...
+                  </>
+                ) : (
+                  "Mark as Solved"
+                )}
+              </Button>
+            </div>
+          </div>
         </DialogContent>
       </Dialog>
     </div>

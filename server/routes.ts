@@ -4073,5 +4073,562 @@ roles: ${JSON.stringify(updated.roles, null, 2)}</pre>
     }
   });
 
+  // ===== User Column Preferences =====
+
+  // Get user's column preferences
+  app.get("/api/users/:userId/column-preferences", async (req, res) => {
+    try {
+      const userEmail = req.headers["x-user-email"] as string;
+      if (!userEmail) {
+        return res.status(401).json({ error: "Authentication required" });
+      }
+
+      const user = await storage.getUserByEmail(userEmail);
+      if (!user) {
+        return res.status(401).json({ error: "User not found" });
+      }
+
+      // Users can only access their own preferences unless they're Admin/Owner
+      if (user.id !== req.params.userId && user.role !== "Owner" && user.role !== "Admin") {
+        return res.status(403).json({ error: "Access denied" });
+      }
+
+      const preferences = await storage.getUserColumnPreferences(req.params.userId);
+
+      // If no preferences exist, return default based on user's department
+      if (!preferences) {
+        const targetUser = await storage.getUserById(req.params.userId);
+        if (!targetUser) {
+          return res.status(404).json({ error: "User not found" });
+        }
+
+        const defaultColumns = targetUser.subDepartment === "Seller Support"
+          ? ["ticketId", "vendor", "department", "category", "issueType", "priority", "status", "assignee", "slaDue", "aging", "lastUpdated", "source", "actions"]
+          : targetUser.subDepartment === "Customer Support"
+          ? ["ticketId", "customer", "department", "category", "issueType", "priority", "status", "assignee", "slaDue", "aging", "lastUpdated", "source", "actions"]
+          : ["ticketId", "department", "category", "issueType", "priority", "status", "assignee", "slaDue", "aging", "lastUpdated", "source", "actions"];
+
+        return res.json({
+          userId: req.params.userId,
+          visibleColumns: defaultColumns,
+        });
+      }
+
+      res.json(preferences);
+    } catch (error: any) {
+      res.status(500).json({ error: error.message });
+    }
+  });
+
+  // Update user's column preferences
+  app.put("/api/users/:userId/column-preferences", async (req, res) => {
+    try {
+      const userEmail = req.headers["x-user-email"] as string;
+      if (!userEmail) {
+        return res.status(401).json({ error: "Authentication required" });
+      }
+
+      const user = await storage.getUserByEmail(userEmail);
+      if (!user) {
+        return res.status(401).json({ error: "User not found" });
+      }
+
+      // Users can only update their own preferences unless they're Admin/Owner
+      if (user.id !== req.params.userId && user.role !== "Owner" && user.role !== "Admin") {
+        return res.status(403).json({ error: "Access denied" });
+      }
+
+      const { visibleColumns } = req.body;
+      if (!Array.isArray(visibleColumns)) {
+        return res.status(400).json({ error: "visibleColumns must be an array" });
+      }
+
+      const preferences = await storage.upsertUserColumnPreferences(req.params.userId, visibleColumns);
+      res.json(preferences);
+    } catch (error: any) {
+      res.status(500).json({ error: error.message });
+    }
+  });
+
+  // ==================== ATTENDANCE ROUTES ====================
+
+  // Helper function for role-based attendance access control
+  async function canAccessAttendance(requestingUser: any, targetUserId?: string) {
+    // Owner, Admin, Head, Manager, Lead can view attendance
+    const managerialRoles = ["Owner", "Admin", "Head", "Manager", "Lead"];
+
+    if (managerialRoles.includes(requestingUser.role)) {
+      // Managers can see their department, admins can see all
+      if (requestingUser.role === "Owner" || requestingUser.role === "Admin") {
+        return { canAccess: true, scope: "all" };
+      }
+
+      if (requestingUser.role === "Head" || requestingUser.role === "Manager" || requestingUser.role === "Lead") {
+        return { canAccess: true, scope: "department", department: requestingUser.department };
+      }
+    }
+
+    // Regular users can only see their own attendance
+    if (targetUserId && targetUserId === requestingUser.id) {
+      return { canAccess: true, scope: "self" };
+    }
+
+    return { canAccess: false };
+  }
+
+  // Login (Check-in) - Create attendance record
+  app.post("/api/attendance/login", async (req, res) => {
+    try {
+      const userEmail = req.headers["x-user-email"] as string;
+      if (!userEmail) {
+        return res.status(401).json({ error: "Authentication required" });
+      }
+
+      const user = await storage.getUserByEmail(userEmail);
+      if (!user) {
+        return res.status(401).json({ error: "User not found" });
+      }
+
+      if (!user.isActive) {
+        return res.status(403).json({ error: "User account is inactive" });
+      }
+
+      // Check if user already has an active attendance session
+      const activeSession = await storage.getActiveAttendanceByUserId(user.id);
+      if (activeSession) {
+        return res.status(400).json({
+          error: "Already logged in",
+          activeSession
+        });
+      }
+
+      const { loginTime, loginLocation, loginDeviceInfo } = req.body;
+
+      if (!loginTime) {
+        return res.status(400).json({ error: "loginTime is required" });
+      }
+
+      const record = await storage.createAttendanceRecord({
+        userId: user.id,
+        loginTime: new Date(loginTime),
+        loginLocation,
+        loginDeviceInfo,
+      });
+
+      // Log audit
+      await auditService.log({
+        userId: user.id,
+        userName: user.name,
+        userRole: user.role,
+        action: "attendance_login",
+        entityType: "attendance",
+        entityId: record.id,
+        details: { loginTime, hasLocation: !!loginLocation },
+      });
+
+      res.json(record);
+    } catch (error: any) {
+      console.error("Login error:", error);
+      res.status(500).json({ error: error.message });
+    }
+  });
+
+  // Logout (Check-out) - Update attendance record
+  app.post("/api/attendance/logout", async (req, res) => {
+    try {
+      const userEmail = req.headers["x-user-email"] as string;
+      if (!userEmail) {
+        return res.status(401).json({ error: "Authentication required" });
+      }
+
+      const user = await storage.getUserByEmail(userEmail);
+      if (!user) {
+        return res.status(401).json({ error: "User not found" });
+      }
+
+      // Get active session
+      const activeSession = await storage.getActiveAttendanceByUserId(user.id);
+      if (!activeSession) {
+        return res.status(400).json({ error: "No active attendance session found" });
+      }
+
+      const { logoutTime, logoutLocation, logoutDeviceInfo } = req.body;
+
+      if (!logoutTime) {
+        return res.status(400).json({ error: "logoutTime is required" });
+      }
+
+      const record = await storage.updateAttendanceLogout(activeSession.id, {
+        logoutTime: new Date(logoutTime),
+        logoutLocation,
+        logoutDeviceInfo,
+      });
+
+      // Log audit
+      await auditService.log({
+        userId: user.id,
+        userName: user.name,
+        userRole: user.role,
+        action: "attendance_logout",
+        entityType: "attendance",
+        entityId: record!.id,
+        details: { logoutTime, workDuration: record!.workDuration, hasLocation: !!logoutLocation },
+      });
+
+      res.json(record);
+    } catch (error: any) {
+      console.error("Logout error:", error);
+      res.status(500).json({ error: error.message });
+    }
+  });
+
+  // Get current active attendance session
+  app.get("/api/attendance/current/:userId", async (req, res) => {
+    try {
+      const userEmail = req.headers["x-user-email"] as string;
+      if (!userEmail) {
+        return res.status(401).json({ error: "Authentication required" });
+      }
+
+      const user = await storage.getUserByEmail(userEmail);
+      if (!user) {
+        return res.status(401).json({ error: "User not found" });
+      }
+
+      const targetUserId = req.params.userId;
+
+      // Check access permissions
+      const accessCheck = await canAccessAttendance(user, targetUserId);
+      if (!accessCheck.canAccess) {
+        return res.status(403).json({ error: "Access denied" });
+      }
+
+      const activeSession = await storage.getActiveAttendanceByUserId(targetUserId);
+      res.json(activeSession || null);
+    } catch (error: any) {
+      console.error("Get current attendance error:", error);
+      res.status(500).json({ error: error.message });
+    }
+  });
+
+  // Get attendance history with filters
+  app.get("/api/attendance/history", async (req, res) => {
+    try {
+      const userEmail = req.headers["x-user-email"] as string;
+      if (!userEmail) {
+        return res.status(401).json({ error: "Authentication required" });
+      }
+
+      const user = await storage.getUserByEmail(userEmail);
+      if (!user) {
+        return res.status(401).json({ error: "User not found" });
+      }
+
+      const {
+        userId,
+        startDate,
+        endDate,
+        status,
+        limit = "50",
+        offset = "0",
+      } = req.query;
+
+      // Check access permissions
+      const accessCheck = await canAccessAttendance(user, userId as string);
+      if (!accessCheck.canAccess) {
+        return res.status(403).json({ error: "Access denied" });
+      }
+
+      // Build filters based on role and scope
+      const filters: any = {
+        limit: parseInt(limit as string),
+        offset: parseInt(offset as string),
+      };
+
+      // Apply scope-based filtering
+      if (accessCheck.scope === "self") {
+        filters.userId = user.id;
+      } else if (accessCheck.scope === "department") {
+        // For department scope, we'll need to filter by department
+        // Get all users in the department first
+        const departmentUsers = await storage.getAllUsers();
+        const departmentUserIds = departmentUsers
+          .filter(u => u.department === accessCheck.department)
+          .map(u => u.id);
+
+        // If specific userId requested, check it's in the department
+        if (userId) {
+          if (!departmentUserIds.includes(userId as string)) {
+            return res.status(403).json({ error: "Access denied to this user's attendance" });
+          }
+          filters.userId = userId;
+        } else {
+          // For now, require userId for department managers
+          // In a full implementation, we'd modify getAttendanceHistory to support IN clause
+          if (!userId) {
+            return res.status(400).json({ error: "userId parameter required for department managers" });
+          }
+        }
+      } else if (accessCheck.scope === "all") {
+        // Admins/Owners can filter by userId or see all
+        if (userId) {
+          filters.userId = userId;
+        }
+      }
+
+      if (startDate) {
+        filters.startDate = new Date(startDate as string);
+      }
+
+      if (endDate) {
+        filters.endDate = new Date(endDate as string);
+      }
+
+      if (status) {
+        filters.status = status;
+      }
+
+      const history = await storage.getAttendanceHistory(filters);
+
+      // Get total count for pagination
+      const totalFilters = { ...filters };
+      delete totalFilters.limit;
+      delete totalFilters.offset;
+      const allRecords = await storage.getAttendanceHistory(totalFilters);
+
+      res.json({
+        records: history,
+        pagination: {
+          total: allRecords.length,
+          limit: filters.limit,
+          offset: filters.offset,
+          hasMore: allRecords.length > filters.offset + filters.limit,
+        },
+      });
+    } catch (error: any) {
+      console.error("Get attendance history error:", error);
+      res.status(500).json({ error: error.message });
+    }
+  });
+
+  // Update attendance notes (Admin/Manager only)
+  app.patch("/api/attendance/:recordId/notes", async (req, res) => {
+    try {
+      const userEmail = req.headers["x-user-email"] as string;
+      if (!userEmail) {
+        return res.status(401).json({ error: "Authentication required" });
+      }
+
+      const user = await storage.getUserByEmail(userEmail);
+      if (!user) {
+        return res.status(401).json({ error: "User not found" });
+      }
+
+      // Only managers and above can add notes
+      const managerialRoles = ["Owner", "Admin", "Head", "Manager", "Lead"];
+      if (!managerialRoles.includes(user.role)) {
+        return res.status(403).json({ error: "Insufficient permissions" });
+      }
+
+      const { recordId } = req.params;
+      const { notes } = req.body;
+
+      if (!notes) {
+        return res.status(400).json({ error: "notes field is required" });
+      }
+
+      const record = await storage.updateAttendanceNotes(recordId, notes);
+
+      if (!record) {
+        return res.status(404).json({ error: "Attendance record not found" });
+      }
+
+      // Log audit
+      await auditService.log({
+        userId: user.id,
+        userName: user.name,
+        userRole: user.role,
+        action: "attendance_notes_updated",
+        entityType: "attendance",
+        entityId: recordId,
+        details: { notes },
+      });
+
+      res.json(record);
+    } catch (error: any) {
+      console.error("Update attendance notes error:", error);
+      res.status(500).json({ error: error.message });
+    }
+  });
+
+  // Mark attendance as incomplete (Admin/Manager only)
+  app.patch("/api/attendance/:recordId/incomplete", async (req, res) => {
+    try {
+      const userEmail = req.headers["x-user-email"] as string;
+      if (!userEmail) {
+        return res.status(401).json({ error: "Authentication required" });
+      }
+
+      const user = await storage.getUserByEmail(userEmail);
+      if (!user) {
+        return res.status(401).json({ error: "User not found" });
+      }
+
+      // Only managers and above can mark incomplete
+      const managerialRoles = ["Owner", "Admin", "Head", "Manager", "Lead"];
+      if (!managerialRoles.includes(user.role)) {
+        return res.status(403).json({ error: "Insufficient permissions" });
+      }
+
+      const { recordId } = req.params;
+
+      const record = await storage.markAttendanceIncomplete(recordId);
+
+      if (!record) {
+        return res.status(404).json({ error: "Attendance record not found" });
+      }
+
+      // Log audit
+      await auditService.log({
+        userId: user.id,
+        userName: user.name,
+        userRole: user.role,
+        action: "attendance_marked_incomplete",
+        entityType: "attendance",
+        entityId: recordId,
+        details: {},
+      });
+
+      res.json(record);
+    } catch (error: any) {
+      console.error("Mark attendance incomplete error:", error);
+      res.status(500).json({ error: error.message });
+    }
+  });
+
+  // Get attendance reports/analytics (Manager+ only)
+  app.get("/api/attendance/reports", async (req, res) => {
+    try {
+      const userEmail = req.headers["x-user-email"] as string;
+      if (!userEmail) {
+        return res.status(401).json({ error: "Authentication required" });
+      }
+
+      const user = await storage.getUserByEmail(userEmail);
+      if (!user) {
+        return res.status(401).json({ error: "User not found" });
+      }
+
+      // Check access permissions
+      const accessCheck = await canAccessAttendance(user);
+      if (!accessCheck.canAccess || accessCheck.scope === "self") {
+        return res.status(403).json({ error: "Manager role or above required" });
+      }
+
+      const { startDate, endDate, department } = req.query;
+
+      if (!startDate || !endDate) {
+        return res.status(400).json({ error: "startDate and endDate are required" });
+      }
+
+      // Get all attendance records in date range
+      const filters: any = {
+        startDate: new Date(startDate as string),
+        endDate: new Date(endDate as string),
+      };
+
+      const allRecords = await storage.getAttendanceHistory(filters);
+
+      // Filter by department if needed
+      let records = allRecords;
+      if (accessCheck.scope === "department") {
+        records = allRecords.filter(r => r.userDepartment === accessCheck.department);
+      } else if (department) {
+        records = allRecords.filter(r => r.userDepartment === department);
+      }
+
+      // Calculate analytics
+      const analytics = {
+        totalRecords: records.length,
+        completedSessions: records.filter(r => r.status === "completed").length,
+        incompleteSessions: records.filter(r => r.status === "incomplete").length,
+        activeSessions: records.filter(r => r.status === "active").length,
+
+        // Late logins (after 9:30 AM)
+        lateLogins: records.filter(r => {
+          const loginHour = new Date(r.loginTime).getHours();
+          const loginMinute = new Date(r.loginTime).getMinutes();
+          return loginHour > 9 || (loginHour === 9 && loginMinute > 30);
+        }).length,
+
+        // Missing logouts
+        missingLogouts: records.filter(r => r.status === "active" || r.status === "incomplete").length,
+
+        // Average work duration (in hours)
+        averageDuration: records
+          .filter(r => r.workDuration)
+          .reduce((sum, r) => sum + (r.workDuration || 0), 0) /
+          records.filter(r => r.workDuration).length / 60 || 0,
+
+        // By user
+        byUser: records.reduce((acc, r) => {
+          const userId = r.userId;
+          if (!acc[userId]) {
+            acc[userId] = {
+              userId: r.userId,
+              userName: r.userName,
+              userEmail: r.userEmail,
+              department: r.userDepartment,
+              totalSessions: 0,
+              completedSessions: 0,
+              totalMinutes: 0,
+              lateLogins: 0,
+            };
+          }
+
+          acc[userId].totalSessions++;
+          if (r.status === "completed") {
+            acc[userId].completedSessions++;
+            acc[userId].totalMinutes += r.workDuration || 0;
+          }
+
+          const loginHour = new Date(r.loginTime).getHours();
+          const loginMinute = new Date(r.loginTime).getMinutes();
+          if (loginHour > 9 || (loginHour === 9 && loginMinute > 30)) {
+            acc[userId].lateLogins++;
+          }
+
+          return acc;
+        }, {} as Record<string, any>),
+
+        // By department
+        byDepartment: records.reduce((acc, r) => {
+          const dept = r.userDepartment || "Unknown";
+          if (!acc[dept]) {
+            acc[dept] = {
+              department: dept,
+              totalSessions: 0,
+              completedSessions: 0,
+              totalMinutes: 0,
+            };
+          }
+
+          acc[dept].totalSessions++;
+          if (r.status === "completed") {
+            acc[dept].completedSessions++;
+            acc[dept].totalMinutes += r.workDuration || 0;
+          }
+
+          return acc;
+        }, {} as Record<string, any>),
+      };
+
+      res.json(analytics);
+    } catch (error: any) {
+      console.error("Get attendance reports error:", error);
+      res.status(500).json({ error: error.message });
+    }
+  });
+
   return httpServer;
 }

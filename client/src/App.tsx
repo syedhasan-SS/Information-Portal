@@ -24,6 +24,10 @@ import OrgHierarchyPage from "@/pages/org-hierarchy";
 import RolesPage from "@/pages/roles";
 import AdminToolsPage from "@/pages/admin-tools";
 import ProductRequestsPage from "@/pages/product-requests";
+import AttendancePage from "@/pages/attendance";
+import AttendanceCheckInPage from "@/pages/attendance-checkin";
+import TeamAttendancePage from "@/pages/attendance-team";
+import LeaveManagementPage from "@/pages/leave-management";
 
 function Router() {
   return (
@@ -112,6 +116,26 @@ function Router() {
       <Route path="/product-requests">
         <ProtectedRoute>
           <ProductRequestsPage />
+        </ProtectedRoute>
+      </Route>
+      <Route path="/attendance">
+        <ProtectedRoute>
+          <AttendancePage />
+        </ProtectedRoute>
+      </Route>
+      <Route path="/attendance/checkin">
+        <ProtectedRoute>
+          <AttendanceCheckInPage />
+        </ProtectedRoute>
+      </Route>
+      <Route path="/attendance/team">
+        <ProtectedRoute>
+          <TeamAttendancePage />
+        </ProtectedRoute>
+      </Route>
+      <Route path="/leave-management">
+        <ProtectedRoute>
+          <LeaveManagementPage />
         </ProtectedRoute>
       </Route>
       {/* Fallback to 404 */}

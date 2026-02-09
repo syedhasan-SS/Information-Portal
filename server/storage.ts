@@ -24,6 +24,7 @@ import {
   categoryRoutingRules,
   productRequests,
   productRequestComments,
+  userColumnPreferences,
   type Vendor,
   type Category,
   type Ticket,
@@ -47,6 +48,7 @@ import {
   type CategoryRoutingRule,
   type ProductRequest,
   type ProductRequestComment,
+  type UserColumnPreference,
   type InsertVendor,
   type InsertCategory,
   type InsertTicket,
@@ -1761,6 +1763,186 @@ export class DatabaseStorage implements IStorage {
 
   async deleteProductRequestComment(id: string): Promise<void> {
     await db.delete(productRequestComments).where(eq(productRequestComments.id, id));
+  }
+
+  // User Column Preferences
+  async getUserColumnPreferences(userId: string): Promise<UserColumnPreference | undefined> {
+    const result = await db.select()
+      .from(userColumnPreferences)
+      .where(eq(userColumnPreferences.userId, userId))
+      .limit(1);
+    return result[0];
+  }
+
+  async upsertUserColumnPreferences(userId: string, visibleColumns: string[]): Promise<UserColumnPreference> {
+    // Check if preferences exist
+    const existing = await this.getUserColumnPreferences(userId);
+
+    if (existing) {
+      // Update existing preferences
+      const result = await db.update(userColumnPreferences)
+        .set({
+          visibleColumns,
+          updatedAt: new Date(),
+        })
+        .where(eq(userColumnPreferences.userId, userId))
+        .returning();
+      return result[0];
+    } else {
+      // Insert new preferences
+      const result = await db.insert(userColumnPreferences)
+        .values({
+          userId,
+          visibleColumns,
+        })
+        .returning();
+      return result[0];
+    }
+  }
+
+  // Attendance Methods
+  async createAttendanceRecord(data: {
+    userId: string;
+    loginTime: Date;
+    loginLocation?: any;
+    loginDeviceInfo?: string;
+  }) {
+    const result = await db.insert(attendanceRecords)
+      .values({
+        userId: data.userId,
+        loginTime: data.loginTime,
+        loginLocation: data.loginLocation,
+        loginDeviceInfo: data.loginDeviceInfo,
+        status: "active",
+      })
+      .returning();
+    return result[0];
+  }
+
+  async getActiveAttendanceByUserId(userId: string) {
+    const results = await db.select()
+      .from(attendanceRecords)
+      .where(and(
+        eq(attendanceRecords.userId, userId),
+        eq(attendanceRecords.status, "active")
+      ))
+      .orderBy(desc(attendanceRecords.loginTime))
+      .limit(1);
+    return results[0];
+  }
+
+  async updateAttendanceLogout(recordId: string, data: {
+    logoutTime: Date;
+    logoutLocation?: any;
+    logoutDeviceInfo?: string;
+  }) {
+    // Calculate work duration in minutes
+    const record = await db.select()
+      .from(attendanceRecords)
+      .where(eq(attendanceRecords.id, recordId))
+      .limit(1);
+
+    if (!record[0]) return null;
+
+    const workDuration = Math.floor(
+      (data.logoutTime.getTime() - new Date(record[0].loginTime).getTime()) / 60000
+    );
+
+    const result = await db.update(attendanceRecords)
+      .set({
+        logoutTime: data.logoutTime,
+        logoutLocation: data.logoutLocation,
+        logoutDeviceInfo: data.logoutDeviceInfo,
+        workDuration,
+        status: "completed",
+        updatedAt: new Date(),
+      })
+      .where(eq(attendanceRecords.id, recordId))
+      .returning();
+    return result[0];
+  }
+
+  async getAttendanceHistory(filters: {
+    userId?: string;
+    startDate?: Date;
+    endDate?: Date;
+    status?: string;
+    limit?: number;
+    offset?: number;
+  }) {
+    const conditions = [];
+
+    if (filters.userId) {
+      conditions.push(eq(attendanceRecords.userId, filters.userId));
+    }
+
+    if (filters.startDate) {
+      conditions.push(sql`${attendanceRecords.loginTime} >= ${filters.startDate}`);
+    }
+
+    if (filters.endDate) {
+      conditions.push(sql`${attendanceRecords.loginTime} <= ${filters.endDate}`);
+    }
+
+    if (filters.status) {
+      conditions.push(eq(attendanceRecords.status, filters.status));
+    }
+
+    const query = db.select({
+      id: attendanceRecords.id,
+      userId: attendanceRecords.userId,
+      userName: users.name,
+      userEmail: users.email,
+      userDepartment: users.department,
+      userRole: users.role,
+      loginTime: attendanceRecords.loginTime,
+      logoutTime: attendanceRecords.logoutTime,
+      loginLocation: attendanceRecords.loginLocation,
+      logoutLocation: attendanceRecords.logoutLocation,
+      workDuration: attendanceRecords.workDuration,
+      status: attendanceRecords.status,
+      notes: attendanceRecords.notes,
+      createdAt: attendanceRecords.createdAt,
+    })
+      .from(attendanceRecords)
+      .leftJoin(users, eq(attendanceRecords.userId, users.id))
+      .orderBy(desc(attendanceRecords.loginTime));
+
+    if (conditions.length > 0) {
+      query.where(and(...conditions));
+    }
+
+    if (filters.limit) {
+      query.limit(filters.limit);
+    }
+
+    if (filters.offset) {
+      query.offset(filters.offset);
+    }
+
+    return await query;
+  }
+
+  async updateAttendanceNotes(recordId: string, notes: string) {
+    const result = await db.update(attendanceRecords)
+      .set({
+        notes,
+        updatedAt: new Date(),
+      })
+      .where(eq(attendanceRecords.id, recordId))
+      .returning();
+    return result[0];
+  }
+
+  async markAttendanceIncomplete(recordId: string) {
+    const result = await db.update(attendanceRecords)
+      .set({
+        status: "incomplete",
+        updatedAt: new Date(),
+      })
+      .where(eq(attendanceRecords.id, recordId))
+      .returning();
+    return result[0];
   }
 }
 

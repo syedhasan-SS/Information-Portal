@@ -35,7 +35,16 @@ import {
   FlaskConical,
   ChevronDown,
   FileText,
+  Info,
+  TrendingDown,
+  Minus,
 } from "lucide-react";
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from "@/components/ui/tooltip";
 import type { Ticket as TicketType, User as UserType } from "@shared/schema";
 
 async function getTickets(): Promise<TicketType[]> {
@@ -177,38 +186,88 @@ export default function DashboardPage() {
     refetchInterval: 30000, // Refetch every 30 seconds
   });
 
+  // Date ranges for calculations
   const today = new Date();
   today.setHours(0, 0, 0, 0);
+
   const weekAgo = new Date(today);
   weekAgo.setDate(weekAgo.getDate() - 7);
-  const monthAgo = new Date(today);
-  monthAgo.setDate(monthAgo.getDate() - 30);
 
+  const monthAgo = new Date(today);
+  monthAgo.setMonth(monthAgo.getMonth() - 1);
+
+  const twoWeeksAgo = new Date(today);
+  twoWeeksAgo.setDate(twoWeeksAgo.getDate() - 14);
+
+  const twoMonthsAgo = new Date(today);
+  twoMonthsAgo.setMonth(twoMonthsAgo.getMonth() - 2);
+
+  // Ticket counts by time period
   const ticketsToday = tickets?.filter((t) => new Date(t.createdAt) >= today).length || 0;
   const ticketsThisWeek = tickets?.filter((t) => new Date(t.createdAt) >= weekAgo).length || 0;
+  const ticketsLastWeek = tickets?.filter((t) => {
+    const created = new Date(t.createdAt);
+    return created >= twoWeeksAgo && created < weekAgo;
+  }).length || 0;
+
   const ticketsThisMonth = tickets?.filter((t) => new Date(t.createdAt) >= monthAgo).length || 0;
+  const ticketsLastMonth = tickets?.filter((t) => {
+    const created = new Date(t.createdAt);
+    return created >= twoMonthsAgo && created < monthAgo;
+  }).length || 0;
 
+  // Pending (open) tickets - across all time
   const openTickets = tickets?.filter((t) => ["New", "Open", "Pending"].includes(t.status)).length || 0;
-  const solvedTickets = tickets?.filter((t) => ["Solved", "Closed"].includes(t.status)).length || 0;
-  const totalTickets = tickets?.length || 0;
-  const resolutionRate = totalTickets > 0 ? Math.round((solvedTickets / totalTickets) * 100) : 0;
 
-  const onTrackCount = tickets?.filter((t) => t.slaStatus === "on_track").length || 0;
-  const atRiskCount = tickets?.filter((t) => t.slaStatus === "at_risk").length || 0;
-  const breachedCount = tickets?.filter((t) => t.slaStatus === "breached").length || 0;
-  const slaCompliance = totalTickets > 0 ? Math.round(((onTrackCount + atRiskCount * 0.5) / totalTickets) * 100) : 100;
+  // Resolution Rate - based on current month tickets only
+  const ticketsThisMonthList = tickets?.filter((t) => new Date(t.createdAt) >= monthAgo) || [];
+  const solvedThisMonth = ticketsThisMonthList.filter((t) => ["Solved", "Closed"].includes(t.status)).length;
+  const resolutionRate = ticketsThisMonth > 0 ? Math.round((solvedThisMonth / ticketsThisMonth) * 100) : 0;
 
+  // Resolution Rate for last month (for comparison)
+  const ticketsLastMonthList = tickets?.filter((t) => {
+    const created = new Date(t.createdAt);
+    return created >= twoMonthsAgo && created < monthAgo;
+  }) || [];
+  const solvedLastMonth = ticketsLastMonthList.filter((t) => ["Solved", "Closed"].includes(t.status)).length;
+  const resolutionRateLastMonth = ticketsLastMonth.length > 0 ? Math.round((solvedLastMonth / ticketsLastMonth.length) * 100) : 0;
+
+  // SLA Compliance - based on current month tickets only
+  const onTrackThisMonth = ticketsThisMonthList.filter((t) => t.slaStatus === "on_track").length;
+  const atRiskThisMonth = ticketsThisMonthList.filter((t) => t.slaStatus === "at_risk").length;
+  const breachedThisMonth = ticketsThisMonthList.filter((t) => t.slaStatus === "breached").length;
+  const slaCompliance = ticketsThisMonth > 0
+    ? Math.round(((onTrackThisMonth + atRiskThisMonth * 0.5) / ticketsThisMonth) * 100)
+    : 100;
+
+  // SLA Compliance for last month (for comparison)
+  const onTrackLastMonth = ticketsLastMonthList.filter((t) => t.slaStatus === "on_track").length;
+  const atRiskLastMonth = ticketsLastMonthList.filter((t) => t.slaStatus === "at_risk").length;
+  const slaComplianceLastMonth = ticketsLastMonth.length > 0
+    ? Math.round(((onTrackLastMonth + atRiskLastMonth * 0.5) / ticketsLastMonth.length) * 100)
+    : 100;
+
+  // Priority Breakdown - PENDING TICKETS ONLY
+  const pendingTickets = tickets?.filter((t) => ["New", "Open", "Pending"].includes(t.status)) || [];
   const priorityBreakdown = {
-    Critical: tickets?.filter((t) => t.priorityTier === "Critical").length || 0,
-    High: tickets?.filter((t) => t.priorityTier === "High").length || 0,
-    Medium: tickets?.filter((t) => t.priorityTier === "Medium").length || 0,
-    Low: tickets?.filter((t) => t.priorityTier === "Low").length || 0,
+    Critical: pendingTickets.filter((t) => t.priorityTier === "Critical").length,
+    High: pendingTickets.filter((t) => t.priorityTier === "High").length,
+    Medium: pendingTickets.filter((t) => t.priorityTier === "Medium").length,
+    Low: pendingTickets.filter((t) => t.priorityTier === "Low").length,
   };
 
-  const departmentBreakdown = tickets?.reduce((acc, t) => {
+  // Department Breakdown - PENDING TICKETS ONLY
+  const departmentBreakdown = pendingTickets.reduce((acc, t) => {
     acc[t.department] = (acc[t.department] || 0) + 1;
     return acc;
-  }, {} as Record<string, number>) || {};
+  }, {} as Record<string, number>);
+
+  // SLA Status Breakdown - PENDING TICKETS ONLY
+  const slaStatusBreakdown = {
+    onTrack: pendingTickets.filter((t) => t.slaStatus === "on_track").length,
+    atRisk: pendingTickets.filter((t) => t.slaStatus === "at_risk").length,
+    breached: pendingTickets.filter((t) => t.slaStatus === "breached").length,
+  };
 
   // Filter users based on current user's department for Heads/Managers
   const filteredUsers = users?.filter((u) => {
@@ -260,6 +319,7 @@ export default function DashboardPage() {
                   <NavButton onClick={() => setLocation("/tickets")} icon={Ticket} label="All Tickets" />
                 )}
                 <NavButton onClick={() => setLocation("/my-tickets")} icon={User} label="My Tickets" />
+                <NavButton onClick={() => setLocation("/attendance")} icon={Clock} label="Attendance" />
                 {hasPermission("view:vendors") && (
                   <NavButton onClick={() => setLocation("/vendors")} icon={Store} label="Vendors" />
                 )}
@@ -401,80 +461,132 @@ export default function DashboardPage() {
             <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
               <KPICard
                 title="Total Tickets"
-                value={totalTickets.toString()}
-                subtitle={`${ticketsToday} today • ${ticketsThisWeek} this week`}
+                value={ticketsThisWeek.toString()}
+                subtitle={`This month: ${ticketsThisMonth} tickets`}
                 icon={Ticket}
+                helpText="Total tickets created this week. Monthly context shows tickets created in the last 30 days."
+                comparison={{
+                  value: ticketsLastWeek > 0 ? Math.round(((ticketsThisWeek - ticketsLastWeek) / ticketsLastWeek) * 100) : 0,
+                  label: "vs last week"
+                }}
               />
               <KPICard
                 title="Resolution Rate"
                 value={`${resolutionRate}%`}
-                subtitle={`${solvedTickets} resolved of ${totalTickets}`}
+                subtitle={`${solvedThisMonth} resolved of ${ticketsThisMonth} (This Month)`}
                 icon={CheckCircle2}
                 color="success"
+                helpText="Percentage of tickets created this month that have been resolved (Solved or Closed status)."
+                comparison={{
+                  value: resolutionRateLastMonth > 0 ? resolutionRate - resolutionRateLastMonth : 0,
+                  label: "vs last month"
+                }}
               />
               <KPICard
                 title="Open Tickets"
                 value={openTickets.toString()}
                 subtitle="New + Open + Pending"
                 icon={Clock}
+                helpText="Total pending tickets across all time periods (New, Open, and Pending statuses)."
               />
               <KPICard
                 title="SLA Compliance"
                 value={`${slaCompliance}%`}
-                subtitle={`${breachedCount} breached`}
+                subtitle={`${breachedThisMonth} breached (This Month)`}
                 icon={AlertTriangle}
                 color={slaCompliance >= 90 ? "success" : slaCompliance >= 70 ? "warning" : "danger"}
+                helpText="Percentage of tickets meeting SLA targets. Based on tickets created this month only."
+                comparison={{
+                  value: slaComplianceLastMonth > 0 ? slaCompliance - slaComplianceLastMonth : 0,
+                  label: "vs last month"
+                }}
               />
             </div>
 
             <div className="grid gap-6 lg:grid-cols-3">
               <Card className="p-6">
-                <h3 className="font-semibold mb-4 flex items-center gap-2">
-                  <BarChart3 className="h-4 w-4" />
-                  Priority Distribution
-                </h3>
+                <div className="flex items-center gap-2 mb-4">
+                  <h3 className="font-semibold flex items-center gap-2">
+                    <BarChart3 className="h-4 w-4" />
+                    Pending Tickets by Priority
+                  </h3>
+                  <TooltipProvider>
+                    <Tooltip>
+                      <TooltipTrigger asChild>
+                        <Info className="h-3.5 w-3.5 text-muted-foreground cursor-help" />
+                      </TooltipTrigger>
+                      <TooltipContent className="max-w-xs">
+                        <p className="text-xs">Shows only pending tickets (New, Open, Pending status). Excludes Solved and Closed tickets.</p>
+                      </TooltipContent>
+                    </Tooltip>
+                  </TooltipProvider>
+                </div>
                 <div className="space-y-3">
                   {Object.entries(priorityBreakdown).map(([priority, count]) => (
-                    <PriorityBar key={priority} priority={priority} count={count} total={totalTickets} />
+                    <PriorityBar key={priority} priority={priority} count={count} total={openTickets} />
                   ))}
                 </div>
               </Card>
 
               <Card className="p-6">
-                <h3 className="font-semibold mb-4 flex items-center gap-2">
-                  <TrendingUp className="h-4 w-4" />
-                  SLA Status
-                </h3>
+                <div className="flex items-center gap-2 mb-4">
+                  <h3 className="font-semibold flex items-center gap-2">
+                    <TrendingUp className="h-4 w-4" />
+                    Pending Tickets by SLA
+                  </h3>
+                  <TooltipProvider>
+                    <Tooltip>
+                      <TooltipTrigger asChild>
+                        <Info className="h-3.5 w-3.5 text-muted-foreground cursor-help" />
+                      </TooltipTrigger>
+                      <TooltipContent className="max-w-xs">
+                        <p className="text-xs">Shows SLA status for pending tickets only (New, Open, Pending). Excludes Solved and Closed tickets.</p>
+                      </TooltipContent>
+                    </Tooltip>
+                  </TooltipProvider>
+                </div>
                 <div className="space-y-3">
                   <div className="flex items-center justify-between">
                     <div className="flex items-center gap-2">
                       <div className="h-3 w-3 rounded-full bg-green-500" />
                       <span className="text-sm">On Track</span>
                     </div>
-                    <span className="font-semibold text-green-600">{onTrackCount}</span>
+                    <span className="font-semibold text-green-600">{slaStatusBreakdown.onTrack}</span>
                   </div>
                   <div className="flex items-center justify-between">
                     <div className="flex items-center gap-2">
                       <div className="h-3 w-3 rounded-full bg-amber-500" />
                       <span className="text-sm">At Risk</span>
                     </div>
-                    <span className="font-semibold text-amber-600">{atRiskCount}</span>
+                    <span className="font-semibold text-amber-600">{slaStatusBreakdown.atRisk}</span>
                   </div>
                   <div className="flex items-center justify-between">
                     <div className="flex items-center gap-2">
                       <div className="h-3 w-3 rounded-full bg-red-500" />
                       <span className="text-sm">Breached</span>
                     </div>
-                    <span className="font-semibold text-red-600">{breachedCount}</span>
+                    <span className="font-semibold text-red-600">{slaStatusBreakdown.breached}</span>
                   </div>
                 </div>
               </Card>
 
               <Card className="p-6">
-                <h3 className="font-semibold mb-4 flex items-center gap-2">
-                  <Store className="h-4 w-4" />
-                  Tickets by Department
-                </h3>
+                <div className="flex items-center gap-2 mb-4">
+                  <h3 className="font-semibold flex items-center gap-2">
+                    <Store className="h-4 w-4" />
+                    Pending Tickets by Department
+                  </h3>
+                  <TooltipProvider>
+                    <Tooltip>
+                      <TooltipTrigger asChild>
+                        <Info className="h-3.5 w-3.5 text-muted-foreground cursor-help" />
+                      </TooltipTrigger>
+                      <TooltipContent className="max-w-xs">
+                        <p className="text-xs">Shows only pending tickets (New, Open, Pending status) grouped by department. Excludes Solved and Closed tickets.</p>
+                      </TooltipContent>
+                    </Tooltip>
+                  </TooltipProvider>
+                </div>
                 <div className="space-y-2">
                   {Object.entries(departmentBreakdown)
                     .sort((a, b) => b[1] - a[1])
@@ -579,18 +691,53 @@ function KPICard({
   subtitle,
   icon: Icon,
   color = "default",
+  helpText,
+  comparison,
 }: {
   title: string;
   value: string;
   subtitle: string;
   icon: any;
   color?: "default" | "success" | "warning" | "danger";
+  helpText?: string;
+  comparison?: {
+    value: number;
+    label: string;
+  };
 }) {
+  const getTrendIcon = () => {
+    if (!comparison) return null;
+    if (comparison.value > 0) return <TrendingUp className="h-3 w-3" />;
+    if (comparison.value < 0) return <TrendingDown className="h-3 w-3" />;
+    return <Minus className="h-3 w-3" />;
+  };
+
+  const getTrendColor = () => {
+    if (!comparison) return "";
+    if (comparison.value > 0) return "text-green-600";
+    if (comparison.value < 0) return "text-red-600";
+    return "text-muted-foreground";
+  };
+
   return (
     <Card className="p-5">
       <div className="flex items-start justify-between">
-        <div className="space-y-1">
-          <p className="text-sm font-medium text-muted-foreground">{title}</p>
+        <div className="space-y-1 flex-1">
+          <div className="flex items-center gap-2">
+            <p className="text-sm font-medium text-muted-foreground">{title}</p>
+            {helpText && (
+              <TooltipProvider>
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <Info className="h-3.5 w-3.5 text-muted-foreground cursor-help" />
+                  </TooltipTrigger>
+                  <TooltipContent className="max-w-xs">
+                    <p className="text-xs">{helpText}</p>
+                  </TooltipContent>
+                </Tooltip>
+              </TooltipProvider>
+            )}
+          </div>
           <p className={cn(
             "text-3xl font-semibold tracking-tight",
             color === "success" && "text-green-600",
@@ -598,6 +745,13 @@ function KPICard({
             color === "danger" && "text-red-600"
           )}>{value}</p>
           <p className="text-xs text-muted-foreground">{subtitle}</p>
+          {comparison && (
+            <div className={cn("flex items-center gap-1 text-xs font-medium mt-2", getTrendColor())}>
+              {getTrendIcon()}
+              <span>{comparison.value > 0 ? "+" : ""}{comparison.value}%</span>
+              <span className="text-muted-foreground font-normal">{comparison.label}</span>
+            </div>
+          )}
         </div>
         <div
           className={cn(

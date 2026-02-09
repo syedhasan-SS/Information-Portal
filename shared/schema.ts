@@ -749,12 +749,77 @@ export const insertProductRequestCommentSchema = createInsertSchema(productReque
   createdAt: true,
 });
 
+// User Column Preferences for Ticket List
+export const userColumnPreferences = pgTable("user_column_preferences", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  userId: varchar("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+  // Array of column IDs in desired display order
+  visibleColumns: text("visible_columns").array().notNull(),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+  updatedAt: timestamp("updated_at").notNull().defaultNow(),
+}, (table) => ({
+  userIdIdx: unique("ucp_user_id_idx").on(table.userId), // One preference record per user
+}));
+
+export const insertUserColumnPreferenceSchema = createInsertSchema(userColumnPreferences).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+});
+
+// Attendance System
+export const attendanceRecords = pgTable("attendance_records", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  userId: varchar("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+
+  // Login (Check-in) Details
+  loginTime: timestamp("login_time").notNull(),
+  loginLocation: jsonb("login_location").$type<{
+    latitude: number;
+    longitude: number;
+    address?: string;
+    accuracy?: number;
+  }>(),
+  loginDeviceInfo: text("login_device_info"), // Browser/Device info
+
+  // Logout (Check-out) Details
+  logoutTime: timestamp("logout_time"),
+  logoutLocation: jsonb("logout_location").$type<{
+    latitude: number;
+    longitude: number;
+    address?: string;
+    accuracy?: number;
+  }>(),
+  logoutDeviceInfo: text("logout_device_info"),
+
+  // Calculated Fields
+  workDuration: integer("work_duration"), // Duration in minutes
+  status: text("status").notNull().$type<"active" | "completed" | "incomplete">().default("active"),
+
+  // Metadata
+  notes: text("notes"), // Optional notes from user or admin
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+  updatedAt: timestamp("updated_at").notNull().defaultNow(),
+}, (table) => ({
+  userIdIdx: index("attendance_user_id_idx").on(table.userId),
+  loginTimeIdx: index("attendance_login_time_idx").on(table.loginTime),
+  statusIdx: index("attendance_status_idx").on(table.status),
+}));
+
+export const insertAttendanceRecordSchema = createInsertSchema(attendanceRecords).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+});
+
 export type InsertPermission = z.infer<typeof insertPermissionSchema>;
 export type InsertRole = z.infer<typeof insertRoleSchema>;
 export type InsertRolePermission = z.infer<typeof insertRolePermissionSchema>;
 export type InsertCategoryRoutingRule = z.infer<typeof insertCategoryRoutingRuleSchema>;
 export type InsertProductRequest = z.infer<typeof insertProductRequestSchema>;
 export type InsertProductRequestComment = z.infer<typeof insertProductRequestCommentSchema>;
+export type InsertUserColumnPreference = z.infer<typeof insertUserColumnPreferenceSchema>;
+export type InsertAttendanceRecord = z.infer<typeof insertAttendanceRecordSchema>;
 
 export type Permission = typeof permissions.$inferSelect;
 export type Role = typeof roles.$inferSelect;
@@ -762,6 +827,7 @@ export type RolePermission = typeof rolePermissions.$inferSelect;
 export type CategoryRoutingRule = typeof categoryRoutingRules.$inferSelect;
 export type ProductRequest = typeof productRequests.$inferSelect;
 export type ProductRequestComment = typeof productRequestComments.$inferSelect;
+export type UserColumnPreference = typeof userColumnPreferences.$inferSelect;
 
 export type Vendor = typeof vendors.$inferSelect;
 export type Category = typeof categories.$inferSelect;
@@ -771,3 +837,4 @@ export type User = typeof users.$inferSelect;
 export type Notification = typeof notifications.$inferSelect;
 export type Department = typeof departments.$inferSelect;
 export type SubDepartment = typeof subDepartments.$inferSelect;
+export type AttendanceRecord = typeof attendanceRecords.$inferSelect;

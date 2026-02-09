@@ -91,3 +91,23 @@ export async function createComment(comment: Omit<Comment, "id" | "createdAt">):
     body: JSON.stringify(comment),
   });
 }
+
+// User Column Preferences
+export interface UserColumnPreference {
+  id: string;
+  userId: string;
+  visibleColumns: string[];
+  createdAt: string;
+  updatedAt: string;
+}
+
+export async function getUserColumnPreferences(userId: string): Promise<UserColumnPreference> {
+  return fetchAPI<UserColumnPreference>(`/api/users/${userId}/column-preferences`);
+}
+
+export async function updateUserColumnPreferences(userId: string, visibleColumns: string[]): Promise<UserColumnPreference> {
+  return fetchAPI<UserColumnPreference>(`/api/users/${userId}/column-preferences`, {
+    method: "PUT",
+    body: JSON.stringify({ visibleColumns }),
+  });
+}

@@ -1,6 +1,6 @@
 import { useState, useRef, useEffect } from "react";
 import { useLocation } from "wouter";
-import { useMutation, useQueryClient } from "@tanstack/react-query";
+import { useMutation, useQueryClient, useQuery } from "@tanstack/react-query";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
@@ -8,7 +8,7 @@ import { PasswordInput } from "@/components/ui/password-input";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/hooks/use-auth";
-import { ArrowLeft, Save, User, Shield, Camera, Loader2 } from "lucide-react";
+import { ArrowLeft, Save, User, Shield, Camera, Loader2, Users } from "lucide-react";
 
 export default function ProfilePage() {
   const [, setLocation] = useLocation();
@@ -28,6 +28,27 @@ export default function ProfilePage() {
       setProfilePicture(savedPicture);
     }
   }, [user]);
+
+  // Fetch all users to get manager and team info
+  const { data: allUsers } = useQuery({
+    queryKey: ["users"],
+    queryFn: async () => {
+      const res = await fetch("/api/users");
+      if (!res.ok) throw new Error("Failed to fetch users");
+      return res.json();
+    },
+    enabled: !!user,
+  });
+
+  // Get manager info
+  const manager = allUsers?.find((u: any) => u.id === user?.managerId);
+
+  // Get team members (same sub-department)
+  const teamMembers = allUsers?.filter((u: any) =>
+    u.subDepartment &&
+    u.subDepartment === user?.subDepartment &&
+    u.id !== user?.id
+  ) || [];
 
   const updateProfilePictureMutation = useMutation({
     mutationFn: async (profilePicture: string) => {
@@ -244,9 +265,61 @@ export default function ProfilePage() {
                     <p className="font-medium">{user.department}</p>
                   </div>
                 )}
+                {user.subDepartment && (
+                  <div>
+                    <Label className="text-muted-foreground text-xs">Sub Department</Label>
+                    <p className="font-medium">{user.subDepartment}</p>
+                  </div>
+                )}
+                {manager && (
+                  <div>
+                    <Label className="text-muted-foreground text-xs">Direct Line Manager</Label>
+                    <p className="font-medium">{manager.name}</p>
+                    <p className="text-xs text-muted-foreground">{manager.email}</p>
+                  </div>
+                )}
               </div>
             </CardContent>
           </Card>
+
+          {/* Team Section */}
+          {user.subDepartment && teamMembers.length > 0 && (
+            <Card>
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  <Users className="h-5 w-5" />
+                  My Team ({user.subDepartment})
+                </CardTitle>
+              </CardHeader>
+              <CardContent>
+                <p className="text-sm text-muted-foreground mb-4">
+                  People from your sub-department
+                </p>
+                <div className="grid gap-3">
+                  {teamMembers.map((member: any) => (
+                    <div
+                      key={member.id}
+                      className="flex items-center gap-3 p-3 rounded-lg border bg-card hover:bg-accent/5 transition-colors"
+                    >
+                      <Avatar className="h-10 w-10">
+                        <AvatarImage src={member.profilePicture || undefined} alt={member.name} />
+                        <AvatarFallback>
+                          {member.name.split(' ').map((n: string) => n[0]).join('')}
+                        </AvatarFallback>
+                      </Avatar>
+                      <div className="flex-1 min-w-0">
+                        <p className="font-medium truncate">{member.name}</p>
+                        <p className="text-sm text-muted-foreground truncate">{member.email}</p>
+                      </div>
+                      <div className="text-right">
+                        <p className="text-xs font-medium text-muted-foreground">{member.role}</p>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </CardContent>
+            </Card>
+          )}
 
           {/* Change Password Card */}
           <Card>
