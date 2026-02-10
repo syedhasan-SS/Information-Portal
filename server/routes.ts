@@ -4646,11 +4646,11 @@ roles: ${JSON.stringify(updated.roles, null, 2)}</pre>
     }
   });
 
-  // TEMPORARY: Emergency endpoint to restore Owner role
-  // This endpoint allows fixing the owner's role if it was accidentally changed
-  app.post("/api/admin/restore-owner-role", async (req, res) => {
+  // TEMPORARY: Emergency endpoint to setup multi-role support
+  // This endpoint allows setting up both Owner and Lead roles simultaneously
+  app.post("/api/admin/setup-multi-role", async (req, res) => {
     try {
-      const { email, secretKey } = req.body;
+      const { email, secretKey, primaryRole, additionalRoles, subDepartment } = req.body;
 
       // Security: require a secret key to prevent abuse
       if (secretKey !== "restore-owner-2026") {
@@ -4661,7 +4661,7 @@ roles: ${JSON.stringify(updated.roles, null, 2)}</pre>
         return res.status(400).json({ error: "Email is required" });
       }
 
-      console.log(`[Admin] Restoring Owner role for: ${email}`);
+      console.log(`[Admin] Setting up multi-role for: ${email}`);
 
       // Get the user
       const user = await storage.getUserByEmail(email);
@@ -4670,24 +4670,37 @@ roles: ${JSON.stringify(updated.roles, null, 2)}</pre>
       }
 
       console.log(`[Admin] Current role: ${user.role}`);
+      console.log(`[Admin] Current roles: ${user.roles}`);
 
-      // Update role to Owner
-      await storage.updateUser(user.id, { role: "Owner" });
+      // Build the roles array (primary role + additional roles)
+      const allRoles = [primaryRole, ...(additionalRoles || [])];
+      const uniqueRoles = [...new Set(allRoles)]; // Remove duplicates
 
-      console.log(`[Admin] ✅ Role restored to Owner for ${email}`);
+      // Update user with multi-role configuration
+      await storage.updateUser(user.id, {
+        role: primaryRole, // Primary role (highest permissions)
+        roles: uniqueRoles, // All roles
+        ...(subDepartment && { subDepartment }), // Optional sub-department
+      });
+
+      console.log(`[Admin] ✅ Multi-role setup complete for ${email}`);
+      console.log(`[Admin]    Primary role: ${primaryRole}`);
+      console.log(`[Admin]    All roles: ${uniqueRoles.join(", ")}`);
+      console.log(`[Admin]    Sub-department: ${subDepartment || "N/A"}`);
 
       res.json({
         success: true,
-        message: "Owner role restored successfully",
+        message: "Multi-role configuration applied successfully",
         user: {
           email: user.email,
           name: user.name,
-          oldRole: user.role,
-          newRole: "Owner",
+          primaryRole: primaryRole,
+          allRoles: uniqueRoles,
+          subDepartment: subDepartment || null,
         },
       });
     } catch (error: any) {
-      console.error("[Admin] Restore owner role error:", error);
+      console.error("[Admin] Setup multi-role error:", error);
       res.status(500).json({ error: error.message });
     }
   });
