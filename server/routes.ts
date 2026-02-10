@@ -2867,6 +2867,63 @@ export async function registerRoutes(
     }
   });
 
+  // Improved BigQuery Vendor Sync Endpoints
+  app.post("/api/automation/bigquery/sync-vendors-v2", async (_req, res) => {
+    try {
+      const { syncVendorsFromBigQueryImproved } = await import("./bigquery-vendor-sync-improved");
+
+      console.log('[API] Starting improved vendor sync...');
+      const results = await syncVendorsFromBigQueryImproved();
+
+      res.json({
+        success: results.success,
+        message: results.success
+          ? "Improved vendor sync completed successfully"
+          : "Vendor sync completed with errors",
+        results: {
+          imported: results.imported,
+          updated: results.updated,
+          skipped: results.skipped,
+          errors: results.errors,
+          totalProcessed: results.totalProcessed,
+          errorDetails: results.errorDetails,
+        },
+      });
+    } catch (error: any) {
+      console.error('[API] Vendor sync v2 failed:', error);
+      res.status(500).json({
+        success: false,
+        error: error.message,
+        message: "Failed to sync vendors from BigQuery",
+      });
+    }
+  });
+
+  app.post("/api/automation/bigquery/fix-vendor-names", async (_req, res) => {
+    try {
+      const { fixMissingVendorNames } = await import("./bigquery-vendor-sync-improved");
+
+      console.log('[API] Starting vendor name fix...');
+      const results = await fixMissingVendorNames();
+
+      res.json({
+        success: results.errors === 0 || results.fixed > 0,
+        message: `Fixed ${results.fixed} vendor names`,
+        results: {
+          fixed: results.fixed,
+          errors: results.errors,
+        },
+      });
+    } catch (error: any) {
+      console.error('[API] Vendor name fix failed:', error);
+      res.status(500).json({
+        success: false,
+        error: error.message,
+        message: "Failed to fix vendor names",
+      });
+    }
+  });
+
   // n8n Integration Endpoints
   app.get("/api/n8n/status", async (_req, res) => {
     res.json({
