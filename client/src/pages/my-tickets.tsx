@@ -208,9 +208,18 @@ export default function MyTicketsPage() {
   // Fetch categories from categoryHierarchy filtered by user's departmentType
   const userDepartmentType = useMemo(() => {
     if (!user) return undefined;
+
+    // CX department with subdepartment (Customer Support or Seller Support)
     if (user.department === "CX" && user.subDepartment) {
       return user.subDepartment; // "Customer Support" or "Seller Support"
     }
+
+    // Owner and Admin roles should see all fields (treat as "All")
+    // This allows them to create tickets for any department type
+    if (user.role === "Owner" || user.role === "Admin") {
+      return "All";
+    }
+
     return undefined;
   }, [user]);
 
@@ -383,6 +392,13 @@ export default function MyTicketsPage() {
   // Helper function to check if a field should be visible
   // Priority: 1) Category override (if category selected), 2) User department type default
   const isFieldVisible = (fieldName: string): boolean => {
+    // ALWAYS show core required fields regardless of configuration
+    // These are essential for ticket creation and must never be hidden
+    const coreRequiredFields = ["subject", "description", "department", "issueType", "categoryId"];
+    if (coreRequiredFields.includes(fieldName)) {
+      return true;
+    }
+
     // If we have resolved fields (category selected), ONLY use those
     // This ensures category-specific field visibility is respected
     if (resolvedFields.length > 0) {
@@ -401,6 +417,12 @@ export default function MyTicketsPage() {
     if (!baseField) return false; // Field not found
 
     const fieldDeptType = baseField.departmentType || "All";
+
+    // If user has "All" department type (Owner, Admin), show all fields
+    if (userDepartmentType === "All") {
+      return true;
+    }
+
     // Show if field is for "All" departments OR matches user's department type
     return fieldDeptType === "All" || fieldDeptType === userDepartmentType;
   };
