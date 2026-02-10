@@ -1,0 +1,300 @@
+{
+  "name": "FLOW - Slack Ticket Notifications",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "slack-notifications",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "id": "webhook-node",
+      "name": "Webhook",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 1,
+      "position": [250, 300]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "string": [
+            {
+              "value1": "={{$json.event}}",
+              "operation": "equals",
+              "value2": "slack.ticket.created"
+            }
+          ]
+        }
+      },
+      "id": "switch-ticket-created",
+      "name": "Is Ticket Created?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 1,
+      "position": [450, 200]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "string": [
+            {
+              "value1": "={{$json.event}}",
+              "operation": "equals",
+              "value2": "slack.ticket.assigned"
+            }
+          ]
+        }
+      },
+      "id": "switch-ticket-assigned",
+      "name": "Is Ticket Assigned?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 1,
+      "position": [450, 300]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "string": [
+            {
+              "value1": "={{$json.event}}",
+              "operation": "equals",
+              "value2": "slack.comment.mention"
+            }
+          ]
+        }
+      },
+      "id": "switch-comment-mention",
+      "name": "Is Comment Mention?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 1,
+      "position": [450, 400]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "string": [
+            {
+              "value1": "={{$json.event}}",
+              "operation": "equals",
+              "value2": "slack.ticket.resolved"
+            }
+          ]
+        }
+      },
+      "id": "switch-ticket-resolved",
+      "name": "Is Ticket Resolved?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 1,
+      "position": [450, 500]
+    },
+    {
+      "parameters": {
+        "functionCode": "const data = $input.item.json.data;\nconst ticket = data.ticket;\nconst creator = data.creator;\nconst assignee = data.assignee;\n\nconst blocks = [\n  {\n    type: \"header\",\n    text: {\n      type: \"plain_text\",\n      text: `${ticket.priorityEmoji} New Ticket Created`,\n      emoji: true\n    }\n  },\n  {\n    type: \"section\",\n    fields: [\n      { type: \"mrkdwn\", text: `*Ticket:*\\n<${ticket.url}|${ticket.number}>` },\n      { type: \"mrkdwn\", text: `*Priority:*\\n${ticket.priorityEmoji} ${ticket.priority}` },\n      { type: \"mrkdwn\", text: `*Department:*\\n${ticket.department}` },\n      { type: \"mrkdwn\", text: `*Created By:*\\n${creator ? creator.email : 'Unknown'}` }\n    ]\n  },\n  {\n    type: \"section\",\n    text: { type: \"mrkdwn\", text: `*Subject:* ${ticket.subject}\\n*Vendor:* ${ticket.vendorHandle}` }\n  }\n];\n\nif (assignee) {\n  blocks.push({\n    type: \"section\",\n    text: { type: \"mrkdwn\", text: `*Assigned to:* ${assignee.email}` }\n  });\n} else {\n  blocks.push({\n    type: \"section\",\n    text: { type: \"mrkdwn\", text: \"*Status:* Unassigned - Waiting for assignment\" }\n  });\n}\n\nblocks.push({\n  type: \"actions\",\n  elements: [{\n    type: \"button\",\n    text: { type: \"plain_text\", text: \"🔗 View Ticket\", emoji: true },\n    url: ticket.url,\n    style: \"primary\"\n  }]\n});\n\nreturn { json: { blocks, text: `New ticket: ${ticket.number} - ${ticket.subject}` } };"
+      },
+      "id": "format-ticket-created",
+      "name": "Format: Ticket Created",
+      "type": "n8n-nodes-base.function",
+      "typeVersion": 1,
+      "position": [650, 200]
+    },
+    {
+      "parameters": {
+        "functionCode": "const data = $input.item.json.data;\nconst ticket = data.ticket;\nconst assignee = data.assignee;\nconst assigner = data.assigner;\n\nconst blocks = [\n  {\n    type: \"header\",\n    text: { type: \"plain_text\", text: `${ticket.priorityEmoji} Ticket Assigned`, emoji: true }\n  },\n  {\n    type: \"section\",\n    fields: [\n      { type: \"mrkdwn\", text: `*Ticket:*\\n<${ticket.url}|${ticket.number}>` },\n      { type: \"mrkdwn\", text: `*Priority:*\\n${ticket.priorityEmoji} ${ticket.priority}` }\n    ]\n  },\n  {\n    type: \"section\",\n    text: { type: \"mrkdwn\", text: `*${assignee.email}* has been assigned by ${assigner ? assigner.email : 'System'}` }\n  },\n  {\n    type: \"section\",\n    text: { type: \"mrkdwn\", text: `*Subject:* ${ticket.subject}\\n*Department:* ${ticket.department}` }\n  },\n  {\n    type: \"actions\",\n    elements: [{\n      type: \"button\",\n      text: { type: \"plain_text\", text: \"🔗 View Ticket\", emoji: true },\n      url: ticket.url,\n      style: \"primary\"\n    }]\n  }\n];\n\nreturn { json: { blocks, text: `Ticket ${ticket.number} assigned to ${assignee.email}` } };"
+      },
+      "id": "format-ticket-assigned",
+      "name": "Format: Ticket Assigned",
+      "type": "n8n-nodes-base.function",
+      "typeVersion": 1,
+      "position": [650, 300]
+    },
+    {
+      "parameters": {
+        "functionCode": "const data = $input.item.json.data;\nconst ticket = data.ticket;\nconst comment = data.comment;\nconst commenter = data.commenter;\nconst mentionedUsers = data.mentionedUsers;\n\nconst mentionsList = mentionedUsers.map(u => u.email).join(', ');\n\nconst blocks = [\n  {\n    type: \"header\",\n    text: { type: \"plain_text\", text: \"💬 You were mentioned in a comment\", emoji: true }\n  },\n  {\n    type: \"section\",\n    fields: [\n      { type: \"mrkdwn\", text: `*Ticket:*\\n<${ticket.url}|${ticket.number}>` },\n      { type: \"mrkdwn\", text: `*Mentioned:*\\n${mentionsList}` }\n    ]\n  },\n  {\n    type: \"section\",\n    text: { type: \"mrkdwn\", text: `*${commenter.email}* commented:\\n> ${comment.text}` }\n  },\n  {\n    type: \"section\",\n    text: { type: \"mrkdwn\", text: `*Ticket Subject:* ${ticket.subject}` }\n  },\n  {\n    type: \"actions\",\n    elements: [{\n      type: \"button\",\n      text: { type: \"plain_text\", text: \"🔗 View Comment\", emoji: true },\n      url: ticket.url,\n      style: \"primary\"\n    }]\n  }\n];\n\nreturn { json: { blocks, text: `${commenter.email} mentioned ${mentionsList}` } };"
+      },
+      "id": "format-comment-mention",
+      "name": "Format: Comment Mention",
+      "type": "n8n-nodes-base.function",
+      "typeVersion": 1,
+      "position": [650, 400]
+    },
+    {
+      "parameters": {
+        "functionCode": "const data = $input.item.json.data;\nconst ticket = data.ticket;\nconst resolver = data.resolver;\n\nconst blocks = [\n  {\n    type: \"header\",\n    text: { type: \"plain_text\", text: \"✅ Ticket Resolved\", emoji: true }\n  },\n  {\n    type: \"section\",\n    fields: [\n      { type: \"mrkdwn\", text: `*Ticket:*\\n<${ticket.url}|${ticket.number}>` },\n      { type: \"mrkdwn\", text: `*Resolved By:*\\n${resolver.email}` }\n    ]\n  },\n  {\n    type: \"section\",\n    text: { type: \"mrkdwn\", text: `*Subject:* ${ticket.subject}\\n*Department:* ${ticket.department}` }\n  },\n  {\n    type: \"actions\",\n    elements: [{\n      type: \"button\",\n      text: { type: \"plain_text\", text: \"🔗 View Ticket\", emoji: true },\n      url: ticket.url\n    }]\n  }\n];\n\nreturn { json: { blocks, text: `Ticket ${ticket.number} resolved by ${resolver.email}` } };"
+      },
+      "id": "format-ticket-resolved",
+      "name": "Format: Ticket Resolved",
+      "type": "n8n-nodes-base.function",
+      "typeVersion": 1,
+      "position": [650, 500]
+    },
+    {
+      "parameters": {
+        "url": "YOUR_SLACK_WEBHOOK_URL_HERE",
+        "sendBody": true,
+        "bodyParameters": {
+          "parameters": [
+            {
+              "name": "blocks",
+              "value": "={{$json.blocks}}"
+            },
+            {
+              "name": "text",
+              "value": "={{$json.text}}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "slack-node",
+      "name": "Send to Slack",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 3,
+      "position": [850, 350]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ { \"success\": true, \"message\": \"Notification sent\" } }}"
+      },
+      "id": "response-node",
+      "name": "Respond to Webhook",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1,
+      "position": [1050, 350]
+    }
+  ],
+  "connections": {
+    "Webhook": {
+      "main": [
+        [
+          {
+            "node": "Is Ticket Created?",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Is Ticket Assigned?",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Is Comment Mention?",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Is Ticket Resolved?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Is Ticket Created?": {
+      "main": [
+        [
+          {
+            "node": "Format: Ticket Created",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Is Ticket Assigned?": {
+      "main": [
+        [
+          {
+            "node": "Format: Ticket Assigned",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Is Comment Mention?": {
+      "main": [
+        [
+          {
+            "node": "Format: Comment Mention",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Is Ticket Resolved?": {
+      "main": [
+        [
+          {
+            "node": "Format: Ticket Resolved",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Format: Ticket Created": {
+      "main": [
+        [
+          {
+            "node": "Send to Slack",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Format: Ticket Assigned": {
+      "main": [
+        [
+          {
+            "node": "Send to Slack",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Format: Comment Mention": {
+      "main": [
+        [
+          {
+            "node": "Send to Slack",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Format: Ticket Resolved": {
+      "main": [
+        [
+          {
+            "node": "Send to Slack",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Send to Slack": {
+      "main": [
+        [
+          {
+            "node": "Respond to Webhook",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "staticData": null,
+  "tags": [],
+  "triggerCount": 0,
+  "updatedAt": "2025-02-09T00:00:00.000Z",
+  "versionId": "1"
+}
