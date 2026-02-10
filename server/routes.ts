@@ -2767,6 +2767,94 @@ export async function registerRoutes(
     }
   });
 
+  // Bulk create routing rules
+  app.post("/api/config/routing-rules/bulk", async (req, res) => {
+    try {
+      // Check permission
+      const permissionCheck = await checkPermission(req, "edit:config");
+      if (!permissionCheck.hasPermission) {
+        return res.status(403).json({ error: permissionCheck.error || "Forbidden" });
+      }
+
+      const { categoryIds, config } = req.body;
+
+      if (!categoryIds || !Array.isArray(categoryIds) || categoryIds.length === 0) {
+        return res.status(400).json({ error: "categoryIds array is required" });
+      }
+
+      if (!config || !config.targetDepartment) {
+        return res.status(400).json({ error: "config.targetDepartment is required" });
+      }
+
+      const {
+        targetDepartment,
+        autoAssignEnabled = false,
+        assignmentStrategy = "round_robin",
+        assignedAgentId = null,
+        priorityBoost = 0,
+        slaResponseHoursOverride = null,
+        slaResolutionHoursOverride = null,
+      } = config;
+
+      const results = {
+        success: [] as any[],
+        skipped: [] as any[],
+        errors: [] as any[],
+      };
+
+      // Process each category
+      for (const categoryId of categoryIds) {
+        try {
+          // Check if an ACTIVE rule already exists for this category
+          const existing = await storage.getCategoryRoutingRuleByCategoryId(categoryId);
+          if (existing && existing.isActive) {
+            results.skipped.push({
+              categoryId,
+              reason: "Active rule already exists",
+              existingRuleId: existing.id
+            });
+            continue;
+          }
+
+          // Create the routing rule
+          const rule = await storage.createCategoryRoutingRule({
+            categoryId,
+            targetDepartment,
+            autoAssignEnabled,
+            assignmentStrategy,
+            assignedAgentId,
+            priorityBoost,
+            slaResponseHoursOverride,
+            slaResolutionHoursOverride,
+            isActive: true,
+          });
+
+          results.success.push({
+            categoryId,
+            ruleId: rule.id
+          });
+        } catch (error: any) {
+          results.errors.push({
+            categoryId,
+            error: error.message
+          });
+        }
+      }
+
+      res.json({
+        message: "Bulk routing rule creation completed",
+        total: categoryIds.length,
+        created: results.success.length,
+        skipped: results.skipped.length,
+        failed: results.errors.length,
+        results
+      });
+    } catch (error: any) {
+      console.error("Error creating bulk routing rules:", error);
+      res.status(500).json({ error: error.message });
+    }
+  });
+
   // Delete ALL routing rules (for migration cleanup)
   app.post("/api/admin/cleanup-routing-rules", async (req, res) => {
     try {
@@ -2791,6 +2879,40 @@ export async function registerRoutes(
     } catch (error: any) {
       console.error("Error cleaning up routing rules:", error);
       res.status(500).json({ error: error.message });
+    }
+  });
+
+  // Sync categories from BigQuery to Ticket Manager
+  app.post("/api/admin/sync-categories-from-bigquery", async (req, res) => {
+    try {
+      const { syncCategoriesFromBigQuery } = await import("./bigquery-category-sync");
+
+      console.log("🔄 Starting category sync from BigQuery...");
+      const result = await syncCategoriesFromBigQuery();
+
+      if (result.success) {
+        res.json({
+          success: true,
+          message: "Category sync completed successfully",
+          ...result
+        });
+      } else {
+        res.status(500).json({
+          success: false,
+          message: "Category sync completed with errors",
+          ...result
+        });
+      }
+    } catch (error: any) {
+      console.error("❌ Error syncing categories:", error);
+      res.status(500).json({
+        success: false,
+        error: error.message,
+        categoriesProcessed: 0,
+        categoriesCreated: 0,
+        categoriesSkipped: 0,
+        errors: [error.message]
+      });
     }
   });
 

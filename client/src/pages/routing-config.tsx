@@ -38,7 +38,10 @@ import {
   Edit,
   Trash2,
   Loader2,
+  Download,
+  List,
 } from "lucide-react";
+import { Checkbox } from "@/components/ui/checkbox";
 
 type Category = {
   id: string;
@@ -98,9 +101,21 @@ export default function RoutingConfigPage() {
   const queryClient = useQueryClient();
 
   const [showDialog, setShowDialog] = useState(false);
+  const [showBulkDialog, setShowBulkDialog] = useState(false);
   const [editingRule, setEditingRule] = useState<RoutingRule | null>(null);
+  const [selectedCategories, setSelectedCategories] = useState<Set<string>>(new Set());
+  const [isSyncing, setIsSyncing] = useState(false);
   const [formData, setFormData] = useState({
     categoryId: "",
+    targetDepartment: "",
+    autoAssignEnabled: false,
+    assignmentStrategy: "round_robin" as "round_robin" | "least_loaded" | "specific_agent",
+    assignedAgentId: "",
+    priorityBoost: 0,
+    slaResponseHoursOverride: "",
+    slaResolutionHoursOverride: "",
+  });
+  const [bulkConfig, setBulkConfig] = useState({
     targetDepartment: "",
     autoAssignEnabled: false,
     assignmentStrategy: "round_robin" as "round_robin" | "least_loaded" | "specific_agent",
@@ -222,6 +237,83 @@ export default function RoutingConfigPage() {
     },
   });
 
+  // Bulk create routing rules
+  const bulkCreateMutation = useMutation({
+    mutationFn: async (data: { categoryIds: string[]; config: any }) => {
+      const res = await fetch("/api/config/routing-rules/bulk", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "x-user-email": localStorage.getItem("userEmail") || "",
+        },
+        body: JSON.stringify(data),
+      });
+      if (!res.ok) {
+        const error = await res.json();
+        throw new Error(error.error || "Failed to create bulk routing rules");
+      }
+      return res.json();
+    },
+    onSuccess: (result) => {
+      queryClient.invalidateQueries({ queryKey: ["routingRules"] });
+      toast({
+        title: "Bulk Setup Complete",
+        description: `Created ${result.created} rules, skipped ${result.skipped}, failed ${result.failed}`,
+      });
+      setShowBulkDialog(false);
+      setSelectedCategories(new Set());
+      setBulkConfig({
+        targetDepartment: "",
+        autoAssignEnabled: false,
+        assignmentStrategy: "round_robin",
+        assignedAgentId: "",
+        priorityBoost: 0,
+        slaResponseHoursOverride: "",
+        slaResolutionHoursOverride: "",
+      });
+    },
+    onError: (error: Error) => {
+      toast({ title: "Error", description: error.message, variant: "destructive" });
+    },
+  });
+
+  // Sync categories from BigQuery
+  const handleSyncCategories = async () => {
+    setIsSyncing(true);
+    try {
+      const res = await fetch("/api/admin/sync-categories-from-bigquery", {
+        method: "POST",
+        headers: {
+          "x-user-email": localStorage.getItem("userEmail") || "",
+        },
+      });
+
+      const result = await res.json();
+
+      if (result.success) {
+        toast({
+          title: "Sync Complete",
+          description: `Processed ${result.categoriesProcessed} combinations, created ${result.categoriesCreated} categories, skipped ${result.categoriesSkipped} existing`,
+        });
+        queryClient.invalidateQueries({ queryKey: ["categories"] });
+      } else {
+        toast({
+          title: "Sync Completed with Errors",
+          description: `Created ${result.categoriesCreated} categories but encountered ${result.errors.length} errors`,
+          variant: "destructive",
+        });
+      }
+    } catch (error: any) {
+      toast({
+        title: "Sync Failed",
+        description: error.message,
+        variant: "destructive",
+      });
+    } finally {
+      setIsSyncing(false);
+    }
+  };
+
   const resetForm = () => {
     setFormData({
       categoryId: "",
@@ -317,17 +409,40 @@ export default function RoutingConfigPage() {
               </div>
             </div>
 
-            <Button
-              onClick={() => {
-                resetForm();
-                setShowDialog(true);
-              }}
-              size="sm"
-              className="bg-accent text-accent-foreground hover:bg-accent/90"
-            >
-              <Plus className="h-4 w-4" />
-              Add Routing Rule
-            </Button>
+            <div className="flex gap-2">
+              <Button
+                onClick={handleSyncCategories}
+                size="sm"
+                variant="outline"
+                disabled={isSyncing}
+              >
+                {isSyncing ? (
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                ) : (
+                  <Download className="h-4 w-4" />
+                )}
+                Sync from BigQuery
+              </Button>
+              <Button
+                onClick={() => setShowBulkDialog(true)}
+                size="sm"
+                variant="outline"
+              >
+                <List className="h-4 w-4" />
+                Bulk Setup
+              </Button>
+              <Button
+                onClick={() => {
+                  resetForm();
+                  setShowDialog(true);
+                }}
+                size="sm"
+                className="bg-accent text-accent-foreground hover:bg-accent/90"
+              >
+                <Plus className="h-4 w-4" />
+                Add Routing Rule
+              </Button>
+            </div>
           </div>
         </div>
       </header>
@@ -627,6 +742,234 @@ export default function RoutingConfigPage() {
                 </>
               ) : (
                 <>{editingRule ? "Update" : "Create"} Rule</>
+              )}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Bulk Setup Dialog */}
+      <Dialog open={showBulkDialog} onOpenChange={setShowBulkDialog}>
+        <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle>Bulk Setup Routing Rules</DialogTitle>
+            <DialogDescription>
+              Select multiple categories and configure routing rules for all of them at once
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="space-y-6 py-4">
+            {/* Category Selection Table */}
+            <div className="space-y-2">
+              <div className="flex items-center justify-between">
+                <Label>Select Categories</Label>
+                <div className="flex gap-2 text-sm text-muted-foreground">
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => {
+                      const allCategoryIds = new Set(availableCategories.map(c => c.id));
+                      setSelectedCategories(allCategoryIds);
+                    }}
+                  >
+                    Select All
+                  </Button>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => setSelectedCategories(new Set())}
+                  >
+                    Clear All
+                  </Button>
+                </div>
+              </div>
+              <div className="border rounded-lg max-h-[300px] overflow-y-auto">
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead className="w-12"></TableHead>
+                      <TableHead>Category Path</TableHead>
+                      <TableHead>Level</TableHead>
+                      <TableHead>Department Type</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {availableCategories.length === 0 ? (
+                      <TableRow>
+                        <TableCell colSpan={4} className="text-center text-muted-foreground">
+                          No available categories. All categories have routing rules or sync categories from BigQuery.
+                        </TableCell>
+                      </TableRow>
+                    ) : (
+                      availableCategories.map((cat) => (
+                        <TableRow key={cat.id}>
+                          <TableCell>
+                            <Checkbox
+                              checked={selectedCategories.has(cat.id)}
+                              onCheckedChange={(checked) => {
+                                const newSelected = new Set(selectedCategories);
+                                if (checked) {
+                                  newSelected.add(cat.id);
+                                } else {
+                                  newSelected.delete(cat.id);
+                                }
+                                setSelectedCategories(newSelected);
+                              }}
+                            />
+                          </TableCell>
+                          <TableCell className="font-medium">{cat.path}</TableCell>
+                          <TableCell>
+                            <Badge variant="outline">L{cat.l1 ? 1 : cat.l2 ? 2 : cat.l3 ? 3 : 4}</Badge>
+                          </TableCell>
+                          <TableCell>
+                            <Badge variant="secondary">{cat.issueType}</Badge>
+                          </TableCell>
+                        </TableRow>
+                      ))
+                    )}
+                  </TableBody>
+                </Table>
+              </div>
+              <p className="text-sm text-muted-foreground">
+                {selectedCategories.size} {selectedCategories.size === 1 ? 'category' : 'categories'} selected
+              </p>
+            </div>
+
+            {/* Common Configuration */}
+            <div className="space-y-4 border rounded-lg p-4">
+              <h4 className="font-medium">Common Configuration for All Selected Categories</h4>
+
+              {/* Target Department */}
+              <div className="space-y-2">
+                <Label htmlFor="bulk-department">Target Department *</Label>
+                <Select
+                  value={bulkConfig.targetDepartment}
+                  onValueChange={(value) => setBulkConfig({ ...bulkConfig, targetDepartment: value, assignedAgentId: "" })}
+                >
+                  <SelectTrigger id="bulk-department">
+                    <SelectValue placeholder="Select target department" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {DEPARTMENTS.map((dept) => (
+                      <SelectItem key={dept} value={dept}>
+                        {dept}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+
+              {/* Auto-Assignment */}
+              <div className="flex items-center justify-between">
+                <div>
+                  <Label htmlFor="bulk-auto-assign">Enable Auto-Assignment</Label>
+                  <p className="text-sm text-muted-foreground">
+                    Automatically assign tickets to available agents
+                  </p>
+                </div>
+                <Switch
+                  id="bulk-auto-assign"
+                  checked={bulkConfig.autoAssignEnabled}
+                  onCheckedChange={(checked) => setBulkConfig({ ...bulkConfig, autoAssignEnabled: checked })}
+                />
+              </div>
+
+              {bulkConfig.autoAssignEnabled && (
+                <div className="space-y-2">
+                  <Label htmlFor="bulk-strategy">Assignment Strategy</Label>
+                  <Select
+                    value={bulkConfig.assignmentStrategy}
+                    onValueChange={(value: any) => setBulkConfig({ ...bulkConfig, assignmentStrategy: value, assignedAgentId: "" })}
+                  >
+                    <SelectTrigger id="bulk-strategy">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {ASSIGNMENT_STRATEGIES.map((strategy) => (
+                        <SelectItem key={strategy.value} value={strategy.value}>
+                          {strategy.label}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+              )}
+
+              {/* Priority Boost */}
+              <div className="space-y-2">
+                <Label htmlFor="bulk-priority-boost">Priority Boost (Points)</Label>
+                <Input
+                  id="bulk-priority-boost"
+                  type="number"
+                  value={bulkConfig.priorityBoost}
+                  onChange={(e) => setBulkConfig({ ...bulkConfig, priorityBoost: parseInt(e.target.value) || 0 })}
+                  placeholder="0"
+                />
+              </div>
+
+              {/* SLA Overrides */}
+              <div className="grid grid-cols-2 gap-4">
+                <div className="space-y-2">
+                  <Label htmlFor="bulk-sla-response">Response Time (Hours)</Label>
+                  <Input
+                    id="bulk-sla-response"
+                    type="number"
+                    value={bulkConfig.slaResponseHoursOverride}
+                    onChange={(e) => setBulkConfig({ ...bulkConfig, slaResponseHoursOverride: e.target.value })}
+                    placeholder="Leave empty for default"
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="bulk-sla-resolution">Resolution Time (Hours)</Label>
+                  <Input
+                    id="bulk-sla-resolution"
+                    type="number"
+                    value={bulkConfig.slaResolutionHoursOverride}
+                    onChange={(e) => setBulkConfig({ ...bulkConfig, slaResolutionHoursOverride: e.target.value })}
+                    placeholder="Leave empty for default"
+                  />
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setShowBulkDialog(false)}>
+              Cancel
+            </Button>
+            <Button
+              onClick={() => {
+                if (selectedCategories.size === 0) {
+                  toast({ title: "Error", description: "Please select at least one category", variant: "destructive" });
+                  return;
+                }
+                if (!bulkConfig.targetDepartment) {
+                  toast({ title: "Error", description: "Please select a target department", variant: "destructive" });
+                  return;
+                }
+
+                bulkCreateMutation.mutate({
+                  categoryIds: Array.from(selectedCategories),
+                  config: {
+                    targetDepartment: bulkConfig.targetDepartment,
+                    autoAssignEnabled: bulkConfig.autoAssignEnabled,
+                    assignmentStrategy: bulkConfig.assignmentStrategy,
+                    assignedAgentId: bulkConfig.assignedAgentId || null,
+                    priorityBoost: bulkConfig.priorityBoost,
+                    slaResponseHoursOverride: bulkConfig.slaResponseHoursOverride ? parseInt(bulkConfig.slaResponseHoursOverride) : null,
+                    slaResolutionHoursOverride: bulkConfig.slaResolutionHoursOverride ? parseInt(bulkConfig.slaResolutionHoursOverride) : null,
+                  }
+                });
+              }}
+              disabled={selectedCategories.size === 0 || !bulkConfig.targetDepartment || bulkCreateMutation.isPending}
+            >
+              {bulkCreateMutation.isPending ? (
+                <>
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                  Creating {selectedCategories.size} rules...
+                </>
+              ) : (
+                <>Create {selectedCategories.size} Routing Rules</>
               )}
             </Button>
           </DialogFooter>
