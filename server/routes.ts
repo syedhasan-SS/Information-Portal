@@ -1,6 +1,7 @@
 import type { Express } from "express";
 import { createServer, type Server } from "http";
 import { storage } from "./storage";
+import { db } from "./db";
 import { registerPageAccessRoutes } from "./routes-page-access";
 import {
   insertVendorSchema,
@@ -10,6 +11,7 @@ import {
   insertCommentSchema,
   insertUserSchema,
   insertNotificationSchema,
+  categoryRoutingRules,
 } from "@shared/schema";
 import { z } from "zod";
 import { sendNewUserEmail } from "./email";
