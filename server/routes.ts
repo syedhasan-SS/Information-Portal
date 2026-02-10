@@ -4646,6 +4646,52 @@ roles: ${JSON.stringify(updated.roles, null, 2)}</pre>
     }
   });
 
+  // TEMPORARY: Emergency endpoint to restore Owner role
+  // This endpoint allows fixing the owner's role if it was accidentally changed
+  app.post("/api/admin/restore-owner-role", async (req, res) => {
+    try {
+      const { email, secretKey } = req.body;
+
+      // Security: require a secret key to prevent abuse
+      if (secretKey !== "restore-owner-2026") {
+        return res.status(403).json({ error: "Invalid secret key" });
+      }
+
+      if (!email) {
+        return res.status(400).json({ error: "Email is required" });
+      }
+
+      console.log(`[Admin] Restoring Owner role for: ${email}`);
+
+      // Get the user
+      const user = await storage.getUserByEmail(email);
+      if (!user) {
+        return res.status(404).json({ error: "User not found" });
+      }
+
+      console.log(`[Admin] Current role: ${user.role}`);
+
+      // Update role to Owner
+      await storage.updateUser(user.id, { role: "Owner" });
+
+      console.log(`[Admin] ✅ Role restored to Owner for ${email}`);
+
+      res.json({
+        success: true,
+        message: "Owner role restored successfully",
+        user: {
+          email: user.email,
+          name: user.name,
+          oldRole: user.role,
+          newRole: "Owner",
+        },
+      });
+    } catch (error: any) {
+      console.error("[Admin] Restore owner role error:", error);
+      res.status(500).json({ error: error.message });
+    }
+  });
+
   // Register page access control routes
   registerPageAccessRoutes(app);
 
