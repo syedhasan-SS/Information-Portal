@@ -1,12 +1,12 @@
 import { storage } from "./storage";
 import type { Ticket, Comment, User } from "@shared/schema";
 import {
-  sendTicketCreatedToN8n,
-  sendTicketAssignedToN8n,
-  sendCommentMentionToN8n,
-  sendTicketResolvedToN8n,
-  sendUrgentTicketAlertToN8n,
-} from "./n8n-slack-integration";
+  sendSlackTicketCreated,
+  sendSlackTicketAssigned,
+  sendSlackCommentMention,
+  sendSlackTicketResolved,
+  sendSlackUrgentAlert,
+} from "./slack-web-api";
 
 /**
  * Helper functions for creating notifications based on ticket events
@@ -46,16 +46,16 @@ export async function notifyTicketCreated(ticket: Ticket, creator: User | undefi
     await Promise.all(notificationPromises);
     console.log(`[Notifications] Created ${notificationPromises.length} notifications for new ticket ${ticket.ticketNumber}`);
 
-    // Send Slack notification via n8n
+    // Send Slack notification
     const assignee = ticket.assigneeId ? await storage.getUserById(ticket.assigneeId) : undefined;
-    sendTicketCreatedToN8n(ticket, creator, assignee).catch(err => {
-      console.error('[n8n-Slack] Failed to send ticket created notification:', err);
+    sendSlackTicketCreated(ticket, creator, assignee).catch(err => {
+      console.error('[Slack] Failed to send ticket created notification:', err);
     });
 
     // Send urgent alert if priority is urgent
     if (ticket.priorityTier?.toLowerCase() === 'urgent') {
-      sendUrgentTicketAlertToN8n(ticket, creator).catch(err => {
-        console.error('[n8n-Slack] Failed to send urgent ticket alert:', err);
+      sendSlackUrgentAlert(ticket, creator).catch(err => {
+        console.error('[Slack] Failed to send urgent ticket alert:', err);
       });
     }
   } catch (error) {
@@ -94,9 +94,9 @@ export async function notifyTicketAssigned(ticket: Ticket, assignee: User, actor
 
     console.log(`[Notifications] Notified user ${assignee.name} about ticket assignment: ${ticket.ticketNumber}`);
 
-    // Send Slack notification via n8n
-    sendTicketAssignedToN8n(ticket, assignee, actor).catch(err => {
-      console.error('[n8n-Slack] Failed to send ticket assigned notification:', err);
+    // Send Slack notification
+    sendSlackTicketAssigned(ticket, assignee, actor).catch(err => {
+      console.error('[Slack] Failed to send ticket assigned notification:', err);
     });
   } catch (error) {
     console.error("[Notifications] Failed to create ticket assignment notification:", error);
@@ -155,10 +155,10 @@ export async function notifyTicketSolved(ticket: Ticket, solver: User | undefine
 
     await Promise.all(notificationPromises);
 
-    // Send Slack notification via n8n
+    // Send Slack notification
     if (solver) {
-      sendTicketResolvedToN8n(ticket, solver).catch(err => {
-        console.error('[n8n-Slack] Failed to send ticket resolved notification:', err);
+      sendSlackTicketResolved(ticket, solver).catch(err => {
+        console.error('[Slack] Failed to send ticket resolved notification:', err);
       });
     }
   } catch (error) {
@@ -287,10 +287,10 @@ export async function notifyMentions(
     await Promise.all(notificationPromises);
     console.log(`[Notifications] Created ${notificationPromises.length} mention notifications for ticket ${ticket.ticketNumber}`);
 
-    // Send Slack notification for mentions via n8n
+    // Send Slack notification for mentions
     if (mentionedUsers.length > 0 && commenter) {
-      sendCommentMentionToN8n(ticket, comment, commenter, mentionedUsers).catch(err => {
-        console.error('[n8n-Slack] Failed to send comment mention notification:', err);
+      sendSlackCommentMention(ticket, comment, commenter, mentionedUsers).catch(err => {
+        console.error('[Slack] Failed to send comment mention notification:', err);
       });
     }
   } catch (error) {
