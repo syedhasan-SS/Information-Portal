@@ -339,9 +339,16 @@ export default function AllTicketsPage() {
     if (!tickets || !user) return [];
 
     // If user has view:all_tickets permission, show all tickets
-    // EXCEPTION: CX users ALWAYS get filtered by sub-department regardless of permissions
-    if (canViewAllTickets && user.department !== "CX") {
-      return tickets;
+    // EXCEPTION: CX users with sub-departments ALWAYS get filtered by sub-department regardless of permissions
+    // Owner and Admin roles can see all tickets
+    if (canViewAllTickets) {
+      // CX users with sub-departments are still filtered even with view:all_tickets
+      if (user.department === "CX" && user.subDepartment) {
+        // Continue to filter below for CX users
+      } else {
+        // All other users with view:all_tickets permission see everything
+        return tickets;
+      }
     }
 
     // Filter based on user's department/sub-department - STRICT SEPARATION
