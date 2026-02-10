@@ -125,14 +125,30 @@ export default function RoutingConfigPage() {
   });
 
   // Fetch categories
-  const { data: categories } = useQuery<Category[]>({
-    queryKey: ["categories"],
+  // Fetch categories from BOTH old and new systems
+  const { data: oldCategories } = useQuery<Category[]>({
+    queryKey: ["categories-old"],
     queryFn: async () => {
       const res = await fetch("/api/categories");
-      if (!res.ok) throw new Error("Failed to fetch categories");
+      if (!res.ok) throw new Error("Failed to fetch old categories");
       return res.json();
     },
   });
+
+  const { data: newCategories } = useQuery<Category[]>({
+    queryKey: ["categories-new"],
+    queryFn: async () => {
+      const res = await fetch("/api/category-hierarchy");
+      if (!res.ok) throw new Error("Failed to fetch new categories");
+      return res.json();
+    },
+  });
+
+  // Combine both with markers for which system they're from
+  const categories = [
+    ...(oldCategories?.map(c => ({ ...c, isOldSystem: true })) || []),
+    ...(newCategories?.map(c => ({ ...c, isOldSystem: false })) || [])
+  ];
 
   // Fetch users for agent selection
   const { data: users } = useQuery<User[]>({
@@ -278,7 +294,11 @@ export default function RoutingConfigPage() {
 
   const getCategoryName = (categoryId: string) => {
     const category = categories?.find(c => c.id === categoryId);
-    return category?.path || categoryId;
+    if (!category) return categoryId;
+
+    // Add system indicator for clarity
+    const systemLabel = (category as any).isOldSystem ? " [Legacy]" : " [Active]";
+    return category.path + systemLabel;
   };
 
   const getAgentName = (agentId: string | null) => {
@@ -333,6 +353,26 @@ export default function RoutingConfigPage() {
       </header>
 
       <main className="mx-auto max-w-[1600px] px-6 py-6">
+        {/* System Migration Notice */}
+        {oldCategories && oldCategories.length > 0 && (
+          <div className="mb-4 rounded-lg border border-amber-200 bg-amber-50 p-4 dark:border-amber-800 dark:bg-amber-950">
+            <div className="flex items-start gap-3">
+              <div className="flex-shrink-0">
+                <svg className="h-5 w-5 text-amber-600 dark:text-amber-400" fill="currentColor" viewBox="0 0 20 20">
+                  <path fillRule="evenodd" d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z" clipRule="evenodd" />
+                </svg>
+              </div>
+              <div className="flex-1">
+                <h3 className="text-sm font-semibold text-amber-800 dark:text-amber-300">Category System Migration Notice</h3>
+                <p className="mt-1 text-sm text-amber-700 dark:text-amber-400">
+                  This page shows categories from both the <strong>Legacy System</strong> (old categories) and the <strong>Active System</strong> (Ticket Manager categories).
+                  Existing routing rules reference legacy categories. For new rules, please use categories from the Active System (Ticket Manager).
+                </p>
+              </div>
+            </div>
+          </div>
+        )}
+
         <Card>
           {rulesLoading ? (
             <div className="flex items-center justify-center py-16">
@@ -459,7 +499,7 @@ export default function RoutingConfigPage() {
                   ) : (
                     availableCategories.map((cat) => (
                       <SelectItem key={cat.id} value={cat.id}>
-                        {cat.path}
+                        {cat.path} {(cat as any).isOldSystem ? "(Legacy System)" : "(Active - Ticket Manager)"}
                       </SelectItem>
                     ))
                   )}
