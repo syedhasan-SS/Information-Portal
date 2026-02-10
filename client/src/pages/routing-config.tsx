@@ -38,7 +38,6 @@ import {
   Edit,
   Trash2,
   Loader2,
-  Download,
   List,
 } from "lucide-react";
 import { Checkbox } from "@/components/ui/checkbox";
@@ -104,7 +103,6 @@ export default function RoutingConfigPage() {
   const [showBulkDialog, setShowBulkDialog] = useState(false);
   const [editingRule, setEditingRule] = useState<RoutingRule | null>(null);
   const [selectedCategories, setSelectedCategories] = useState<Set<string>>(new Set());
-  const [isSyncing, setIsSyncing] = useState(false);
   const [formData, setFormData] = useState({
     categoryId: "",
     targetDepartment: "",
@@ -277,43 +275,6 @@ export default function RoutingConfigPage() {
     },
   });
 
-  // Sync categories from BigQuery
-  const handleSyncCategories = async () => {
-    setIsSyncing(true);
-    try {
-      const res = await fetch("/api/admin/sync-categories-from-bigquery", {
-        method: "POST",
-        headers: {
-          "x-user-email": localStorage.getItem("userEmail") || "",
-        },
-      });
-
-      const result = await res.json();
-
-      if (result.success) {
-        toast({
-          title: "Sync Complete",
-          description: `Processed ${result.categoriesProcessed} combinations, created ${result.categoriesCreated} categories, skipped ${result.categoriesSkipped} existing`,
-        });
-        queryClient.invalidateQueries({ queryKey: ["categories"] });
-      } else {
-        toast({
-          title: "Sync Completed with Errors",
-          description: `Created ${result.categoriesCreated} categories but encountered ${result.errors.length} errors`,
-          variant: "destructive",
-        });
-      }
-    } catch (error: any) {
-      toast({
-        title: "Sync Failed",
-        description: error.message,
-        variant: "destructive",
-      });
-    } finally {
-      setIsSyncing(false);
-    }
-  };
-
   const resetForm = () => {
     setFormData({
       categoryId: "",
@@ -410,19 +371,6 @@ export default function RoutingConfigPage() {
             </div>
 
             <div className="flex gap-2">
-              <Button
-                onClick={handleSyncCategories}
-                size="sm"
-                variant="outline"
-                disabled={isSyncing}
-              >
-                {isSyncing ? (
-                  <Loader2 className="h-4 w-4 animate-spin" />
-                ) : (
-                  <Download className="h-4 w-4" />
-                )}
-                Sync from BigQuery
-              </Button>
               <Button
                 onClick={() => setShowBulkDialog(true)}
                 size="sm"
