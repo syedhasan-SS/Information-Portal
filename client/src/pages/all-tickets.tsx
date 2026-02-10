@@ -338,9 +338,17 @@ export default function AllTicketsPage() {
   const departmentFilteredTickets = useMemo(() => {
     if (!tickets || !user) return [];
 
-    // If user has view:all_tickets permission, show all tickets
-    // EXCEPTION: CX users with sub-departments ALWAYS get filtered by sub-department regardless of permissions
-    // Owner and Admin roles can see all tickets
+    // Check if user has Owner or Admin role - these roles bypass ALL filtering
+    const userRoles = user.roles && user.roles.length > 0 ? user.roles : [user.role];
+    const isOwnerOrAdmin = userRoles.some(r => r === "Owner" || r === "Admin");
+
+    // Owner and Admin roles can see ALL tickets regardless of department/sub-department
+    if (isOwnerOrAdmin) {
+      return tickets;
+    }
+
+    // If user has view:all_tickets permission (but not Owner/Admin), show all tickets
+    // EXCEPTION: CX users with sub-departments ALWAYS get filtered by sub-department
     if (canViewAllTickets) {
       // CX users with sub-departments are still filtered even with view:all_tickets
       if (user.department === "CX" && user.subDepartment) {
