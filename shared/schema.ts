@@ -614,7 +614,7 @@ export const insertRolePermissionSchema = createInsertSchema(rolePermissions).om
 // Category Routing Rules Table
 export const categoryRoutingRules = pgTable("category_routing_rules", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
-  categoryId: varchar("category_id").notNull().references(() => categories.id, { onDelete: "cascade" }),
+  categoryId: varchar("category_id").notNull().references(() => categoryHierarchy.id, { onDelete: "cascade" }),
 
   // Department routing
   targetDepartment: text("target_department").notNull().$type<"Finance" | "Operations" | "Marketplace" | "Tech" | "Supply" | "Growth" | "Experience" | "CX">(),

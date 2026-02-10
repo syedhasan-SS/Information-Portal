@@ -2765,6 +2765,33 @@ export async function registerRoutes(
     }
   });
 
+  // Delete ALL routing rules (for migration cleanup)
+  app.post("/api/admin/cleanup-routing-rules", async (req, res) => {
+    try {
+      // Security check - require explicit confirmation
+      const { confirmCleanup, secretKey } = req.body;
+      if (secretKey !== "cleanup-routing-2026" || !confirmCleanup) {
+        return res.status(403).json({ error: "Invalid confirmation or secret key" });
+      }
+
+      // Get count before deletion
+      const existingRules = await storage.getCategoryRoutingRules();
+      const count = existingRules.length;
+
+      // Delete all routing rules
+      await db.delete(categoryRoutingRules);
+
+      res.json({
+        success: true,
+        deletedCount: count,
+        message: `Deleted ${count} routing rules. You can now recreate them using Ticket Manager categories.`
+      });
+    } catch (error: any) {
+      console.error("Error cleaning up routing rules:", error);
+      res.status(500).json({ error: error.message });
+    }
+  });
+
   // Analytics & Reporting
   app.get("/api/analytics/ticket-counts", async (_req, res) => {
     try {
