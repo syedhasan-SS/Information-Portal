@@ -17,7 +17,7 @@
       "parameters": {
         "projectId": "dogwood-baton-345622",
         "operation": "executeQuery",
-        "sqlQuery": "SELECT DISTINCT requester_email, requester_name FROM `dogwood-baton-345622.zendesk_new.ticket` WHERE requester_email IS NOT NULL ORDER BY requester_email ASC"
+        "sqlQuery": "SELECT DISTINCT customer_id, customer_email, customer_name FROM `dogwood-baton-345622.fleek_hub.order_line_details` WHERE customer_email IS NOT NULL ORDER BY customer_email ASC LIMIT 5000"
       },
       "id": "bigquery_customers",
       "name": "BigQuery - Fetch Customers",

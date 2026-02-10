@@ -17,7 +17,7 @@
       "parameters": {
         "projectId": "dogwood-baton-345622",
         "operation": "executeQuery",
-        "sqlQuery": "SELECT order_id, order_status, order_date, order_amount, vendor_handle FROM `dogwood-baton-345622.orders.active_orders` WHERE customer_email = '{{ $json.params.customerId }}' AND order_status IN ('pending', 'processing', 'shipped') ORDER BY order_date DESC LIMIT 100"
+        "sqlQuery": "SELECT order_id, fleek_id, order_number, ol_financial_status, latest_status, created_at as order_date, gmv_post_all_discounts as order_amount, vendor FROM `dogwood-baton-345622.fleek_hub.order_line_details` WHERE customer_email = '{{ $json.query.customerId }}' AND ol_financial_status IN ('pending', 'authorized', 'partially_paid', 'paid') ORDER BY created_at DESC LIMIT 100"
       },
       "id": "bigquery_customer_orders",
       "name": "BigQuery - Customer Orders",
