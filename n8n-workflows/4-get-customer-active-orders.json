@@ -1,0 +1,72 @@
+{
+  "name": "4. Get Customer Active Orders",
+  "nodes": [
+    {
+      "parameters": {
+        "path": "api/orders/customer/:customerId",
+        "httpMethod": "GET",
+        "responseMode": "responseNode"
+      },
+      "id": "webhook_customer_orders",
+      "name": "Webhook - Get Customer Orders",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [250, 300]
+    },
+    {
+      "parameters": {
+        "projectId": "dogwood-baton-345622",
+        "operation": "executeQuery",
+        "sqlQuery": "SELECT order_id, order_status, order_date, order_amount, vendor_handle FROM `dogwood-baton-345622.orders.active_orders` WHERE customer_email = '{{ $json.params.customerId }}' AND order_status IN ('pending', 'processing', 'shipped') ORDER BY order_date DESC LIMIT 100"
+      },
+      "id": "bigquery_customer_orders",
+      "name": "BigQuery - Customer Orders",
+      "type": "n8n-nodes-base.googleBigQuery",
+      "typeVersion": 1,
+      "position": [450, 300],
+      "credentials": {
+        "googleBigQueryOAuth2Api": {
+          "id": "YOUR_CREDENTIAL_ID",
+          "name": "Google BigQuery account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ $json }}"
+      },
+      "id": "respond_customer_orders",
+      "name": "Respond to Webhook",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1,
+      "position": [650, 300]
+    }
+  ],
+  "connections": {
+    "Webhook - Get Customer Orders": {
+      "main": [
+        [
+          {
+            "node": "BigQuery - Customer Orders",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "BigQuery - Customer Orders": {
+      "main": [
+        [
+          {
+            "node": "Respond to Webhook",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {}
+}

@@ -1,0 +1,72 @@
+{
+  "name": "1. Get All Vendor Handles",
+  "nodes": [
+    {
+      "parameters": {
+        "path": "api/vendors/all",
+        "httpMethod": "GET",
+        "responseMode": "responseNode"
+      },
+      "id": "webhook_vendors",
+      "name": "Webhook - Get Vendors",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [250, 300]
+    },
+    {
+      "parameters": {
+        "projectId": "dogwood-baton-345622",
+        "operation": "executeQuery",
+        "sqlQuery": "SELECT DISTINCT vendor_handle FROM `dogwood-baton-345622.zendesk_new.ticket` WHERE vendor_handle IS NOT NULL ORDER BY vendor_handle ASC"
+      },
+      "id": "bigquery_vendors",
+      "name": "BigQuery - Fetch Vendors",
+      "type": "n8n-nodes-base.googleBigQuery",
+      "typeVersion": 1,
+      "position": [450, 300],
+      "credentials": {
+        "googleBigQueryOAuth2Api": {
+          "id": "YOUR_CREDENTIAL_ID",
+          "name": "Google BigQuery account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ $json }}"
+      },
+      "id": "respond_vendors",
+      "name": "Respond to Webhook",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1,
+      "position": [650, 300]
+    }
+  ],
+  "connections": {
+    "Webhook - Get Vendors": {
+      "main": [
+        [
+          {
+            "node": "BigQuery - Fetch Vendors",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "BigQuery - Fetch Vendors": {
+      "main": [
+        [
+          {
+            "node": "Respond to Webhook",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {}
+}

@@ -1,0 +1,72 @@
+{
+  "name": "5. Get Vendor GMV",
+  "nodes": [
+    {
+      "parameters": {
+        "path": "api/vendor/:vendorHandle/gmv",
+        "httpMethod": "GET",
+        "responseMode": "responseNode"
+      },
+      "id": "webhook_gmv",
+      "name": "Webhook - Get Vendor GMV",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [250, 300]
+    },
+    {
+      "parameters": {
+        "projectId": "dogwood-baton-345622",
+        "operation": "executeQuery",
+        "sqlQuery": "SELECT vendor_handle, SUM(order_amount) as total_gmv, COUNT(DISTINCT order_id) as total_orders, MIN(order_date) as first_order_date, MAX(order_date) as last_order_date FROM `dogwood-baton-345622.orders.all_orders` WHERE vendor_handle = '{{ $json.params.vendorHandle }}' AND order_status = 'completed' GROUP BY vendor_handle"
+      },
+      "id": "bigquery_gmv",
+      "name": "BigQuery - Calculate GMV",
+      "type": "n8n-nodes-base.googleBigQuery",
+      "typeVersion": 1,
+      "position": [450, 300],
+      "credentials": {
+        "googleBigQueryOAuth2Api": {
+          "id": "YOUR_CREDENTIAL_ID",
+          "name": "Google BigQuery account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ $json }}"
+      },
+      "id": "respond_gmv",
+      "name": "Respond to Webhook",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1,
+      "position": [650, 300]
+    }
+  ],
+  "connections": {
+    "Webhook - Get Vendor GMV": {
+      "main": [
+        [
+          {
+            "node": "BigQuery - Calculate GMV",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "BigQuery - Calculate GMV": {
+      "main": [
+        [
+          {
+            "node": "Respond to Webhook",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {}
+}

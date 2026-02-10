@@ -1,0 +1,72 @@
+{
+  "name": "2. Get All Customer Handles",
+  "nodes": [
+    {
+      "parameters": {
+        "path": "api/customers/all",
+        "httpMethod": "GET",
+        "responseMode": "responseNode"
+      },
+      "id": "webhook_customers",
+      "name": "Webhook - Get Customers",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [250, 300]
+    },
+    {
+      "parameters": {
+        "projectId": "dogwood-baton-345622",
+        "operation": "executeQuery",
+        "sqlQuery": "SELECT DISTINCT requester_email, requester_name FROM `dogwood-baton-345622.zendesk_new.ticket` WHERE requester_email IS NOT NULL ORDER BY requester_email ASC"
+      },
+      "id": "bigquery_customers",
+      "name": "BigQuery - Fetch Customers",
+      "type": "n8n-nodes-base.googleBigQuery",
+      "typeVersion": 1,
+      "position": [450, 300],
+      "credentials": {
+        "googleBigQueryOAuth2Api": {
+          "id": "YOUR_CREDENTIAL_ID",
+          "name": "Google BigQuery account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ $json }}"
+      },
+      "id": "respond_customers",
+      "name": "Respond to Webhook",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1,
+      "position": [650, 300]
+    }
+  ],
+  "connections": {
+    "Webhook - Get Customers": {
+      "main": [
+        [
+          {
+            "node": "BigQuery - Fetch Customers",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "BigQuery - Fetch Customers": {
+      "main": [
+        [
+          {
+            "node": "Respond to Webhook",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {}
+}
