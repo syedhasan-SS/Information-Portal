@@ -141,7 +141,7 @@ export default function RoutingConfigPage() {
   const { data: categories } = useQuery<Category[]>({
     queryKey: ["categories"],
     queryFn: async () => {
-      const res = await fetch("/api/category-hierarchy");
+      const res = await fetch("/api/categories/for-ticket-creation");
       if (!res.ok) throw new Error("Failed to fetch categories");
       return res.json();
     },
