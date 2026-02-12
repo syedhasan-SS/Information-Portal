@@ -171,12 +171,29 @@ export async function registerRoutes(
   httpServer: Server,
   app: Express
 ): Promise<Server> {
-  // Vendors
+  // Vendors - Fetch from n8n workflow
   app.get("/api/vendors", async (_req, res) => {
     try {
-      const vendors = await storage.getVendors();
+      // Fetch vendors from n8n workflow
+      const response = await fetch('https://n8n.joinfleek.com/webhook/api/vendors/all');
+      if (!response.ok) {
+        throw new Error(`n8n workflow failed: ${response.statusText}`);
+      }
+
+      const n8nData = await response.json();
+
+      // Transform BigQuery format to simple vendor array
+      // n8n returns: [{"f": [{"v": "vendor-handle"}]}, ...]
+      const vendors = n8nData
+        .map((row: any) => ({
+          handle: row.f[0].v,
+          // We only have handle from n8n, other fields will be fetched individually if needed
+        }))
+        .filter((v: any) => v.handle); // Filter out empty handles
+
       res.json(vendors);
     } catch (error: any) {
+      console.error('Error fetching vendors from n8n:', error);
       res.status(500).json({ error: error.message });
     }
   });
@@ -202,6 +219,34 @@ export async function registerRoutes(
       const vendor = await storage.createVendor(parsed.data);
       res.status(201).json(vendor);
     } catch (error: any) {
+      res.status(500).json({ error: error.message });
+    }
+  });
+
+  // Customers - Fetch from n8n workflow
+  app.get("/api/customers", async (_req, res) => {
+    try {
+      // Fetch customers from n8n workflow
+      const response = await fetch('https://n8n.joinfleek.com/webhook/api/customers/all');
+      if (!response.ok) {
+        throw new Error(`n8n workflow failed: ${response.statusText}`);
+      }
+
+      const n8nData = await response.json();
+
+      // Transform BigQuery format to customer objects
+      // n8n returns: [{"f": [{"v": "customer_id"}, {"v": "email"}, {"v": "name"}]}, ...]
+      const customers = n8nData
+        .map((row: any) => ({
+          customerId: row.f[0].v,
+          customerEmail: row.f[1].v,
+          customerName: row.f[2].v,
+        }))
+        .filter((c: any) => c.customerEmail); // Filter out records without email
+
+      res.json(customers);
+    } catch (error: any) {
+      console.error('Error fetching customers from n8n:', error);
       res.status(500).json({ error: error.message });
     }
   });
