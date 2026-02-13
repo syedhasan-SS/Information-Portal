@@ -183,11 +183,11 @@ export async function registerRoutes(
       const n8nData = await response.json();
 
       // Transform BigQuery format to simple vendor array
-      // n8n returns: [{"f": [{"v": "vendor-handle"}]}, ...]
+      // n8n returns: [{"f": [{"v": "vendor-handle"}, {"v": "vendor-name"}]}, ...]
       const vendors = n8nData
         .map((row: any) => ({
           handle: row.f[0].v,
-          // We only have handle from n8n, other fields will be fetched individually if needed
+          name: row.f[1]?.v || row.f[0].v, // Use name from column 2, fallback to handle
         }))
         .filter((v: any) => v.handle); // Filter out empty handles
 
