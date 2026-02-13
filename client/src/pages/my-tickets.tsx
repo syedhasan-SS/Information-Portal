@@ -1207,6 +1207,11 @@ export default function MyTicketsPage() {
                             onValueChange={setVendorSearchValue}
                           />
                           <CommandList className="max-h-[300px] overflow-y-auto">
+                            {!vendorSearchValue && vendors && vendors.length > 200 && (
+                              <div className="px-3 py-2 text-xs text-muted-foreground bg-muted/50 border-b">
+                                Showing first 200 of {vendors.length} vendors. Type to search all...
+                              </div>
+                            )}
                             <CommandEmpty>
                               <div className="p-4 text-center">
                                 <p className="text-sm text-muted-foreground mb-2">
@@ -1235,6 +1240,7 @@ export default function MyTicketsPage() {
                                     v.name.toLowerCase().includes(search)
                                   );
                                 })
+                                .slice(0, vendorSearchValue ? undefined : 200)
                                 .map((v) => (
                                   <CommandItem
                                     key={v.handle}
