@@ -774,11 +774,19 @@ export class DatabaseStorage implements IStorage {
       .filter(l4 => l4.name && l4.name.trim() !== "")
       .map(buildCategoryObject);
 
+    // Get IDs of all L4 categories that have been added (to avoid duplicates)
+    const l4ObjectIds = new Set(l4Objects.map(obj => obj.id));
+
     // Build from L3 categories (those without L4 or with empty L4 - Customer Support case)
     const l3Objects = l3Categories
       .filter(l3 => {
-        // Include L3 if it has a child L4 with departmentType but empty name
+        // Don't include this L3 if we already have its L4 counterpart
         const childL4 = l4Categories.find(l4 => l4.parentId === l3.id);
+        if (childL4 && l4ObjectIds.has(childL4.id)) {
+          return false; // Skip this L3, we already have the L4
+        }
+
+        // Include L3 if it has a child L4 with departmentType but empty name
         if (childL4 && childL4.departmentType && childL4.departmentType !== "All") {
           return true;
         }
@@ -799,6 +807,15 @@ export class DatabaseStorage implements IStorage {
       });
 
     let allCategoryObjects = [...l4Objects, ...l3Objects];
+
+    // Remove any remaining duplicates by ID (just in case)
+    const uniqueCategoryMap = new Map<string, any>();
+    allCategoryObjects.forEach(cat => {
+      if (!uniqueCategoryMap.has(cat.id)) {
+        uniqueCategoryMap.set(cat.id, cat);
+      }
+    });
+    allCategoryObjects = Array.from(uniqueCategoryMap.values());
 
     // Filter by departmentType if specified
     if (filters?.departmentType) {
