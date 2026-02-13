@@ -251,6 +251,76 @@ export async function registerRoutes(
     }
   });
 
+  // Orders - Fetch from n8n workflows
+  // Get orders by vendor handle
+  app.get("/api/orders/vendor/:vendorHandle", async (req, res) => {
+    try {
+      const { vendorHandle } = req.params;
+
+      // Fetch vendor orders from n8n workflow
+      const response = await fetch(`https://n8n.joinfleek.com/webhook/api/orders/vendor/${vendorHandle}`);
+      if (!response.ok) {
+        throw new Error(`n8n workflow failed: ${response.statusText}`);
+      }
+
+      const n8nData = await response.json();
+
+      // Transform BigQuery format to order objects
+      // n8n returns: [{"f": [{"v": "vendor"}, {"v": "order_id"}, {"v": "fleek_id"}, ...]}, ...]
+      const orders = n8nData
+        .map((row: any) => ({
+          vendor: row.f[0].v,
+          orderId: row.f[1].v,
+          fleekId: row.f[2].v,
+          orderNumber: row.f[3].v,
+          latestStatus: row.f[4].v,
+          orderDate: row.f[5].v,
+          customerEmail: row.f[6].v,
+          customerName: row.f[7].v,
+        }))
+        .filter((o: any) => o.orderId); // Filter out empty orders
+
+      res.json(orders);
+    } catch (error: any) {
+      console.error('Error fetching vendor orders from n8n:', error);
+      res.status(500).json({ error: error.message });
+    }
+  });
+
+  // Get orders by customer email
+  app.get("/api/orders/customer/:customerEmail", async (req, res) => {
+    try {
+      const { customerEmail } = req.params;
+
+      // Fetch customer orders from n8n workflow
+      const response = await fetch(`https://n8n.joinfleek.com/webhook/api/orders/customer/${customerEmail}`);
+      if (!response.ok) {
+        throw new Error(`n8n workflow failed: ${response.statusText}`);
+      }
+
+      const n8nData = await response.json();
+
+      // Transform BigQuery format to order objects
+      // n8n returns: [{"f": [{"v": "customer_email"}, {"v": "order_id"}, {"v": "fleek_id"}, ...]}, ...]
+      const orders = n8nData
+        .map((row: any) => ({
+          customerEmail: row.f[0].v,
+          orderId: row.f[1].v,
+          fleekId: row.f[2].v,
+          orderNumber: row.f[3].v,
+          latestStatus: row.f[4].v,
+          orderDate: row.f[5].v,
+          vendor: row.f[6].v,
+        }))
+        .filter((o: any) => o.orderId); // Filter out empty orders
+
+      res.json(orders);
+    } catch (error: any) {
+      console.error('Error fetching customer orders from n8n:', error);
+      res.status(500).json({ error: error.message });
+    }
+  });
+
   // Categories
   app.get("/api/categories", async (_req, res) => {
     try {
