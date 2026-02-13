@@ -599,25 +599,40 @@ export default function RoutingConfigPage() {
                   {formData.assignmentStrategy === "specific_agent" && (
                     <div className="space-y-2">
                       <Label htmlFor="agent">Assigned Agent *</Label>
-                      <Select
-                        value={formData.assignedAgentId}
-                        onValueChange={(value) => setFormData({ ...formData, assignedAgentId: value })}
-                      >
-                        <SelectTrigger id="agent">
-                          <SelectValue placeholder="Select an agent" />
-                        </SelectTrigger>
-                        <SelectContent className="max-h-[300px] overflow-y-auto">
-                          {departmentAgents.map((agent) => (
-                            <SelectItem key={agent.id} value={agent.id}>
-                              {agent.name} ({agent.email})
-                            </SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
-                      {departmentAgents.length === 0 && formData.targetDepartment && (
-                        <p className="text-sm text-destructive">
-                          No active agents found in {formData.targetDepartment} department
-                        </p>
+                      {!formData.targetDepartment ? (
+                        <div className="rounded-lg border border-dashed border-muted-foreground/25 bg-muted/50 p-3">
+                          <p className="text-sm text-muted-foreground text-center">
+                            Please select a target department first
+                          </p>
+                        </div>
+                      ) : departmentAgents.length === 0 ? (
+                        <div className="rounded-lg border border-destructive/50 bg-destructive/10 p-3">
+                          <p className="text-sm text-destructive">
+                            No active agents found in {formData.targetDepartment} department.
+                            Please assign agents to this department first.
+                          </p>
+                        </div>
+                      ) : (
+                        <>
+                          <Select
+                            value={formData.assignedAgentId}
+                            onValueChange={(value) => setFormData({ ...formData, assignedAgentId: value })}
+                          >
+                            <SelectTrigger id="agent">
+                              <SelectValue placeholder={`Select from ${departmentAgents.length} available agents`} />
+                            </SelectTrigger>
+                            <SelectContent className="max-h-[300px] overflow-y-auto">
+                              {departmentAgents.map((agent) => (
+                                <SelectItem key={agent.id} value={agent.id}>
+                                  {agent.name} ({agent.email})
+                                </SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
+                          <p className="text-xs text-muted-foreground">
+                            {departmentAgents.length} active agent{departmentAgents.length !== 1 ? 's' : ''} in {formData.targetDepartment}
+                          </p>
+                        </>
                       )}
                     </div>
                   )}
@@ -825,24 +840,73 @@ export default function RoutingConfigPage() {
               </div>
 
               {bulkConfig.autoAssignEnabled && (
-                <div className="space-y-2">
-                  <Label htmlFor="bulk-strategy">Assignment Strategy</Label>
-                  <Select
-                    value={bulkConfig.assignmentStrategy}
-                    onValueChange={(value: any) => setBulkConfig({ ...bulkConfig, assignmentStrategy: value, assignedAgentId: "" })}
-                  >
-                    <SelectTrigger id="bulk-strategy">
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {ASSIGNMENT_STRATEGIES.map((strategy) => (
-                        <SelectItem key={strategy.value} value={strategy.value}>
-                          {strategy.label}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </div>
+                <>
+                  <div className="space-y-2">
+                    <Label htmlFor="bulk-strategy">Assignment Strategy</Label>
+                    <Select
+                      value={bulkConfig.assignmentStrategy}
+                      onValueChange={(value: any) => setBulkConfig({ ...bulkConfig, assignmentStrategy: value, assignedAgentId: "" })}
+                    >
+                      <SelectTrigger id="bulk-strategy">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {ASSIGNMENT_STRATEGIES.map((strategy) => (
+                          <SelectItem key={strategy.value} value={strategy.value}>
+                            {strategy.label}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+
+                  {/* Bulk Specific Agent Selection */}
+                  {bulkConfig.assignmentStrategy === "specific_agent" && (
+                    <div className="space-y-2">
+                      <Label htmlFor="bulk-agent">Assigned Agent *</Label>
+                      {!bulkConfig.targetDepartment ? (
+                        <div className="rounded-lg border border-dashed border-muted-foreground/25 bg-muted/50 p-3">
+                          <p className="text-sm text-muted-foreground text-center">
+                            Please select a target department first
+                          </p>
+                        </div>
+                      ) : (() => {
+                        const bulkDepartmentAgents = users?.filter(
+                          u => u.isActive && u.role === "Agent" && u.department === bulkConfig.targetDepartment
+                        ) || [];
+                        return bulkDepartmentAgents.length === 0 ? (
+                          <div className="rounded-lg border border-destructive/50 bg-destructive/10 p-3">
+                            <p className="text-sm text-destructive">
+                              No active agents found in {bulkConfig.targetDepartment} department.
+                              Please assign agents to this department first.
+                            </p>
+                          </div>
+                        ) : (
+                          <>
+                            <Select
+                              value={bulkConfig.assignedAgentId}
+                              onValueChange={(value) => setBulkConfig({ ...bulkConfig, assignedAgentId: value })}
+                            >
+                              <SelectTrigger id="bulk-agent">
+                                <SelectValue placeholder={`Select from ${bulkDepartmentAgents.length} available agents`} />
+                              </SelectTrigger>
+                              <SelectContent className="max-h-[300px] overflow-y-auto">
+                                {bulkDepartmentAgents.map((agent) => (
+                                  <SelectItem key={agent.id} value={agent.id}>
+                                    {agent.name} ({agent.email})
+                                  </SelectItem>
+                                ))}
+                              </SelectContent>
+                            </Select>
+                            <p className="text-xs text-muted-foreground">
+                              {bulkDepartmentAgents.length} active agent{bulkDepartmentAgents.length !== 1 ? 's' : ''} in {bulkConfig.targetDepartment}
+                            </p>
+                          </>
+                        );
+                      })()}
+                    </div>
+                  )}
+                </>
               )}
 
               {/* Priority Boost */}
@@ -911,7 +975,12 @@ export default function RoutingConfigPage() {
                   }
                 });
               }}
-              disabled={selectedCategories.size === 0 || !bulkConfig.targetDepartment || bulkCreateMutation.isPending}
+              disabled={
+                selectedCategories.size === 0 ||
+                !bulkConfig.targetDepartment ||
+                (bulkConfig.autoAssignEnabled && bulkConfig.assignmentStrategy === "specific_agent" && !bulkConfig.assignedAgentId) ||
+                bulkCreateMutation.isPending
+              }
             >
               {bulkCreateMutation.isPending ? (
                 <>
