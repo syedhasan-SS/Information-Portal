@@ -1235,7 +1235,6 @@ export default function MyTicketsPage() {
                                     v.name.toLowerCase().includes(search)
                                   );
                                 })
-                                .slice(0, 100)
                                 .map((v) => (
                                   <CommandItem
                                     key={v.handle}
