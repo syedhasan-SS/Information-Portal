@@ -44,13 +44,15 @@ import { Checkbox } from "@/components/ui/checkbox";
 
 type Category = {
   id: string;
-  issueType: "Complaint" | "Request" | "Information";
+  issueType: "Complaint" | "Request" | "Information" | null;
   l1: string;
   l2: string;
   l3: string;
   l4: string | null;
   path: string;
   issuePriorityPoints: number;
+  departmentType?: string;
+  createdAt?: string;
 };
 
 type User = {
