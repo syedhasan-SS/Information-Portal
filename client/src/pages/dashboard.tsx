@@ -87,43 +87,6 @@ export default function DashboardPage() {
   // We trust the backend filtering and just display what we receive
   const tickets = allTickets;
 
-    // Agent/Associate level: see only assigned tickets or their specific department/sub-department tickets
-    if (["Agent", "Associate"].includes(user.role)) {
-      const isAssigned = ticket.assigneeId === user.id;
-
-      // For CX agents - MUST have sub-department specified
-      if (user.department === "CX") {
-        if (!user.subDepartment) {
-          // CX users without sub-department - only see assigned tickets
-          return isAssigned;
-        }
-        // Filter based on category departmentType
-        const categoryDepartmentType = ticket.categorySnapshot?.departmentType;
-
-        // Seller Support agents see assigned tickets OR Seller Support tickets (based on category)
-        if (user.subDepartment === "Seller Support") {
-          return isAssigned || categoryDepartmentType === "Seller Support" || categoryDepartmentType === "All";
-        }
-        // Customer Support agents see assigned tickets OR Customer Support tickets (based on category)
-        if (user.subDepartment === "Customer Support") {
-          return isAssigned || categoryDepartmentType === "Customer Support" || categoryDepartmentType === "All";
-        }
-        // Other CX sub-departments: only assigned tickets
-        return isAssigned;
-      }
-
-      // All other agents: see assigned or their department tickets
-      if (user.department) {
-        return isAssigned || ticket.department === user.department;
-      }
-
-      return isAssigned;
-    }
-
-    // Default: only show assigned tickets
-    return ticket.assigneeId === user.id;
-  });
-
   const { data: users } = useQuery({
     queryKey: ["users"],
     queryFn: getUsers,

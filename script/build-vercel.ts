@@ -46,7 +46,7 @@ async function buildAll() {
 
   // Build server code as modules that can be required by api/index.js
   await esbuild({
-    entryPoints: ["server/routes.ts", "server/storage.ts", "server/db.ts", "server/ticket-permissions.ts"],
+    entryPoints: ["server/routes.ts", "server/storage.ts", "server/db.ts"],
     platform: "node",
     bundle: true,
     format: "cjs",
