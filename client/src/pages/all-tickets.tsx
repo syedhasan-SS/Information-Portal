@@ -53,7 +53,6 @@ import {
   UserPlus,
 } from "lucide-react";
 import type { Ticket, Category, Department, SubDepartment } from "@shared/schema";
-import { DebugCacheViewer } from "@/components/debug-cache-viewer";
 
 async function getTickets(): Promise<Ticket[]> {
   const userEmail = localStorage.getItem("userEmail");
@@ -625,11 +624,6 @@ export default function AllTicketsPage() {
       </header>
 
       <main className="mx-auto max-w-[1600px] px-6 py-6">
-        {/* Debug Tools - REMOVE IN PRODUCTION */}
-        <div className="mb-4">
-          <DebugCacheViewer />
-        </div>
-
         {/* Tab Navigation */}
         <div className="mb-6 flex gap-2 border-b">
           <Button
