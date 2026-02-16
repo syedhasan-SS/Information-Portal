@@ -1,6 +1,5 @@
 {
-  "buildCommand": "npm ci && npx tsx script/build-vercel.ts",
-  "installCommand": "npm ci",
+  "buildCommand": "npx tsx script/build-vercel.ts",
   "framework": null,
   "rewrites": [
     {
