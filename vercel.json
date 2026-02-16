@@ -1,6 +1,6 @@
 {
-  "buildCommand": "NODE_ENV=production npm install && npx tsx script/build-vercel.ts",
-  "installCommand": "npm install",
+  "buildCommand": "npm ci && npx tsx script/build-vercel.ts",
+  "installCommand": "npm ci",
   "framework": null,
   "rewrites": [
     {
