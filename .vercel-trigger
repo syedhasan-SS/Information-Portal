@@ -1,0 +1,4 @@
+Deployment trigger file
+Last updated: 2026-02-16 19:35 UTC
+Commit: 40cd2f6
+Purpose: Force Vercel to detect changes and deploy
