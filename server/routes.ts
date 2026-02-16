@@ -36,6 +36,13 @@ import {
   triggerTicketCreated,
   triggerTicketUpdated,
 } from "./n8n-integration";
+import {
+  filterTicketsByDepartmentAccess,
+  canViewTicket,
+  canEditTicketDetails,
+  validateTicketUpdate,
+  getUserDepartmentAccess,
+} from "./ticket-permissions";
 
 // Permission check helper
 async function checkPermission(req: any, requiredPermission: string): Promise<{ hasPermission: boolean; user?: any; error?: string }> {
@@ -361,10 +368,32 @@ export async function registerRoutes(
   });
 
   // Tickets
-  app.get("/api/tickets", async (_req, res) => {
+  app.get("/api/tickets", async (req, res) => {
     try {
-      const tickets = await storage.getTickets();
-      res.json(tickets);
+      // Get current user for department filtering
+      const currentUser = await getCurrentUser(req);
+      console.log("[GET /api/tickets] Request from:", currentUser?.email, "Department:", currentUser?.department, "Role:", currentUser?.role);
+
+      if (!currentUser) {
+        return res.status(401).json({ error: "Authentication required" });
+      }
+
+      // Get all tickets
+      const allTickets = await storage.getTickets();
+      console.log("[GET /api/tickets] Total tickets in DB:", allTickets.length);
+
+      // Filter tickets based on user's department access
+      // CX users see all tickets, non-CX users only see their department
+      const filteredTickets = filterTicketsByDepartmentAccess(allTickets, currentUser);
+      console.log("[GET /api/tickets] Filtered tickets returned:", filteredTickets.length);
+      console.log("[GET /api/tickets] Department breakdown:",
+        filteredTickets.reduce((acc: any, t: any) => {
+          acc[t.department] = (acc[t.department] || 0) + 1;
+          return acc;
+        }, {})
+      );
+
+      res.json(filteredTickets);
     } catch (error: any) {
       res.status(500).json({ error: error.message });
     }
@@ -372,10 +401,24 @@ export async function registerRoutes(
 
   app.get("/api/tickets/:id", async (req, res) => {
     try {
+      // Get current user for permission check
+      const currentUser = await getCurrentUser(req);
+      if (!currentUser) {
+        return res.status(401).json({ error: "Authentication required" });
+      }
+
       const ticket = await storage.getTicketById(req.params.id);
       if (!ticket) {
         return res.status(404).json({ error: "Ticket not found" });
       }
+
+      // Check if user can view this ticket based on department
+      if (!canViewTicket(currentUser, ticket)) {
+        return res.status(403).json({
+          error: `Access denied. You can only view tickets in ${currentUser.department} department.`
+        });
+      }
+
       res.json(ticket);
     } catch (error: any) {
       res.status(500).json({ error: error.message });
@@ -474,19 +517,11 @@ export async function registerRoutes(
         console.log('✅ Found routing rule:', routingRule);
 
         // Apply department routing
-        // SPECIAL CASE: For CX users, keep department as "CX" to maintain visibility within CX team
+        // Route to target department for all users
         if (routingRule.targetDepartment) {
-          if (ticketCreator && ticketCreator.department === "CX") {
-            // CX users' tickets stay in CX department for visibility
-            parsed.data.department = "CX";
-            parsed.data.ownerTeam = routingRule.targetDepartment; // But route to target team
-            console.log('📍 CX user ticket: keeping department=CX, routing team to:', routingRule.targetDepartment);
-          } else {
-            // Non-CX users: apply standard routing
-            parsed.data.department = routingRule.targetDepartment;
-            parsed.data.ownerTeam = routingRule.targetDepartment;
-            console.log('📍 Auto-routed to department:', routingRule.targetDepartment);
-          }
+          parsed.data.department = routingRule.targetDepartment;
+          parsed.data.ownerTeam = routingRule.targetDepartment;
+          console.log('📍 Auto-routed to department:', routingRule.targetDepartment);
         }
 
         // Apply priority boost if configured
@@ -614,9 +649,22 @@ export async function registerRoutes(
 
   app.patch("/api/tickets/:id", async (req, res) => {
     try {
+      // Get current user for permission check
+      const currentUser = await getCurrentUser(req);
+      if (!currentUser) {
+        return res.status(401).json({ error: "Authentication required" });
+      }
+
       const oldTicket = await storage.getTicketById(req.params.id);
       if (!oldTicket) {
         return res.status(404).json({ error: "Ticket not found" });
+      }
+
+      // Check if user can view this ticket
+      if (!canViewTicket(currentUser, oldTicket)) {
+        return res.status(403).json({
+          error: `Access denied. You can only access tickets in ${currentUser.department} department.`
+        });
       }
 
       // Validate input using update schema
@@ -626,6 +674,12 @@ export async function registerRoutes(
           error: "Invalid ticket update data",
           details: parsed.error.issues
         });
+      }
+
+      // Validate user's permission to update these specific fields
+      const validationError = validateTicketUpdate(currentUser, oldTicket, parsed.data);
+      if (validationError) {
+        return res.status(403).json({ error: validationError });
       }
 
       // Validate status transitions if status is being changed
@@ -678,9 +732,7 @@ export async function registerRoutes(
         return res.status(404).json({ error: "Ticket not found" });
       }
 
-      const currentUser = await getCurrentUser(req);
-
-      // Check if ticket was assigned
+      // Check if ticket was assigned (currentUser already declared at top of function)
       if (req.body.assigneeId && oldTicket.assigneeId !== req.body.assigneeId) {
         const assignee = await storage.getUserById(req.body.assigneeId);
         if (assignee) {
@@ -1394,6 +1446,84 @@ export async function registerRoutes(
         version: "1.0.1"
       });
     } catch (error: any) {
+      res.status(500).json({ error: error.message });
+    }
+  });
+
+  // Get user's department access information
+  app.get("/api/user/department-access", async (req, res) => {
+    try {
+      const currentUser = await getCurrentUser(req);
+      if (!currentUser) {
+        return res.status(401).json({ error: "Authentication required" });
+      }
+
+      const access = getUserDepartmentAccess(currentUser);
+      res.json(access);
+    } catch (error: any) {
+      console.error('Get department access error:', error);
+      res.status(500).json({ error: error.message });
+    }
+  });
+
+  // Admin endpoint to fix tickets with wrong department
+  app.post("/api/admin/fix-cx-department-tickets", async (_req, res) => {
+    try {
+      const { eq, and, ne, isNotNull } = await import('drizzle-orm');
+      const { tickets } = await import('@shared/schema');
+
+      // Find all affected tickets
+      const affectedTickets = await db
+        .select({
+          id: tickets.id,
+          ticketNumber: tickets.ticketNumber,
+          department: tickets.department,
+          ownerTeam: tickets.ownerTeam,
+        })
+        .from(tickets)
+        .where(
+          and(
+            eq(tickets.department, 'CX'),
+            ne(tickets.ownerTeam, 'CX'),
+            isNotNull(tickets.ownerTeam)
+          )
+        );
+
+      if (affectedTickets.length === 0) {
+        return res.json({
+          success: true,
+          message: 'No tickets need fixing',
+          fixed: 0,
+          tickets: []
+        });
+      }
+
+      // Fix all tickets
+      const fixed = [];
+      for (const ticket of affectedTickets) {
+        await db
+          .update(tickets)
+          .set({
+            department: ticket.ownerTeam,
+            updatedAt: new Date(),
+          })
+          .where(eq(tickets.id, ticket.id));
+
+        fixed.push({
+          ticketNumber: ticket.ticketNumber,
+          from: ticket.department,
+          to: ticket.ownerTeam
+        });
+      }
+
+      res.json({
+        success: true,
+        message: `Fixed ${fixed.length} ticket(s)`,
+        fixed: fixed.length,
+        tickets: fixed
+      });
+    } catch (error: any) {
+      console.error('Fix CX department tickets error:', error);
       res.status(500).json({ error: error.message });
     }
   });

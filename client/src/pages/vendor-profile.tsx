@@ -43,7 +43,12 @@ async function getVendor(handle: string): Promise<Vendor | undefined> {
 }
 
 async function getTickets(): Promise<Ticket[]> {
-  const res = await fetch("/api/tickets");
+  const userEmail = localStorage.getItem("userEmail");
+  const res = await fetch("/api/tickets", {
+    headers: {
+      ...(userEmail ? { "x-user-email": userEmail } : {}),
+    },
+  });
   if (!res.ok) throw new Error("Failed to fetch tickets");
   return res.json();
 }

@@ -54,7 +54,12 @@ interface FleetOrderData {
 }
 
 async function getTicket(id: string): Promise<Ticket> {
-  const res = await fetch(`/api/tickets/${id}`);
+  const userEmail = localStorage.getItem("userEmail");
+  const res = await fetch(`/api/tickets/${id}`, {
+    headers: {
+      ...(userEmail ? { "x-user-email": userEmail } : {}),
+    },
+  });
   if (!res.ok) throw new Error("Failed to fetch ticket");
   return res.json();
 }
@@ -90,9 +95,13 @@ async function getUsers(): Promise<UserType[]> {
 }
 
 async function updateTicket(id: string, updates: Partial<Ticket>): Promise<Ticket> {
+  const userEmail = localStorage.getItem("userEmail");
   const res = await fetch(`/api/tickets/${id}`, {
     method: "PATCH",
-    headers: { "Content-Type": "application/json" },
+    headers: {
+      "Content-Type": "application/json",
+      ...(userEmail ? { "x-user-email": userEmail } : {}),
+    },
     body: JSON.stringify(updates),
   });
   if (!res.ok) throw new Error("Failed to update ticket");

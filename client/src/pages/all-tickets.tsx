@@ -53,9 +53,15 @@ import {
   UserPlus,
 } from "lucide-react";
 import type { Ticket, Category, Department, SubDepartment } from "@shared/schema";
+import { DebugCacheViewer } from "@/components/debug-cache-viewer";
 
 async function getTickets(): Promise<Ticket[]> {
-  const res = await fetch("/api/tickets");
+  const userEmail = localStorage.getItem("userEmail");
+  const res = await fetch("/api/tickets", {
+    headers: {
+      ...(userEmail ? { "x-user-email": userEmail } : {}),
+    },
+  });
   if (!res.ok) throw new Error("Failed to fetch tickets");
   return res.json();
 }
@@ -338,93 +344,17 @@ export default function AllTicketsPage() {
   const departmentFilteredTickets = useMemo(() => {
     if (!tickets || !user) return [];
 
-    // Check if user has Owner or Admin role - these roles bypass ALL filtering
-    const userRoles = user.roles && user.roles.length > 0 ? user.roles : [user.role];
-    const isOwnerOrAdmin = userRoles.some(r => r === "Owner" || r === "Admin");
+    console.log("[All-Tickets] User:", user.email, "Department:", user.department, "Role:", user.role);
+    console.log("[All-Tickets] Tickets received from API:", tickets.length);
+    console.log("[All-Tickets] Departments in tickets:", [...new Set(tickets.map(t => t.department))]);
 
-    // Owner and Admin roles can see ALL tickets regardless of department/sub-department
-    if (isOwnerOrAdmin) {
-      return tickets;
-    }
+    // IMPORTANT: Backend already filters tickets by department
+    // The API endpoint /api/tickets returns pre-filtered tickets based on user's department
+    // We trust the backend filtering and just display what we receive
 
-    // If user has view:all_tickets permission (but not Owner/Admin), show all tickets
-    // EXCEPTION: CX users with sub-departments ALWAYS get filtered by sub-department
-    if (canViewAllTickets) {
-      // CX users with sub-departments are still filtered even with view:all_tickets
-      if (user.department === "CX" && user.subDepartment) {
-        // Continue to filter below for CX users
-      } else {
-        // All other users with view:all_tickets permission see everything
-        return tickets;
-      }
-    }
-
-    // Filter based on user's department/sub-department - STRICT SEPARATION
-    return tickets.filter((ticket) => {
-      const ticketDept = ticket.department as string;
-
-      // VALIDATION: Exclude malformed tickets with empty/invalid department
-      // These are likely test data or corrupted entries
-      if (!ticketDept || ticketDept.trim() === "") {
-        console.warn(`Ticket ${ticket.ticketNumber} has empty department - excluding from view`);
-        return false;
-      }
-
-      // For CX department users - MUST have sub-department specified
-      // IMPORTANT: CX filtering CANNOT be bypassed by view:all_tickets permission
-      if (user.department === "CX") {
-        // If no sub-department set, deny all access (user needs proper configuration)
-        if (!user.subDepartment) {
-          console.warn(`CX user ${user.email} has no sub-department set - denying ticket access`);
-          return false;
-        }
-
-        // For Seller Support users
-        if (user.subDepartment === "Seller Support") {
-          // Option 1: Ticket has department "Seller Support" (legacy tickets)
-          if (ticketDept === "Seller Support") {
-            return true;
-          }
-
-          // Option 2: Ticket has department "CX" with Seller Support category (new tickets)
-          if (ticketDept === "CX") {
-            const categoryDepartmentType = ticket.categorySnapshot?.departmentType;
-            return categoryDepartmentType === "Seller Support" || categoryDepartmentType === "All";
-          }
-
-          // Not a Seller Support ticket
-          return false;
-        }
-
-        // For Customer Support users
-        if (user.subDepartment === "Customer Support") {
-          // Option 1: Ticket has department "Customer Support" (legacy tickets)
-          if (ticketDept === "Customer Support") {
-            return true;
-          }
-
-          // Option 2: Ticket has department "CX" with Customer Support category (new tickets)
-          if (ticketDept === "CX") {
-            const categoryDepartmentType = ticket.categorySnapshot?.departmentType;
-            return categoryDepartmentType === "Customer Support" || categoryDepartmentType === "All";
-          }
-
-          // Not a Customer Support ticket
-          return false;
-        }
-
-        // Any other CX sub-department: deny access (should not happen)
-        return false;
-      }
-
-      // All other department users see only their department's tickets
-      if (user.department) {
-        return ticketDept === user.department;
-      }
-
-      // If no department assigned, show only tickets assigned to them
-      return ticket.assigneeId === user.id;
-    });
+    // No client-side department filtering needed - backend handles it all
+    console.log("[All-Tickets] Trusting backend filter - displaying all", tickets.length, "tickets");
+    return tickets;
   }, [tickets, user, canViewAllTickets]);
 
   const filteredTickets = departmentFilteredTickets.filter((ticket) => {
@@ -695,6 +625,11 @@ export default function AllTicketsPage() {
       </header>
 
       <main className="mx-auto max-w-[1600px] px-6 py-6">
+        {/* Debug Tools - REMOVE IN PRODUCTION */}
+        <div className="mb-4">
+          <DebugCacheViewer />
+        </div>
+
         {/* Tab Navigation */}
         <div className="mb-6 flex gap-2 border-b">
           <Button

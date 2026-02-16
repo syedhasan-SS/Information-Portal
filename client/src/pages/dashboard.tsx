@@ -50,7 +50,12 @@ import {
 import type { Ticket as TicketType, User as UserType } from "@shared/schema";
 
 async function getTickets(): Promise<TicketType[]> {
-  const res = await fetch("/api/tickets");
+  const userEmail = localStorage.getItem("userEmail");
+  const res = await fetch("/api/tickets", {
+    headers: {
+      ...(userEmail ? { "x-user-email": userEmail } : {}),
+    },
+  });
   if (!res.ok) throw new Error("Failed to fetch tickets");
   return res.json();
 }
@@ -77,66 +82,10 @@ export default function DashboardPage() {
     queryFn: getTickets,
   });
 
-  // Filter tickets based on user role and permissions
-  const tickets = allTickets?.filter((ticket) => {
-    if (!user) return false;
-
-    // Owners and Admins see all tickets
-    // EXCEPTION: CX users ALWAYS get filtered by sub-department regardless of permissions
-    if (hasPermission("view:all_tickets") && user.department !== "CX") {
-      return true;
-    }
-
-    // Department-based access: Heads/Managers/Leads see only their department tickets
-    if (hasPermission("view:department_tickets") && user.department) {
-      // For CX department - MUST have sub-department specified
-      if (user.department === "CX") {
-        if (!user.subDepartment) {
-          // CX users without sub-department - deny access
-          return false;
-        }
-        // Filter based on category departmentType
-        const categoryDepartmentType = ticket.categorySnapshot?.departmentType;
-
-        // Seller Support agents see only Seller Support tickets (based on category)
-        if (user.subDepartment === "Seller Support") {
-          return categoryDepartmentType === "Seller Support" || categoryDepartmentType === "All";
-        }
-        // Customer Support agents see only Customer Support tickets (based on category)
-        if (user.subDepartment === "Customer Support") {
-          return categoryDepartmentType === "Customer Support" || categoryDepartmentType === "All";
-        }
-        // Other CX sub-departments: deny access
-        return false;
-      }
-      // All other departments: see only their department tickets
-      return ticket.department === user.department;
-    }
-
-    // Team-based access: Leads see only their department/team tickets
-    if (hasPermission("view:team_tickets") && user.department) {
-      // For CX department - MUST have sub-department specified
-      if (user.department === "CX") {
-        if (!user.subDepartment) {
-          // CX users without sub-department - deny access
-          return false;
-        }
-        // Filter based on category departmentType
-        const categoryDepartmentType = ticket.categorySnapshot?.departmentType;
-
-        // Seller Support agents see only Seller Support tickets (based on category)
-        if (user.subDepartment === "Seller Support") {
-          return categoryDepartmentType === "Seller Support" || categoryDepartmentType === "All";
-        }
-        // Customer Support agents see only Customer Support tickets (based on category)
-        if (user.subDepartment === "Customer Support") {
-          return categoryDepartmentType === "Customer Support" || categoryDepartmentType === "All";
-        }
-        // Other CX sub-departments: deny access
-        return false;
-      }
-      return ticket.department === user.department;
-    }
+  // IMPORTANT: Backend already filters tickets by department
+  // The API endpoint /api/tickets returns pre-filtered tickets based on user's department
+  // We trust the backend filtering and just display what we receive
+  const tickets = allTickets;
 
     // Agent/Associate level: see only assigned tickets or their specific department/sub-department tickets
     if (["Agent", "Associate"].includes(user.role)) {
