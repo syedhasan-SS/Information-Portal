@@ -519,7 +519,11 @@ export default function MyTicketsPage() {
           createdById: user?.id, // Track who created the ticket
         }),
       });
-      if (!res.ok) throw new Error("Failed to create ticket");
+      if (!res.ok) {
+        const errorData = await res.json().catch(() => ({ error: 'Unknown error' }));
+        console.error('❌ Server error response:', errorData);
+        throw new Error(errorData.error || `Failed to create ticket (${res.status})`);
+      }
       return res.json();
     },
     onSuccess: () => {
