@@ -416,14 +416,48 @@ export async function registerRoutes(
       // Validate vendorHandle exists if provided (for Seller Support)
       if (parsed.data.vendorHandle) {
         console.log('🔍 Validating vendor handle:', parsed.data.vendorHandle);
-        const vendor = await storage.getVendorByHandle(parsed.data.vendorHandle);
+        let vendor = await storage.getVendorByHandle(parsed.data.vendorHandle);
+
+        // If vendor doesn't exist in database but is in n8n/BigQuery, auto-create it
         if (!vendor) {
-          console.error('❌ Vendor not found:', parsed.data.vendorHandle);
-          return res.status(400).json({
-            error: `Vendor with handle "${parsed.data.vendorHandle}" not found. Please select a valid vendor from the dropdown or create the vendor first.`
-          });
+          console.log('⚠️ Vendor not in database, checking n8n/BigQuery...');
+          try {
+            const n8nResponse = await fetch('https://n8n.joinfleek.com/webhook/api/vendors/all');
+            if (n8nResponse.ok) {
+              const n8nData = await n8nResponse.json();
+              const n8nVendor = n8nData.find((row: any) => row.f[0].v === parsed.data.vendorHandle);
+
+              if (n8nVendor) {
+                const vendorName = n8nVendor.f[1]?.v || parsed.data.vendorHandle;
+                console.log('✅ Found in n8n/BigQuery, auto-creating vendor:', vendorName);
+
+                // Auto-create vendor in database
+                vendor = await storage.createVendor({
+                  handle: parsed.data.vendorHandle,
+                  name: vendorName,
+                  gmvTier: 'S', // Default tier, can be updated later
+                  email: null,
+                  phone: null,
+                  address: null,
+                  isActive: true,
+                });
+                console.log('✅ Vendor auto-created:', vendor.name);
+              } else {
+                console.error('❌ Vendor not found in n8n/BigQuery:', parsed.data.vendorHandle);
+                return res.status(400).json({
+                  error: `Vendor with handle "${parsed.data.vendorHandle}" not found in system. Please verify the vendor handle.`
+                });
+              }
+            }
+          } catch (n8nError) {
+            console.error('❌ Failed to fetch from n8n:', n8nError);
+            return res.status(400).json({
+              error: `Vendor with handle "${parsed.data.vendorHandle}" not found in database. Please select a valid vendor from the dropdown or contact support.`
+            });
+          }
+        } else {
+          console.log('✅ Vendor validated:', vendor.name);
         }
-        console.log('✅ Vendor validated:', vendor.name);
       }
 
       // Check creator's department for CX special handling
