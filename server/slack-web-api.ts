@@ -143,7 +143,7 @@ export async function sendSlackTicketCreated(
       type: 'section',
       text: {
         type: 'mrkdwn',
-        text: `🔗 *<${ticketUrl}|View Ticket in Portal>*`,
+        text: `🔗 <${ticketUrl}|View Ticket in Portal>`,
       },
     });
 
@@ -216,7 +216,7 @@ export async function sendSlackTicketAssigned(
         type: 'section',
         text: {
           type: 'mrkdwn',
-          text: `🔗 *<${ticketUrl}|View Ticket in Portal>*`,
+          text: `🔗 <${ticketUrl}|View Ticket in Portal>`,
         },
       },
     ];
@@ -296,7 +296,7 @@ export async function sendSlackCommentMention(
         type: 'section',
         text: {
           type: 'mrkdwn',
-          text: `🔗 *<${ticketUrl}|View Comment in Portal>*`,
+          text: `🔗 <${ticketUrl}|View Comment in Portal>`,
         },
       },
     ];
@@ -361,7 +361,7 @@ export async function sendSlackTicketResolved(
         type: 'section',
         text: {
           type: 'mrkdwn',
-          text: `🔗 *<${ticketUrl}|View Ticket in Portal>*`,
+          text: `🔗 <${ticketUrl}|View Ticket in Portal>`,
         },
       },
     ];
@@ -434,7 +434,7 @@ export async function sendSlackUrgentAlert(
         type: 'section',
         text: {
           type: 'mrkdwn',
-          text: `🔗 *<${ticketUrl}|View Urgent Ticket in Portal>*`,
+          text: `🔗 <${ticketUrl}|View Urgent Ticket in Portal>`,
         },
       },
     ];
