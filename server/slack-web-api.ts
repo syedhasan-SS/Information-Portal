@@ -35,10 +35,17 @@ export function isSlackConfigured(): boolean {
 }
 
 /**
- * Get channel name or ID
+ * Get channel name or ID based on department
  */
-function getChannel(): string {
-  return process.env.SLACK_CHANNEL_ID || '#complaint-notifications';
+function getChannel(department?: string): string {
+  // Department-specific channels (configure in .env)
+  if (department) {
+    const deptChannel = process.env[`SLACK_CHANNEL_${department.toUpperCase()}`];
+    if (deptChannel) return deptChannel;
+  }
+
+  // Fallback to main channel
+  return process.env.SLACK_CHANNEL_ID || '#flow-complaint-notifications';
 }
 
 /**
@@ -148,7 +155,7 @@ export async function sendSlackTicketCreated(
     });
 
     await client.chat.postMessage({
-      channel: getChannel(),
+      channel: getChannel(ticket.department),
       text: `New ticket created: ${ticket.ticketNumber} - ${ticket.subject}`,
       blocks,
     });
@@ -222,7 +229,7 @@ export async function sendSlackTicketAssigned(
     ];
 
     await client.chat.postMessage({
-      channel: getChannel(),
+      channel: getChannel(ticket.department),
       text: `Ticket ${ticket.ticketNumber} assigned to ${assignee.email}`,
       blocks,
     });
@@ -236,20 +243,39 @@ export async function sendSlackTicketAssigned(
 }
 
 /**
- * Send comment mention notification
+ * Send comment mention notification with proper @mentions
  */
 export async function sendSlackCommentMention(
   ticket: Ticket,
   comment: Comment,
   commenter: User,
-  mentionedUsers: User[]
+  mentionedUsers: User[],
+  managers?: User[]
 ): Promise<boolean> {
   const client = getSlackClient();
   if (!client) return false;
 
   try {
     const ticketUrl = getTicketUrl(ticket.id);
-    const mentionsList = mentionedUsers.map(u => u.email).join(', ');
+
+    // Create proper Slack @mentions for users who have Slack IDs
+    const slackMentions = mentionedUsers
+      .filter(u => u.slackUserId)
+      .map(u => `<@${u.slackUserId}>`)
+      .join(', ');
+
+    const emailMentions = mentionedUsers
+      .filter(u => !u.slackUserId)
+      .map(u => u.email)
+      .join(', ');
+
+    const mentionsList = [slackMentions, emailMentions].filter(Boolean).join(', ');
+
+    // Add manager mentions if provided
+    const managerMentions = managers
+      ?.filter(m => m.slackUserId)
+      .map(m => `<@${m.slackUserId}>`)
+      .join(', ') || '';
 
     // Truncate comment if too long
     const commentText = comment.text.length > 200
@@ -292,19 +318,35 @@ export async function sendSlackCommentMention(
           text: `*Ticket Subject:* ${ticket.subject}`,
         },
       },
-      {
-        type: 'section',
-        text: {
-          type: 'mrkdwn',
-          text: `🔗 <${ticketUrl}|View Comment in Portal>`,
-        },
-      },
     ];
 
+    // Add manager notification section if managers are included
+    if (managerMentions) {
+      blocks.push({
+        type: 'context',
+        elements: [
+          {
+            type: 'mrkdwn',
+            text: `👔 *Managers notified:* ${managerMentions}`,
+          },
+        ],
+      });
+    }
+
+    blocks.push({
+      type: 'section',
+      text: {
+        type: 'mrkdwn',
+        text: `🔗 <${ticketUrl}|View Comment in Portal>`,
+      },
+    });
+
     await client.chat.postMessage({
-      channel: getChannel(),
+      channel: getChannel(ticket.department),
       text: `${commenter.email} mentioned ${mentionsList} in ticket ${ticket.ticketNumber}`,
       blocks,
+      // This will actually @mention users in Slack, triggering notifications
+      link_names: true,
     });
 
     console.log(`[Slack] Sent comment mention notification: ${ticket.ticketNumber}`);
@@ -367,7 +409,7 @@ export async function sendSlackTicketResolved(
     ];
 
     await client.chat.postMessage({
-      channel: getChannel(),
+      channel: getChannel(ticket.department),
       text: `Ticket ${ticket.ticketNumber} resolved by ${resolver.email}`,
       blocks,
     });
@@ -440,7 +482,7 @@ export async function sendSlackUrgentAlert(
     ];
 
     await client.chat.postMessage({
-      channel: getChannel(),
+      channel: getChannel(ticket.department),
       text: `🚨 URGENT: ${ticket.ticketNumber} - ${ticket.subject}`,
       blocks,
     });

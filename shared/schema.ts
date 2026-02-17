@@ -156,6 +156,7 @@ export const users = pgTable("users", {
   department: text("department").$type<"Finance" | "Operations" | "Marketplace" | "Tech" | "Supply" | "Growth" | "CX">(),
   subDepartment: text("sub_department"), // Sub-department for organizational hierarchy
   managerId: varchar("manager_id").references((): AnyPgColumn => users.id, { onDelete: "set null" }), // Reports to (direct manager)
+  slackUserId: text("slack_user_id"), // Slack User ID for @mentions (e.g., U01234ABCD)
   profilePicture: text("profile_picture"),
   customPermissions: text("custom_permissions").array(), // Agent-level custom permissions
   isActive: boolean("is_active").notNull().default(true),

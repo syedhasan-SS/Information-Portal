@@ -265,6 +265,16 @@ export async function notifyMentions(
     // Get user objects for notification
     const mentionedUsers = allUsers.filter(user => mentionedUserIds.has(user.id));
 
+    // Find managers of mentioned users
+    const managerIds = new Set<string>();
+    mentionedUsers.forEach(user => {
+      if (user.managerId && user.managerId !== commenter?.id) {
+        managerIds.add(user.managerId);
+      }
+    });
+
+    const managers = allUsers.filter(user => managerIds.has(user.id) && user.isActive);
+
     // Create notifications for mentioned users
     const notificationPromises = mentionedUsers.map((user) =>
       storage.createNotification({
@@ -284,12 +294,32 @@ export async function notifyMentions(
       })
     );
 
-    await Promise.all(notificationPromises);
-    console.log(`[Notifications] Created ${notificationPromises.length} mention notifications for ticket ${ticket.ticketNumber}`);
+    // Create notifications for managers
+    const managerNotificationPromises = managers.map((manager) =>
+      storage.createNotification({
+        userId: manager.id,
+        type: "comment_mention",
+        title: "Your Team Member Was Mentioned",
+        message: `${commenter?.name || "Someone"} mentioned your team member in ticket: ${ticket.subject}`,
+        ticketId: ticket.id,
+        commentId: comment.id,
+        actorId: commenter?.id,
+        metadata: {
+          ticketNumber: ticket.ticketNumber,
+          vendorHandle: ticket.vendorHandle,
+          mentionedBy: commenter?.name,
+          isManagerNotification: true,
+        },
+        isRead: false,
+      })
+    );
 
-    // Send Slack notification for mentions
+    await Promise.all([...notificationPromises, ...managerNotificationPromises]);
+    console.log(`[Notifications] Created ${notificationPromises.length} mention notifications and ${managerNotificationPromises.length} manager notifications for ticket ${ticket.ticketNumber}`);
+
+    // Send Slack notification for mentions (including managers)
     if (mentionedUsers.length > 0 && commenter) {
-      sendSlackCommentMention(ticket, comment, commenter, mentionedUsers).catch(err => {
+      sendSlackCommentMention(ticket, comment, commenter, mentionedUsers, managers).catch(err => {
         console.error('[Slack] Failed to send comment mention notification:', err);
       });
     }
