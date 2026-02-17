@@ -82,6 +82,17 @@ async function getComments(ticketId: string): Promise<Comment[]> {
   return res.json();
 }
 
+async function getTicketActivity(ticketId: string): Promise<any[]> {
+  const userEmail = localStorage.getItem("userEmail");
+  const res = await fetch(`/api/tickets/${ticketId}/activity`, {
+    headers: {
+      ...(userEmail ? { "x-user-email": userEmail } : {}),
+    },
+  });
+  if (!res.ok) throw new Error("Failed to fetch activity");
+  return res.json();
+}
+
 async function getCategories(): Promise<Category[]> {
   const res = await fetch("/api/categories");
   if (!res.ok) throw new Error("Failed to fetch categories");
@@ -198,6 +209,12 @@ export default function TicketDetailPage() {
     enabled: !!id,
   });
 
+  const { data: activities, isLoading: activitiesLoading } = useQuery({
+    queryKey: ["activities", id],
+    queryFn: () => getTicketActivity(id!),
+    enabled: !!id,
+  });
+
   const { data: categories } = useQuery({
     queryKey: ["categories"],
     queryFn: getCategories,
@@ -219,6 +236,7 @@ export default function TicketDetailPage() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["ticket", id] });
       queryClient.invalidateQueries({ queryKey: ["tickets"] });
+      queryClient.invalidateQueries({ queryKey: ["activities", id] });
       setPendingChanges({});
       setShowConfirmDialog(false);
     },
@@ -279,6 +297,7 @@ export default function TicketDetailPage() {
     mutationFn: (content: string) => addComment(id!, content, user?.id!, user?.name || "Unknown User"),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["comments", id] });
+      queryClient.invalidateQueries({ queryKey: ["activities", id] });
       setNewComment("");
     },
   });
@@ -477,29 +496,83 @@ export default function TicketDetailPage() {
 
               {activeTab === "activity" && (
                 <div className="space-y-3">
-                  <div className="flex items-start gap-3 text-sm">
-                    <div className="mt-0.5 flex h-6 w-6 items-center justify-center rounded-full bg-blue-500/10 text-blue-600">
-                      <Clock className="h-3 w-3" />
+                  {activitiesLoading ? (
+                    <div className="flex items-center justify-center py-8">
+                      <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
                     </div>
-                    <div>
-                      <p className="font-medium">Ticket Created</p>
-                      <p className="text-muted-foreground">
-                        {new Date(ticket.createdAt).toLocaleString()}
-                      </p>
-                    </div>
-                  </div>
-                  {ticket.resolvedAt && (
-                    <div className="flex items-start gap-3 text-sm">
-                      <div className="mt-0.5 flex h-6 w-6 items-center justify-center rounded-full bg-green-500/10 text-green-600">
-                        <CheckCircle className="h-3 w-3" />
-                      </div>
-                      <div>
-                        <p className="font-medium">Ticket Resolved</p>
-                        <p className="text-muted-foreground">
-                          {new Date(ticket.resolvedAt).toLocaleString()}
-                        </p>
-                      </div>
-                    </div>
+                  ) : activities && activities.length > 0 ? (
+                    activities.map((activity: any) => {
+                      const getActivityIcon = () => {
+                        switch (activity.action) {
+                          case "created":
+                            return <Plus className="h-3 w-3" />;
+                          case "status_changed":
+                          case "resolved":
+                          case "closed":
+                            return <CheckCircle className="h-3 w-3" />;
+                          case "reopened":
+                            return <AlertCircle className="h-3 w-3" />;
+                          case "assigned":
+                          case "reassigned":
+                          case "unassigned":
+                            return <User className="h-3 w-3" />;
+                          case "priority_changed":
+                            return <AlertCircle className="h-3 w-3" />;
+                          case "department_changed":
+                            return <Tag className="h-3 w-3" />;
+                          case "comment_added":
+                            return <MessageSquare className="h-3 w-3" />;
+                          case "tags_updated":
+                            return <Tag className="h-3 w-3" />;
+                          default:
+                            return <Activity className="h-3 w-3" />;
+                        }
+                      };
+
+                      const getActivityColor = () => {
+                        switch (activity.action) {
+                          case "created":
+                            return "bg-blue-500/10 text-blue-600";
+                          case "resolved":
+                          case "closed":
+                            return "bg-green-500/10 text-green-600";
+                          case "reopened":
+                            return "bg-yellow-500/10 text-yellow-600";
+                          case "assigned":
+                          case "reassigned":
+                            return "bg-purple-500/10 text-purple-600";
+                          case "unassigned":
+                            return "bg-gray-500/10 text-gray-600";
+                          case "priority_changed":
+                            return "bg-orange-500/10 text-orange-600";
+                          case "comment_added":
+                            return "bg-cyan-500/10 text-cyan-600";
+                          default:
+                            return "bg-gray-500/10 text-gray-600";
+                        }
+                      };
+
+                      return (
+                        <div key={activity.id} className="flex items-start gap-3 text-sm">
+                          <div className={cn("mt-0.5 flex h-6 w-6 items-center justify-center rounded-full", getActivityColor())}>
+                            {getActivityIcon()}
+                          </div>
+                          <div className="flex-1">
+                            <p className="font-medium">{activity.description}</p>
+                            {activity.fieldName && activity.oldValue && activity.newValue && (
+                              <p className="text-xs text-muted-foreground mt-0.5">
+                                {activity.oldValue} → {activity.newValue}
+                              </p>
+                            )}
+                            <p className="text-xs text-muted-foreground mt-1">
+                              {new Date(activity.createdAt).toLocaleString()} • {activity.userName}
+                            </p>
+                          </div>
+                        </div>
+                      );
+                    })
+                  ) : (
+                    <p className="text-sm text-muted-foreground text-center py-8">No activity yet</p>
                   )}
                 </div>
               )}

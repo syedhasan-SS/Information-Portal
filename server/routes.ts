@@ -24,6 +24,17 @@ import {
   notifyMentions,
   getCurrentUser,
 } from "./notifications";
+import {
+  logTicketCreated,
+  logStatusChange,
+  logAssigneeChange,
+  logPriorityChange,
+  logDepartmentChange,
+  logCommentAdded,
+  logTagsUpdate,
+  logFieldUpdate,
+  getTicketActivity,
+} from "./activity-logger";
 import { auditService } from "./audit-service";
 import {
   syncVendorsFromBigQuery,
@@ -425,6 +436,34 @@ export async function registerRoutes(
     }
   });
 
+  // Get activity log for a ticket
+  app.get("/api/tickets/:id/activity", async (req, res) => {
+    try {
+      // Get current user for permission check
+      const currentUser = await getCurrentUser(req);
+      if (!currentUser) {
+        return res.status(401).json({ error: "Authentication required" });
+      }
+
+      const ticket = await storage.getTicketById(req.params.id);
+      if (!ticket) {
+        return res.status(404).json({ error: "Ticket not found" });
+      }
+
+      // Check if user can view this ticket
+      if (!canViewTicket(currentUser, ticket)) {
+        return res.status(403).json({
+          error: `Access denied. You can only view tickets in ${currentUser.department} department.`
+        });
+      }
+
+      const activities = await getTicketActivity(req.params.id);
+      res.json(activities);
+    } catch (error: any) {
+      res.status(500).json({ error: error.message });
+    }
+  });
+
   app.post("/api/tickets", async (req, res) => {
     try {
       console.log('📝 Creating ticket with data:', JSON.stringify(req.body, null, 2));
@@ -615,6 +654,13 @@ export async function registerRoutes(
         console.error('Failed to send ticket creation notifications:', err);
       });
 
+      // Log ticket creation activity
+      if (creator) {
+        logTicketCreated(ticket, creator).catch(err => {
+          console.error('Failed to log ticket creation activity:', err);
+        });
+      }
+
       res.status(201).json(ticket);
     } catch (error: any) {
       console.error('❌ Failed to create ticket:', error);
@@ -732,6 +778,44 @@ export async function registerRoutes(
         return res.status(404).json({ error: "Ticket not found" });
       }
 
+      // Log activity for various field changes
+      // Status change
+      if (parsed.data.status && parsed.data.status !== oldTicket.status) {
+        logStatusChange(ticket, oldTicket.status, parsed.data.status, currentUser).catch(err => {
+          console.error('Failed to log status change:', err);
+        });
+      }
+
+      // Assignee change
+      if (parsed.data.assigneeId !== undefined && parsed.data.assigneeId !== oldTicket.assigneeId) {
+        const oldAssignee = oldTicket.assigneeId ? await storage.getUserById(oldTicket.assigneeId) : null;
+        const newAssignee = parsed.data.assigneeId ? await storage.getUserById(parsed.data.assigneeId) : null;
+        logAssigneeChange(ticket, oldAssignee, newAssignee, currentUser).catch(err => {
+          console.error('Failed to log assignee change:', err);
+        });
+      }
+
+      // Priority change
+      if (parsed.data.priorityTier && parsed.data.priorityTier !== oldTicket.priorityTier) {
+        logPriorityChange(ticket, oldTicket.priorityTier, parsed.data.priorityTier, currentUser).catch(err => {
+          console.error('Failed to log priority change:', err);
+        });
+      }
+
+      // Department change
+      if (parsed.data.department && parsed.data.department !== oldTicket.department) {
+        logDepartmentChange(ticket, oldTicket.department, parsed.data.department, currentUser).catch(err => {
+          console.error('Failed to log department change:', err);
+        });
+      }
+
+      // Tags change
+      if (parsed.data.tags && JSON.stringify(parsed.data.tags) !== JSON.stringify(oldTicket.tags)) {
+        logTagsUpdate(ticket, oldTicket.tags || [], parsed.data.tags, currentUser).catch(err => {
+          console.error('Failed to log tags update:', err);
+        });
+      }
+
       // Check if ticket was assigned (currentUser already declared at top of function)
       if (req.body.assigneeId && oldTicket.assigneeId !== req.body.assigneeId) {
         const assignee = await storage.getUserById(req.body.assigneeId);
@@ -787,6 +871,13 @@ export async function registerRoutes(
         notifyMentions(comment, ticket, commenter).catch(err => {
           console.error('Failed to send mention notifications:', err);
         });
+
+        // Log comment activity
+        if (commenter) {
+          logCommentAdded(ticket, comment, commenter).catch(err => {
+            console.error('Failed to log comment activity:', err);
+          });
+        }
       }
 
       res.status(201).json(comment);

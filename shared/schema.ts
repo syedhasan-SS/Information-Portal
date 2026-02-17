@@ -146,6 +146,38 @@ export const comments = pgTable("comments", {
   createdAt: timestamp("created_at").notNull().defaultNow(),
 });
 
+// Ticket Activity Log for audit trail
+export const ticketActivityLog = pgTable("ticket_activity_log", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  ticketId: varchar("ticket_id").notNull().references(() => tickets.id, { onDelete: "cascade" }),
+  ticketNumber: varchar("ticket_number").notNull(),
+  action: text("action").notNull().$type<
+    | "created"
+    | "updated"
+    | "status_changed"
+    | "assigned"
+    | "reassigned"
+    | "unassigned"
+    | "priority_changed"
+    | "department_changed"
+    | "comment_added"
+    | "resolved"
+    | "closed"
+    | "reopened"
+    | "tags_updated"
+    | "field_updated"
+  >(),
+  userId: varchar("user_id").references(() => users.id, { onDelete: "set null" }),
+  userEmail: varchar("user_email").notNull(),
+  userName: varchar("user_name").notNull(),
+  fieldName: varchar("field_name"), // e.g., 'status', 'assigneeId', 'priority'
+  oldValue: text("old_value"), // Previous value
+  newValue: text("new_value"), // New value
+  description: text("description"), // Human-readable description
+  metadata: jsonb("metadata").$type<Record<string, any>>(), // Additional context
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+});
+
 export const users = pgTable("users", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
   email: text("email").notNull().unique(),
@@ -839,6 +871,8 @@ export type Notification = typeof notifications.$inferSelect;
 export type Department = typeof departments.$inferSelect;
 export type SubDepartment = typeof subDepartments.$inferSelect;
 export type AttendanceRecord = typeof attendanceRecords.$inferSelect;
+export type TicketActivityLog = typeof ticketActivityLog.$inferSelect;
+export type InsertTicketActivityLog = typeof ticketActivityLog.$inferInsert;
 
 // Page Access Control System
 export const pagePermissions = pgTable("page_permissions", {
