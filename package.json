@@ -5,7 +5,7 @@
   "scripts": {
     "dev:client": "vite dev --port 5000",
     "dev": "NODE_ENV=development tsx server/index.ts",
-    "build": "drizzle-kit push && tsx script/seed-page-permissions.ts && tsx script/build.ts",
+    "build": "drizzle-kit push && tsx script/run-activity-log-migration.ts && tsx script/seed-page-permissions.ts && tsx script/build.ts",
     "start": "NODE_ENV=production node dist/index.cjs",
     "check": "tsc",
     "db:push": "drizzle-kit push",
