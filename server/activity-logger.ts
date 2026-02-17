@@ -3,9 +3,10 @@
  * Tracks all changes to tickets for audit trail and transparency
  */
 
-import { storage } from "./storage";
+import { db } from "./db";
+import { ticketActivityLog } from "@shared/schema";
 import type { Ticket, User, TicketActivityLog, Comment } from "@shared/schema";
-import { eq, desc } from "drizzle-orm";
+import { eq, desc, sql } from "drizzle-orm";
 
 interface ActivityContext {
   user: User;
@@ -17,7 +18,7 @@ interface ActivityContext {
  */
 export async function logTicketCreated(ticket: Ticket, user: User): Promise<void> {
   try {
-    await storage.db.insert(storage.schema.ticketActivityLog).values({
+    await db.insert(ticketActivityLog).values({
       ticketId: ticket.id,
       ticketNumber: ticket.ticketNumber,
       action: "created",
@@ -63,7 +64,7 @@ export async function logStatusChange(
       description = `Ticket reopened by ${user.name}`;
     }
 
-    await storage.db.insert(storage.schema.ticketActivityLog).values({
+    await db.insert(ticketActivityLog).values({
       ticketId: ticket.id,
       ticketNumber: ticket.ticketNumber,
       action,
@@ -106,7 +107,7 @@ export async function logAssigneeChange(
       description = `Unassigned from ${oldAssignee.name} by ${user.name}`;
     }
 
-    await storage.db.insert(storage.schema.ticketActivityLog).values({
+    await db.insert(ticketActivityLog).values({
       ticketId: ticket.id,
       ticketNumber: ticket.ticketNumber,
       action,
@@ -139,7 +140,7 @@ export async function logPriorityChange(
   user: User
 ): Promise<void> {
   try {
-    await storage.db.insert(storage.schema.ticketActivityLog).values({
+    await db.insert(ticketActivityLog).values({
       ticketId: ticket.id,
       ticketNumber: ticket.ticketNumber,
       action: "priority_changed",
@@ -168,7 +169,7 @@ export async function logDepartmentChange(
   user: User
 ): Promise<void> {
   try {
-    await storage.db.insert(storage.schema.ticketActivityLog).values({
+    await db.insert(ticketActivityLog).values({
       ticketId: ticket.id,
       ticketNumber: ticket.ticketNumber,
       action: "department_changed",
@@ -201,7 +202,7 @@ export async function logCommentAdded(
       ? comment.body.substring(0, 100) + "..."
       : comment.body;
 
-    await storage.db.insert(storage.schema.ticketActivityLog).values({
+    await db.insert(ticketActivityLog).values({
       ticketId: ticket.id,
       ticketNumber: ticket.ticketNumber,
       action: "comment_added",
@@ -244,7 +245,7 @@ export async function logTagsUpdate(
       description = `Tags updated: added ${added.join(", ")}, removed ${removed.join(", ")}`;
     }
 
-    await storage.db.insert(storage.schema.ticketActivityLog).values({
+    await db.insert(ticketActivityLog).values({
       ticketId: ticket.id,
       ticketNumber: ticket.ticketNumber,
       action: "tags_updated",
@@ -279,7 +280,7 @@ export async function logFieldUpdate(
   description?: string
 ): Promise<void> {
   try {
-    await storage.db.insert(storage.schema.ticketActivityLog).values({
+    await db.insert(ticketActivityLog).values({
       ticketId: ticket.id,
       ticketNumber: ticket.ticketNumber,
       action: "field_updated",
@@ -300,14 +301,18 @@ export async function logFieldUpdate(
 
 /**
  * Get activity log for a ticket
+ * @param ticketIdOrNumber - Can be either ticket UUID or ticket number (e.g., "SS00020")
  */
-export async function getTicketActivity(ticketId: string): Promise<TicketActivityLog[]> {
+export async function getTicketActivity(ticketIdOrNumber: string): Promise<TicketActivityLog[]> {
   try {
-    const activities = await storage.db
+    const activities = await db
       .select()
-      .from(storage.schema.ticketActivityLog)
-      .where(eq(storage.schema.ticketActivityLog.ticketId, ticketId))
-      .orderBy(desc(storage.schema.ticketActivityLog.createdAt));
+      .from(ticketActivityLog)
+      .where(
+        // Support both UUID ticketId and ticketNumber
+        sql`${ticketActivityLog.ticketId} = ${ticketIdOrNumber} OR ${ticketActivityLog.ticketNumber} = ${ticketIdOrNumber}`
+      )
+      .orderBy(desc(ticketActivityLog.createdAt));
 
     return activities;
   } catch (error) {

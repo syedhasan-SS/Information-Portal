@@ -329,7 +329,16 @@ export class DatabaseStorage implements IStorage {
   }
 
   async getTicketById(id: string): Promise<Ticket | undefined> {
-    const results = await db.select().from(tickets).where(eq(tickets.id, id)).limit(1);
+    // Support both UUID and ticket number (e.g., "SS00020")
+    console.log(`[Storage] Looking up ticket by id: "${id}"`);
+    const results = await db
+      .select()
+      .from(tickets)
+      .where(
+        sql`${tickets.id} = ${id} OR ${tickets.ticketNumber} = ${id}`
+      )
+      .limit(1);
+    console.log(`[Storage] Found ticket:`, results[0] ? `YES (${results[0].ticketNumber})` : 'NO');
     return results[0];
   }
 
@@ -544,10 +553,13 @@ export class DatabaseStorage implements IStorage {
   }
 
   async updateTicket(id: string, updates: Partial<InsertTicket>): Promise<Ticket | undefined> {
+    // Support both UUID and ticket number (e.g., "SS00020")
     const results = await db
       .update(tickets)
       .set({ ...updates, updatedAt: new Date() })
-      .where(eq(tickets.id, id))
+      .where(
+        sql`${tickets.id} = ${id} OR ${tickets.ticketNumber} = ${id}`
+      )
       .returning();
     return results[0];
   }
