@@ -717,6 +717,12 @@ export default function MyTicketsPage() {
     t.status !== "Closed"
   ) || [];
 
+  // Debug logging
+  console.log('[My Tickets Debug] User ID:', user?.id);
+  console.log('[My Tickets Debug] Total tickets:', tickets?.length);
+  console.log('[My Tickets Debug] Assigned tickets count:', assignedTickets.length);
+  console.log('[My Tickets Debug] Assigned tickets:', assignedTickets.map(t => ({ number: t.ticketNumber, assigneeId: t.assigneeId, status: t.status })));
+
   // Solved tickets - tickets that user created OR was assigned to
   const solvedTickets = tickets?.filter((t) =>
     (t.createdById === user?.id || t.assigneeId === user?.id) &&
