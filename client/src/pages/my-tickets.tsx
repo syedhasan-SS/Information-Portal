@@ -564,11 +564,15 @@ export default function MyTicketsPage() {
   // Bulk transfer mutation
   const bulkTransferMutation = useMutation({
     mutationFn: async ({ ticketIds, assigneeId }: { ticketIds: string[], assigneeId: string }) => {
+      const userEmail = localStorage.getItem("userEmail");
       const results = await Promise.all(
         ticketIds.map(async (ticketId) => {
           const res = await fetch(`/api/tickets/${ticketId}`, {
             method: "PATCH",
-            headers: { "Content-Type": "application/json" },
+            headers: {
+              "Content-Type": "application/json",
+              ...(userEmail ? { "x-user-email": userEmail } : {}),
+            },
             body: JSON.stringify({
               assigneeId,
               status: "Open", // Set to Open when assigning
@@ -598,11 +602,15 @@ export default function MyTicketsPage() {
   // Bulk comment mutation
   const bulkCommentMutation = useMutation({
     mutationFn: async ({ ticketIds, comment }: { ticketIds: string[], comment: string }) => {
+      const userEmail = localStorage.getItem("userEmail");
       const results = await Promise.all(
         ticketIds.map(async (ticketId) => {
           const res = await fetch("/api/comments", {
             method: "POST",
-            headers: { "Content-Type": "application/json" },
+            headers: {
+              "Content-Type": "application/json",
+              ...(userEmail ? { "x-user-email": userEmail } : {}),
+            },
             body: JSON.stringify({
               ticketId,
               userId: user?.id,
@@ -636,6 +644,7 @@ export default function MyTicketsPage() {
     mutationFn: async (ticketIds: string[]) => {
       // Get current ticket data to check statuses
       const ticketsToSolve = tickets?.filter(t => ticketIds.includes(t.id)) || [];
+      const userEmail = localStorage.getItem("userEmail");
 
       const results = await Promise.all(
         ticketsToSolve.map(async (ticket) => {
@@ -645,7 +654,10 @@ export default function MyTicketsPage() {
               // First update to Open
               const openRes = await fetch(`/api/tickets/${ticket.id}`, {
                 method: "PATCH",
-                headers: { "Content-Type": "application/json" },
+                headers: {
+                  "Content-Type": "application/json",
+                  ...(userEmail ? { "x-user-email": userEmail } : {}),
+                },
                 body: JSON.stringify({ status: "Open" }),
               });
               if (!openRes.ok) {
@@ -658,7 +670,10 @@ export default function MyTicketsPage() {
             // Then update to Solved (works for all status types now)
             const res = await fetch(`/api/tickets/${ticket.id}`, {
               method: "PATCH",
-              headers: { "Content-Type": "application/json" },
+              headers: {
+                "Content-Type": "application/json",
+                ...(userEmail ? { "x-user-email": userEmail } : {}),
+              },
               body: JSON.stringify({
                 status: "Solved",
               }),
