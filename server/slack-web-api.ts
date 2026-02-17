@@ -140,19 +140,11 @@ export async function sendSlackTicketCreated(
     }
 
     blocks.push({
-      type: 'actions',
-      elements: [
-        {
-          type: 'button',
-          text: {
-            type: 'plain_text',
-            text: '🔗 View Ticket',
-            emoji: true,
-          },
-          url: ticketUrl,
-          style: 'primary',
-        },
-      ],
+      type: 'section',
+      text: {
+        type: 'mrkdwn',
+        text: `🔗 *<${ticketUrl}|View Ticket in Portal>*`,
+      },
     });
 
     await client.chat.postMessage({
@@ -221,19 +213,11 @@ export async function sendSlackTicketAssigned(
         },
       },
       {
-        type: 'actions',
-        elements: [
-          {
-            type: 'button',
-            text: {
-              type: 'plain_text',
-              text: '🔗 View Ticket',
-              emoji: true,
-            },
-            url: ticketUrl,
-            style: 'primary',
-          },
-        ],
+        type: 'section',
+        text: {
+          type: 'mrkdwn',
+          text: `🔗 *<${ticketUrl}|View Ticket in Portal>*`,
+        },
       },
     ];
 
@@ -309,19 +293,11 @@ export async function sendSlackCommentMention(
         },
       },
       {
-        type: 'actions',
-        elements: [
-          {
-            type: 'button',
-            text: {
-              type: 'plain_text',
-              text: '🔗 View Comment',
-              emoji: true,
-            },
-            url: ticketUrl,
-            style: 'primary',
-          },
-        ],
+        type: 'section',
+        text: {
+          type: 'mrkdwn',
+          text: `🔗 *<${ticketUrl}|View Comment in Portal>*`,
+        },
       },
     ];
 
@@ -382,18 +358,11 @@ export async function sendSlackTicketResolved(
         },
       },
       {
-        type: 'actions',
-        elements: [
-          {
-            type: 'button',
-            text: {
-              type: 'plain_text',
-              text: '🔗 View Ticket',
-              emoji: true,
-            },
-            url: ticketUrl,
-          },
-        ],
+        type: 'section',
+        text: {
+          type: 'mrkdwn',
+          text: `🔗 *<${ticketUrl}|View Ticket in Portal>*`,
+        },
       },
     ];
 
@@ -462,19 +431,11 @@ export async function sendSlackUrgentAlert(
         },
       },
       {
-        type: 'actions',
-        elements: [
-          {
-            type: 'button',
-            text: {
-              type: 'plain_text',
-              text: '🔗 View Urgent Ticket',
-              emoji: true,
-            },
-            url: ticketUrl,
-            style: 'danger',
-          },
-        ],
+        type: 'section',
+        text: {
+          type: 'mrkdwn',
+          text: `🔗 *<${ticketUrl}|View Urgent Ticket in Portal>*`,
+        },
       },
     ];
 
