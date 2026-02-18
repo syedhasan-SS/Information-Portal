@@ -6,6 +6,7 @@ import { Input } from "@/components/ui/input";
 import { PasswordInput } from "@/components/ui/password-input";
 import { useToast } from "@/hooks/use-toast";
 import { AlertCircle } from "lucide-react";
+import { Link } from "wouter";
 
 export default function LoginPage() {
   const { toast } = useToast();
@@ -127,13 +128,14 @@ export default function LoginPage() {
           </form>
 
           <div className="mt-6 text-center">
-            <a
-              href="#"
-              className="text-sm text-muted-foreground hover:text-foreground"
-              data-testid="link-forgot-password"
-            >
-              Forgot your password?
-            </a>
+            <Link href="/forgot-password">
+              <a
+                className="text-sm text-muted-foreground hover:text-foreground"
+                data-testid="link-forgot-password"
+              >
+                Forgot your password?
+              </a>
+            </Link>
           </div>
         </Card>
 

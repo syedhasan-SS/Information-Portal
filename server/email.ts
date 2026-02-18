@@ -188,3 +188,142 @@ This is an automated message from FLOW. Please do not reply to this email.
     return { success: false, error: error instanceof Error ? error.message : 'Unknown error' };
   }
 }
+
+export async function sendPasswordResetEmail(user: User, resetToken: string) {
+  try {
+    const transporter = createTransporter();
+
+    const resetUrl = `${process.env.APP_URL || 'http://localhost:5000'}/reset-password?token=${resetToken}`;
+
+    const mailOptions = {
+      from: process.env.SMTP_FROM || '"FLOW Support" <noreply@flow.com>',
+      to: user.email,
+      subject: 'Reset Your FLOW Password',
+      html: `
+        <!DOCTYPE html>
+        <html>
+        <head>
+          <style>
+            body {
+              font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+              line-height: 1.6;
+              color: #333;
+              max-width: 600px;
+              margin: 0 auto;
+              padding: 20px;
+            }
+            .header {
+              background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+              color: white;
+              padding: 30px;
+              border-radius: 8px 8px 0 0;
+              text-align: center;
+            }
+            .content {
+              background: #ffffff;
+              padding: 30px;
+              border: 1px solid #e0e0e0;
+              border-top: none;
+            }
+            .alert-box {
+              background: #fff3cd;
+              border-left: 4px solid #ffc107;
+              padding: 15px;
+              margin: 20px 0;
+            }
+            .button {
+              display: inline-block;
+              padding: 12px 30px;
+              background: #667eea;
+              color: white;
+              text-decoration: none;
+              border-radius: 6px;
+              margin: 20px 0;
+            }
+            .footer {
+              background: #f8f9fa;
+              padding: 20px;
+              border-radius: 0 0 8px 8px;
+              text-align: center;
+              font-size: 12px;
+              color: #666;
+            }
+          </style>
+        </head>
+        <body>
+          <div class="header">
+            <h1>🔐 Password Reset Request</h1>
+            <p>FLOW - Fleek Complaint Management Portal</p>
+          </div>
+
+          <div class="content">
+            <h2>Hello ${user.name},</h2>
+
+            <p>We received a request to reset your password for your FLOW account. Click the button below to create a new password:</p>
+
+            <div style="text-align: center;">
+              <a href="${resetUrl}" class="button">Reset My Password</a>
+            </div>
+
+            <p>Or copy and paste this link into your browser:</p>
+            <p style="word-break: break-all; background: #f8f9fa; padding: 10px; border-radius: 4px; font-size: 12px;">
+              ${resetUrl}
+            </p>
+
+            <div class="alert-box">
+              <p><strong>⏰ This link will expire in 1 hour.</strong></p>
+              <p style="margin-bottom: 0;">For security reasons, password reset links are only valid for 1 hour after being requested.</p>
+            </div>
+
+            <p><strong>⚠️ Didn't request this?</strong><br>
+            If you didn't request a password reset, you can safely ignore this email. Your password will remain unchanged.</p>
+
+            <p>If you continue to receive these emails without requesting them, please contact your administrator immediately.</p>
+          </div>
+
+          <div class="footer">
+            <p>This is an automated message from FLOW. Please do not reply to this email.</p>
+            <p>&copy; ${new Date().getFullYear()} FLOW - Fleek Complaint Management Portal</p>
+          </div>
+        </body>
+        </html>
+      `,
+      text: `
+Password Reset Request - FLOW
+
+Hello ${user.name},
+
+We received a request to reset your password for your FLOW account.
+
+Reset your password by visiting this link:
+${resetUrl}
+
+This link will expire in 1 hour for security reasons.
+
+Didn't request this?
+If you didn't request a password reset, you can safely ignore this email. Your password will remain unchanged.
+
+If you continue to receive these emails without requesting them, please contact your administrator immediately.
+
+---
+This is an automated message from FLOW. Please do not reply to this email.
+© ${new Date().getFullYear()} FLOW - Fleek Complaint Management Portal
+      `,
+    };
+
+    const info = await transporter.sendMail(mailOptions);
+
+    // In development, log the email content
+    if (process.env.NODE_ENV !== 'production') {
+      console.log('\n📧 Password reset email sent to:', user.email);
+      console.log('Reset URL:', resetUrl);
+      console.log('Preview URL:', nodemailer.getTestMessageUrl(info) || 'N/A');
+      console.log('Email content logged for development\n');
+    }
+
+    return { success: true, messageId: info.messageId };
+  } catch (error) {
+    console.error('Failed to send password reset email:', error);
+    return { success: false, error: error instanceof Error ? error.message : 'Unknown error' };
+  }
+}
