@@ -75,12 +75,13 @@ function getPriorityEmoji(priority?: string): string {
 }
 
 /**
- * Send ticket created notification
+ * Send ticket created notification with @mentions for assignee and manager
  */
 export async function sendSlackTicketCreated(
   ticket: Ticket,
   creator?: User,
-  assignee?: User
+  assignee?: User,
+  manager?: User
 ): Promise<boolean> {
   const client = getSlackClient();
   if (!client) return false;
@@ -129,11 +130,16 @@ export async function sendSlackTicketCreated(
     ];
 
     if (assignee) {
+      // Build @mention string for assignee
+      const assigneeMention = assignee.slackUserId
+        ? `<@${assignee.slackUserId}>`
+        : assignee.email;
+
       blocks.push({
         type: 'section',
         text: {
           type: 'mrkdwn',
-          text: `*Assigned to:* ${assignee.email}`,
+          text: `*Assigned to:* ${assigneeMention}`,
         },
       });
     } else {
@@ -143,6 +149,19 @@ export async function sendSlackTicketCreated(
           type: 'mrkdwn',
           text: '*Status:* Unassigned - Waiting for assignment',
         },
+      });
+    }
+
+    // Add manager notification if available
+    if (manager && manager.slackUserId) {
+      blocks.push({
+        type: 'context',
+        elements: [
+          {
+            type: 'mrkdwn',
+            text: `👔 *Manager notified:* <@${manager.slackUserId}>`,
+          },
+        ],
       });
     }
 
@@ -158,6 +177,7 @@ export async function sendSlackTicketCreated(
       channel: getChannel(ticket.department),
       text: `New ticket created: ${ticket.ticketNumber} - ${ticket.subject}`,
       blocks,
+      link_names: true, // Enable @mentions to trigger notifications
     });
 
     console.log(`[Slack] Sent ticket created notification: ${ticket.ticketNumber}`);
@@ -169,12 +189,13 @@ export async function sendSlackTicketCreated(
 }
 
 /**
- * Send ticket assigned notification
+ * Send ticket assigned notification with @mentions for assignee and manager
  */
 export async function sendSlackTicketAssigned(
   ticket: Ticket,
   assignee: User,
-  assigner?: User
+  assigner?: User,
+  manager?: User
 ): Promise<boolean> {
   const client = getSlackClient();
   if (!client) return false;
@@ -182,6 +203,13 @@ export async function sendSlackTicketAssigned(
   try {
     const ticketUrl = getTicketUrl(ticket.id);
     const priorityEmoji = getPriorityEmoji(ticket.priorityTier);
+
+    // Build @mention string for assignee
+    const assigneeMention = assignee.slackUserId
+      ? `<@${assignee.slackUserId}>`
+      : assignee.email;
+
+    const assignerText = assigner ? assigner.email : 'System';
 
     const blocks: any[] = [
       {
@@ -209,7 +237,7 @@ export async function sendSlackTicketAssigned(
         type: 'section',
         text: {
           type: 'mrkdwn',
-          text: `*${assignee.email}* has been assigned to this ticket by ${assigner ? assigner.email : 'System'}`,
+          text: `*${assigneeMention}* has been assigned to this ticket by ${assignerText}`,
         },
       },
       {
@@ -219,19 +247,34 @@ export async function sendSlackTicketAssigned(
           text: `*Subject:* ${ticket.subject}\n*Department:* ${ticket.department || 'General'}`,
         },
       },
-      {
-        type: 'section',
-        text: {
-          type: 'mrkdwn',
-          text: `🔗 <${ticketUrl}|View Ticket in Portal>`,
-        },
-      },
     ];
+
+    // Add manager notification if available
+    if (manager && manager.slackUserId) {
+      blocks.push({
+        type: 'context',
+        elements: [
+          {
+            type: 'mrkdwn',
+            text: `👔 *Manager notified:* <@${manager.slackUserId}>`,
+          },
+        ],
+      });
+    }
+
+    blocks.push({
+      type: 'section',
+      text: {
+        type: 'mrkdwn',
+        text: `🔗 <${ticketUrl}|View Ticket in Portal>`,
+      },
+    });
 
     await client.chat.postMessage({
       channel: getChannel(ticket.department),
       text: `Ticket ${ticket.ticketNumber} assigned to ${assignee.email}`,
       blocks,
+      link_names: true, // Enable @mentions to trigger notifications
     });
 
     console.log(`[Slack] Sent ticket assigned notification: ${ticket.ticketNumber}`);

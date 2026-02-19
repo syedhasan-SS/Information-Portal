@@ -46,9 +46,10 @@ export async function notifyTicketCreated(ticket: Ticket, creator: User | undefi
     await Promise.all(notificationPromises);
     console.log(`[Notifications] Created ${notificationPromises.length} notifications for new ticket ${ticket.ticketNumber}`);
 
-    // Send Slack notification
+    // Send Slack notification with assignee and manager
     const assignee = ticket.assigneeId ? await storage.getUserById(ticket.assigneeId) : undefined;
-    sendSlackTicketCreated(ticket, creator, assignee).catch(err => {
+    const manager = assignee?.managerId ? await storage.getUserById(assignee.managerId) : undefined;
+    sendSlackTicketCreated(ticket, creator, assignee, manager).catch(err => {
       console.error('[Slack] Failed to send ticket created notification:', err);
     });
 
@@ -94,8 +95,9 @@ export async function notifyTicketAssigned(ticket: Ticket, assignee: User, actor
 
     console.log(`[Notifications] Notified user ${assignee.name} about ticket assignment: ${ticket.ticketNumber}`);
 
-    // Send Slack notification
-    sendSlackTicketAssigned(ticket, assignee, actor).catch(err => {
+    // Send Slack notification with manager
+    const manager = assignee.managerId ? await storage.getUserById(assignee.managerId) : undefined;
+    sendSlackTicketAssigned(ticket, assignee, actor, manager).catch(err => {
       console.error('[Slack] Failed to send ticket assigned notification:', err);
     });
   } catch (error) {
