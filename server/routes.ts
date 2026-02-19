@@ -1544,6 +1544,25 @@ export async function registerRoutes(
     }
   });
 
+  // Debug endpoint to check environment variables (REMOVE IN PRODUCTION)
+  app.get("/api/debug/env-check", async (_req, res) => {
+    res.json({
+      slack: {
+        hasBotToken: !!process.env.SLACK_BOT_TOKEN,
+        botTokenPrefix: process.env.SLACK_BOT_TOKEN?.substring(0, 10) || 'NOT_SET',
+        hasChannelId: !!process.env.SLACK_CHANNEL_ID,
+        channelId: process.env.SLACK_CHANNEL_ID || 'NOT_SET',
+        hasFinanceChannel: !!process.env.SLACK_CHANNEL_FINANCE,
+        financeChannel: process.env.SLACK_CHANNEL_FINANCE || 'NOT_SET',
+      },
+      database: {
+        hasUrl: !!process.env.DATABASE_URL,
+        urlPrefix: process.env.DATABASE_URL?.substring(0, 20) || 'NOT_SET',
+      },
+      timestamp: new Date().toISOString(),
+    });
+  });
+
   // Get user's department access information
   app.get("/api/user/department-access", async (req, res) => {
     try {
