@@ -161,7 +161,7 @@ export default function RoutingConfigPage() {
 
   // Get agents for selected department
   const departmentAgents = users?.filter(
-    u => u.isActive && u.role === "Agent" && u.department === formData.targetDepartment
+    u => u.isActive && u.department === formData.targetDepartment
   ) || [];
 
   // Create routing rule
@@ -872,7 +872,7 @@ export default function RoutingConfigPage() {
                         </div>
                       ) : (() => {
                         const bulkDepartmentAgents = users?.filter(
-                          u => u.isActive && u.role === "Agent" && u.department === bulkConfig.targetDepartment
+                          u => u.isActive && u.department === bulkConfig.targetDepartment
                         ) || [];
                         return bulkDepartmentAgents.length === 0 ? (
                           <div className="rounded-lg border border-destructive/50 bg-destructive/10 p-3">
