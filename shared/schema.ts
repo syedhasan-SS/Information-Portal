@@ -84,6 +84,9 @@ export const tickets = pgTable("tickets", {
   zendeskLinked: boolean("zendesk_linked").notNull().default(false),
   zendeskTicketId: text("zendesk_ticket_id"),
 
+  // Slack thread tracking - stores the ts of the first Slack message so all updates reply in-thread
+  slackMessageTs: text("slack_message_ts"),
+
   // CONFIGURATION SNAPSHOTS - Immutable state captured at creation
   categorySnapshot: jsonb("category_snapshot").$type<{
     categoryId: string;

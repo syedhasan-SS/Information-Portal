@@ -13,19 +13,14 @@ import {
  */
 
 /**
- * Create notification when a new ticket is created
+ * Create notification when a new ticket is created.
+ * The Slack ts is saved on the ticket so all future updates reply in-thread.
  */
 export async function notifyTicketCreated(ticket: Ticket, creator: User | undefined) {
   try {
-    // Notify team members in the owner team/department (optimized query)
     const teamMembers = await storage.getUsersByDepartment(ticket.ownerTeam, { isActive: true });
+    const relevantUsers = teamMembers.filter((user) => user.id !== ticket.createdById);
 
-    // Filter out the creator
-    const relevantUsers = teamMembers.filter(
-      (user) => user.id !== ticket.createdById
-    );
-
-    // Create notifications for team members
     const notificationPromises = relevantUsers.map((user) =>
       storage.createNotification({
         userId: user.id,
@@ -46,16 +41,18 @@ export async function notifyTicketCreated(ticket: Ticket, creator: User | undefi
     await Promise.all(notificationPromises);
     console.log(`[Notifications] Created ${notificationPromises.length} notifications for new ticket ${ticket.ticketNumber}`);
 
-    // Send Slack notification with assignee and manager
+    // Send Slack — save the returned ts so all future updates post in-thread
     const assignee = ticket.assigneeId ? await storage.getUserById(ticket.assigneeId) : undefined;
-    const manager = assignee?.managerId ? await storage.getUserById(assignee.managerId) : undefined;
-    sendSlackTicketCreated(ticket, creator, assignee, manager).catch(err => {
-      console.error('[Slack] Failed to send ticket created notification:', err);
-    });
+    const manager  = assignee?.managerId ? await storage.getUserById(assignee.managerId) : undefined;
 
-    // Send urgent alert if priority is urgent
+    const slackTs = await sendSlackTicketCreated(ticket, creator, assignee, manager);
+    if (slackTs) {
+      await storage.updateTicket(ticket.id, { slackMessageTs: slackTs } as any);
+      console.log(`[Slack] Stored thread ts for ${ticket.ticketNumber}: ${slackTs}`);
+    }
+
     if (ticket.priorityTier?.toLowerCase() === 'urgent') {
-      sendSlackUrgentAlert(ticket, creator).catch(err => {
+      sendSlackUrgentAlert(ticket, creator, slackTs).catch(err => {
         console.error('[Slack] Failed to send urgent ticket alert:', err);
       });
     }
@@ -65,13 +62,12 @@ export async function notifyTicketCreated(ticket: Ticket, creator: User | undefi
 }
 
 /**
- * Create notification when a ticket is assigned
+ * Create notification when a ticket is assigned.
+ * Replies in the original thread if slackMessageTs exists on the ticket.
  */
 export async function notifyTicketAssigned(ticket: Ticket, assignee: User, actor: User | undefined) {
   try {
     if (!ticket.assigneeId) return;
-
-    // Only notify active users
     if (!assignee.isActive) {
       console.log(`[Notifications] Skipping notification - assignee ${assignee.name} is inactive`);
       return;
@@ -95,9 +91,10 @@ export async function notifyTicketAssigned(ticket: Ticket, assignee: User, actor
 
     console.log(`[Notifications] Notified user ${assignee.name} about ticket assignment: ${ticket.ticketNumber}`);
 
-    // Send Slack notification with manager
-    const manager = assignee.managerId ? await storage.getUserById(assignee.managerId) : undefined;
-    sendSlackTicketAssigned(ticket, assignee, actor, manager).catch(err => {
+    const manager    = assignee.managerId ? await storage.getUserById(assignee.managerId) : undefined;
+    const threadTs   = (ticket as any).slackMessageTs || null;
+
+    sendSlackTicketAssigned(ticket, assignee, actor, manager, threadTs).catch(err => {
       console.error('[Slack] Failed to send ticket assigned notification:', err);
     });
   } catch (error) {
@@ -106,35 +103,25 @@ export async function notifyTicketAssigned(ticket: Ticket, assignee: User, actor
 }
 
 /**
- * Create notification when a ticket is solved
+ * Create notification when a ticket is solved.
+ * Replies in the original thread if slackMessageTs exists on the ticket.
  */
 export async function notifyTicketSolved(ticket: Ticket, solver: User | undefined) {
   try {
-    // Use Set to deduplicate user IDs (if creator == assignee)
     const usersToNotify = new Set<string>();
 
-    // Add ticket creator (if not the solver)
     if (ticket.createdById && ticket.createdById !== solver?.id) {
       usersToNotify.add(ticket.createdById);
     }
-
-    // Add ticket assignee (if not the solver and not already added)
     if (ticket.assigneeId && ticket.assigneeId !== solver?.id) {
       usersToNotify.add(ticket.assigneeId);
     }
 
-    // Create notifications for all unique users
     const notificationPromises = Array.from(usersToNotify).map(async (userId) => {
       const user = await storage.getUserById(userId);
-
-      // Only notify active users
-      if (!user?.isActive) {
-        console.log(`[Notifications] Skipping notification - user ${userId} is inactive`);
-        return;
-      }
+      if (!user?.isActive) return;
 
       const isCreator = userId === ticket.createdById;
-
       await storage.createNotification({
         userId,
         type: "ticket_solved",
@@ -151,15 +138,13 @@ export async function notifyTicketSolved(ticket: Ticket, solver: User | undefine
         },
         isRead: false,
       });
-
-      console.log(`[Notifications] Notified ${isCreator ? 'creator' : 'assignee'} about ticket resolution: ${ticket.ticketNumber}`);
     });
 
     await Promise.all(notificationPromises);
 
-    // Send Slack notification
     if (solver) {
-      sendSlackTicketResolved(ticket, solver).catch(err => {
+      const threadTs = (ticket as any).slackMessageTs || null;
+      sendSlackTicketResolved(ticket, solver, threadTs).catch(err => {
         console.error('[Slack] Failed to send ticket resolved notification:', err);
       });
     }
@@ -169,7 +154,7 @@ export async function notifyTicketSolved(ticket: Ticket, solver: User | undefine
 }
 
 /**
- * Create notification when a comment is added to a ticket
+ * Create notification when a comment is added to a ticket.
  */
 export async function notifyCommentAdded(
   comment: Comment,
@@ -179,23 +164,15 @@ export async function notifyCommentAdded(
   try {
     const usersToNotify = new Set<string>();
 
-    // Notify ticket creator (only if active)
     if (ticket.createdById && ticket.createdById !== commenter?.id) {
       const creator = await storage.getUserById(ticket.createdById);
-      if (creator?.isActive) {
-        usersToNotify.add(ticket.createdById);
-      }
+      if (creator?.isActive) usersToNotify.add(ticket.createdById);
     }
-
-    // Notify ticket assignee (only if active)
     if (ticket.assigneeId && ticket.assigneeId !== commenter?.id) {
       const assignee = await storage.getUserById(ticket.assigneeId);
-      if (assignee?.isActive) {
-        usersToNotify.add(ticket.assigneeId);
-      }
+      if (assignee?.isActive) usersToNotify.add(ticket.assigneeId);
     }
 
-    // Create notifications
     const notificationPromises = Array.from(usersToNotify).map((userId) =>
       storage.createNotification({
         userId,
@@ -222,8 +199,8 @@ export async function notifyCommentAdded(
 }
 
 /**
- * Create notifications for mentioned users in a comment
- * Supports @username or @email mentions
+ * Create notifications for @mentioned users in a comment.
+ * Replies in the original thread if slackMessageTs exists on the ticket.
  */
 export async function notifyMentions(
   comment: Comment,
@@ -231,53 +208,32 @@ export async function notifyMentions(
   commenter: User | undefined
 ) {
   try {
-    // Extract mentions from comment body using regex
-    // Matches @email.address or @username (no spaces)
     const mentionRegex = /@([\w.+-]+@[\w.-]+\.\w+|[\w.+-]+)/g;
     const mentions = comment.body.match(mentionRegex);
-
     if (!mentions || mentions.length === 0) return;
 
-    // Get all users to check for mentions
     const allUsers = await storage.getUsers();
-
-    // Track mentioned user IDs to deduplicate (same user mentioned multiple times)
     const mentionedUserIds = new Set<string>();
 
-    // Find users who were mentioned using EXACT matching
     mentions.forEach((mention) => {
-      const cleanMention = mention.substring(1).toLowerCase(); // Remove @ and lowercase
-
+      const cleanMention = mention.substring(1).toLowerCase();
       const matchedUser = allUsers.find((user) => {
-        // Skip commenter and inactive users
         if (user.id === commenter?.id || !user.isActive) return false;
-
-        // Exact match on email or name (case-insensitive)
         return (
           user.email.toLowerCase() === cleanMention ||
           user.name.toLowerCase() === cleanMention
         );
       });
-
-      if (matchedUser) {
-        mentionedUserIds.add(matchedUser.id);
-      }
+      if (matchedUser) mentionedUserIds.add(matchedUser.id);
     });
 
-    // Get user objects for notification
     const mentionedUsers = allUsers.filter(user => mentionedUserIds.has(user.id));
-
-    // Find managers of mentioned users
     const managerIds = new Set<string>();
     mentionedUsers.forEach(user => {
-      if (user.managerId && user.managerId !== commenter?.id) {
-        managerIds.add(user.managerId);
-      }
+      if (user.managerId && user.managerId !== commenter?.id) managerIds.add(user.managerId);
     });
-
     const managers = allUsers.filter(user => managerIds.has(user.id) && user.isActive);
 
-    // Create notifications for mentioned users
     const notificationPromises = mentionedUsers.map((user) =>
       storage.createNotification({
         userId: user.id,
@@ -296,7 +252,6 @@ export async function notifyMentions(
       })
     );
 
-    // Create notifications for managers
     const managerNotificationPromises = managers.map((manager) =>
       storage.createNotification({
         userId: manager.id,
@@ -317,11 +272,11 @@ export async function notifyMentions(
     );
 
     await Promise.all([...notificationPromises, ...managerNotificationPromises]);
-    console.log(`[Notifications] Created ${notificationPromises.length} mention notifications and ${managerNotificationPromises.length} manager notifications for ticket ${ticket.ticketNumber}`);
+    console.log(`[Notifications] Created ${notificationPromises.length} mention + ${managerNotificationPromises.length} manager notifications for ${ticket.ticketNumber}`);
 
-    // Send Slack notification for mentions (including managers)
     if (mentionedUsers.length > 0 && commenter) {
-      sendSlackCommentMention(ticket, comment, commenter, mentionedUsers, managers).catch(err => {
+      const threadTs = (ticket as any).slackMessageTs || null;
+      sendSlackCommentMention(ticket, comment, commenter, mentionedUsers, managers, threadTs).catch(err => {
         console.error('[Slack] Failed to send comment mention notification:', err);
       });
     }
@@ -332,24 +287,17 @@ export async function notifyMentions(
 
 /**
  * Get current user from request headers (x-user-email)
- * SECURITY: Never trust client-provided user IDs from request body
  */
 export async function getCurrentUser(req: any): Promise<User | undefined> {
-  // Get user email from auth header (set by frontend after login)
   const email = req.headers["x-user-email"] as string;
-
   if (!email) {
     console.warn("[getCurrentUser] No x-user-email header found in request");
     return undefined;
   }
-
-  // Look up user by email from auth header
   const user = await storage.getUserByEmail(email);
-
   if (!user) {
     console.warn(`[getCurrentUser] No user found for email: ${email}`);
     return undefined;
   }
-
   return user;
 }
