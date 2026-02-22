@@ -564,6 +564,17 @@ export class DatabaseStorage implements IStorage {
     return results[0];
   }
 
+  async deleteTicket(id: string): Promise<Ticket | undefined> {
+    // Support both UUID and ticket number (e.g., "SS00020")
+    const results = await db
+      .delete(tickets)
+      .where(
+        sql`${tickets.id} = ${id} OR ${tickets.ticketNumber} = ${id}`
+      )
+      .returning();
+    return results[0];
+  }
+
   // Comments
   async getCommentsByTicketId(ticketId: string): Promise<Comment[]> {
     return await db.select().from(comments).where(eq(comments.ticketId, ticketId)).orderBy(comments.createdAt);

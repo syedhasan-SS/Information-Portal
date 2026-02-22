@@ -39,6 +39,7 @@ import {
   Save,
   Plus,
   X,
+  Trash2,
 } from "lucide-react";
 import type { Ticket, Comment, Category, User as UserType } from "@shared/schema";
 
@@ -160,12 +161,13 @@ function getCategoryDisplay(ticket: Ticket, categoryMap: Record<string, Category
 export default function TicketDetailPage() {
   const [location, setLocation] = useLocation();
   const { id } = useParams<{ id: string }>();
-  const { user } = useAuth();
+  const { user, hasPermission } = useAuth();
   const [newComment, setNewComment] = useState("");
   const [activeTab, setActiveTab] = useState<"comments" | "activity">("comments");
   const [pendingChanges, setPendingChanges] = useState<Partial<Ticket>>({});
   const [showConfirmDialog, setShowConfirmDialog] = useState(false);
   const [newTag, setNewTag] = useState("");
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
 
   // Get the referrer from query params
   const urlParams = new URLSearchParams(window.location.search);
@@ -302,6 +304,30 @@ export default function TicketDetailPage() {
     },
   });
 
+  const deleteTicketMutation = useMutation({
+    mutationFn: async () => {
+      const userEmail = localStorage.getItem("userEmail");
+      const res = await fetch(`/api/tickets/${id}`, {
+        method: "DELETE",
+        headers: {
+          ...(userEmail ? { "x-user-email": userEmail } : {}),
+        },
+      });
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({ error: "Unknown error" }));
+        throw new Error(err.error || "Failed to delete ticket");
+      }
+      return res.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["tickets"] });
+      setLocation(getBackPath());
+    },
+    onError: (error: Error) => {
+      alert("Failed to delete ticket: " + error.message);
+    },
+  });
+
   const categoryMap = categories?.reduce((acc, cat) => {
     acc[cat.id] = cat;
     return acc;
@@ -395,6 +421,18 @@ export default function TicketDetailPage() {
                 </p>
               </div>
             </div>
+            {hasPermission("delete:tickets") && (
+              <Button
+                variant="ghost"
+                size="sm"
+                className="text-destructive hover:text-destructive hover:bg-destructive/10"
+                onClick={() => setShowDeleteConfirm(true)}
+                data-testid="button-delete-ticket"
+              >
+                <Trash2 className="h-4 w-4 mr-1" />
+                Delete
+              </Button>
+            )}
           </div>
         </div>
       </header>
@@ -953,6 +991,48 @@ export default function TicketDetailPage() {
                 <>
                   <CheckCircle className="mr-2 h-4 w-4" />
                   Confirm & Save
+                </>
+              )}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Delete Ticket Confirmation Dialog */}
+      <Dialog open={showDeleteConfirm} onOpenChange={setShowDeleteConfirm}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2 text-destructive">
+              <Trash2 className="h-5 w-5" />
+              Delete Ticket
+            </DialogTitle>
+            <DialogDescription>
+              This action cannot be undone. The ticket and all its comments and
+              history will be permanently removed.
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button
+              variant="outline"
+              onClick={() => setShowDeleteConfirm(false)}
+              disabled={deleteTicketMutation.isPending}
+            >
+              Cancel
+            </Button>
+            <Button
+              variant="destructive"
+              onClick={() => deleteTicketMutation.mutate()}
+              disabled={deleteTicketMutation.isPending}
+            >
+              {deleteTicketMutation.isPending ? (
+                <>
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                  Deleting...
+                </>
+              ) : (
+                <>
+                  <Trash2 className="mr-2 h-4 w-4" />
+                  Delete Permanently
                 </>
               )}
             </Button>

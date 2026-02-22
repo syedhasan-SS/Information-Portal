@@ -1,0 +1,148 @@
+{
+  "name": "6. Pending Cases Report - Twice Daily Slack",
+  "nodes": [
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "cronExpression",
+              "expression": "0 7 * * 1-6"
+            },
+            {
+              "field": "cronExpression",
+              "expression": "0 13 * * 1-6"
+            }
+          ]
+        }
+      },
+      "name": "Schedule - 12PM & 6PM PKT (Mon-Sat)",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.1,
+      "position": [240, 300],
+      "notes": "PKT = UTC+5. 12:00 PM PKT = 07:00 UTC. 6:00 PM PKT = 13:00 UTC. Runs Mon-Sat."
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://bigquery.googleapis.com/bigquery/v2/projects/dogwood-baton-345622/queries",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "googleBigQueryOAuth2Api",
+        "sendBody": true,
+        "bodyContentType": "json",
+        "jsonBody": "={\n  \"query\": \"SELECT status, department, COUNT(*) as count, COUNT(CASE WHEN priority_tier IN ('Critical', 'High') THEN 1 END) as high_priority_count, COUNT(CASE WHEN sla_resolve_target IS NOT NULL AND sla_resolve_target < CURRENT_TIMESTAMP() AND status NOT IN ('Solved', 'Closed') THEN 1 END) as sla_breached_count FROM `dogwood-baton-345622.information_portal_analytics.tickets` WHERE status IN ('New', 'Open', 'Pending') GROUP BY status, department ORDER BY department, status\",\n  \"useLegacySql\": false\n}",
+        "options": {}
+      },
+      "name": "BigQuery - Get Pending Cases by Dept",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [460, 300]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://bigquery.googleapis.com/bigquery/v2/projects/dogwood-baton-345622/queries",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "googleBigQueryOAuth2Api",
+        "sendBody": true,
+        "bodyContentType": "json",
+        "jsonBody": "={\n  \"query\": \"SELECT COUNT(*) as total_pending, COUNT(CASE WHEN status = 'New' THEN 1 END) as new_count, COUNT(CASE WHEN status = 'Open' THEN 1 END) as open_count, COUNT(CASE WHEN status = 'Pending' THEN 1 END) as pending_count, COUNT(CASE WHEN priority_tier = 'Critical' AND status NOT IN ('Solved','Closed') THEN 1 END) as critical_count, COUNT(CASE WHEN priority_tier = 'High' AND status NOT IN ('Solved','Closed') THEN 1 END) as high_count, COUNT(CASE WHEN sla_resolve_target IS NOT NULL AND sla_resolve_target < CURRENT_TIMESTAMP() AND status NOT IN ('Solved', 'Closed') THEN 1 END) as total_sla_breached FROM `dogwood-baton-345622.information_portal_analytics.tickets` WHERE status IN ('New', 'Open', 'Pending')\",\n  \"useLegacySql\": false\n}",
+        "options": {}
+      },
+      "name": "BigQuery - Get Summary Totals",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [460, 500]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Parse BigQuery responses and build the Slack message\nconst deptData = $('BigQuery - Get Pending Cases by Dept').first().json;\nconst summaryData = $('BigQuery - Get Summary Totals').first().json;\n\n// Helper: parse BigQuery rows\nfunction parseRows(bqResponse) {\n  if (!bqResponse.rows || bqResponse.rows.length === 0) return [];\n  const fields = bqResponse.schema.fields.map(f => f.name);\n  return bqResponse.rows.map(row => {\n    const obj = {};\n    row.f.forEach((cell, i) => {\n      obj[fields[i]] = isNaN(cell.v) ? cell.v : Number(cell.v);\n    });\n    return obj;\n  });\n}\n\nconst deptRows = parseRows(deptData);\nconst summaryRows = parseRows(summaryData);\nconst summary = summaryRows[0] || {};\n\n// Get current time in PKT\nconst now = new Date();\nconst pktTime = new Date(now.getTime() + (5 * 60 * 60 * 1000));\nconst timeStr = pktTime.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: true });\nconst dateStr = pktTime.toLocaleDateString('en-US', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' });\nconst slot = pktTime.getUTCHours() >= 13 ? 'Evening' : 'Noon';\n\n// Group dept rows by department\nconst byDept = {};\ndeptRows.forEach(row => {\n  if (!byDept[row.department]) byDept[row.department] = [];\n  byDept[row.department].push(row);\n});\n\n// Department emojis\nconst deptEmoji = {\n  'Operations': '⚙️',\n  'Finance': '💰',\n  'Growth': '📈',\n  'Marketplace': '🛒',\n  'CX': '🎧',\n  'default': '📂'\n};\n\n// Build department breakdown\nlet deptLines = '';\nObject.keys(byDept).sort().forEach(dept => {\n  const emoji = deptEmoji[dept] || deptEmoji.default;\n  const rows = byDept[dept];\n  const deptTotal = rows.reduce((s, r) => s + r.count, 0);\n  const deptHighPriority = rows.reduce((s, r) => s + (r.high_priority_count || 0), 0);\n  const deptBreached = rows.reduce((s, r) => s + (r.sla_breached_count || 0), 0);\n  \n  const statusBreakdown = rows.map(r => `${r.status}: ${r.count}`).join(' | ');\n  const alerts = [];\n  if (deptHighPriority > 0) alerts.push(`🔴 ${deptHighPriority} high-priority`);\n  if (deptBreached > 0) alerts.push(`⚠️ ${deptBreached} SLA breached`);\n  \n  deptLines += `\\n${emoji} *${dept}* — ${deptTotal} cases`;\n  deptLines += `\\n    └ ${statusBreakdown}`;\n  if (alerts.length > 0) deptLines += `\\n    └ ${alerts.join(' · ')}`;\n});\n\nif (!deptLines) deptLines = '\\n✅ No pending cases across any department.';\n\n// Totals\nconst total = summary.total_pending || 0;\nconst newCount = summary.new_count || 0;\nconst openCount = summary.open_count || 0;\nconst pendingCount = summary.pending_count || 0;\nconst criticalCount = summary.critical_count || 0;\nconst highCount = summary.high_count || 0;\nconst slaBreached = summary.total_sla_breached || 0;\n\n// Urgency header\nlet urgencyLine = '';\nif (criticalCount > 0) urgencyLine += `🚨 *${criticalCount} CRITICAL* cases need immediate attention!\\n`;\nif (slaBreached > 0) urgencyLine += `⏰ *${slaBreached} cases* have *breached SLA* — escalation required!\\n`;\n\n// Portal link\nconst portalUrl = 'https://information-portal-beryl.vercel.app';\n\n// Build final message\nconst message = [\n  {\n    \"type\": \"header\",\n    \"text\": {\n      \"type\": \"plain_text\",\n      \"text\": `📋 Pending Cases Report — ${slot} Update`,\n      \"emoji\": true\n    }\n  },\n  {\n    \"type\": \"section\",\n    \"text\": {\n      \"type\": \"mrkdwn\",\n      \"text\": `*${dateStr}* | ${timeStr} PKT`\n    }\n  },\n  { \"type\": \"divider\" },\n  {\n    \"type\": \"section\",\n    \"fields\": [\n      { \"type\": \"mrkdwn\", \"text\": `*Total Pending*\\n${total}` },\n      { \"type\": \"mrkdwn\", \"text\": `*SLA Breached*\\n${slaBreached > 0 ? '⚠️ ' + slaBreached : '✅ 0'}` },\n      { \"type\": \"mrkdwn\", \"text\": `*New*\\n${newCount}` },\n      { \"type\": \"mrkdwn\", \"text\": `*Open*\\n${openCount}` },\n      { \"type\": \"mrkdwn\", \"text\": `*Awaiting Response*\\n${pendingCount}` },\n      { \"type\": \"mrkdwn\", \"text\": `*Critical/High Priority*\\n${criticalCount > 0 ? '🔴 ' + criticalCount : '0'} / ${highCount > 0 ? '🟠 ' + highCount : '0'}` }\n    ]\n  },\n  { \"type\": \"divider\" },\n  {\n    \"type\": \"section\",\n    \"text\": {\n      \"type\": \"mrkdwn\",\n      \"text\": `*By Department:*${deptLines}`\n    }\n  }\n];\n\n// Add urgency block if needed\nif (urgencyLine) {\n  message.splice(3, 0, {\n    \"type\": \"section\",\n    \"text\": {\n      \"type\": \"mrkdwn\",\n      \"text\": urgencyLine.trim()\n    }\n  });\n}\n\n// Add footer\nmessage.push(\n  { \"type\": \"divider\" },\n  {\n    \"type\": \"actions\",\n    \"elements\": [\n      {\n        \"type\": \"button\",\n        \"text\": { \"type\": \"plain_text\", \"text\": \"🔗 View All Tickets\", \"emoji\": true },\n        \"url\": portalUrl\n      }\n    ]\n  },\n  {\n    \"type\": \"context\",\n    \"elements\": [\n      {\n        \"type\": \"mrkdwn\",\n        \"text\": `_Automated report by FLOW Portal · Next update in 6 hours_`\n      }\n    ]\n  }\n);\n\nreturn [{ json: { blocks: message, text: `📋 Pending Cases Report — ${total} cases pending as of ${timeStr} PKT` } }];"
+      },
+      "name": "Format Slack Message",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [700, 400]
+    },
+    {
+      "parameters": {
+        "authentication": "oAuth2",
+        "channel": "C_LEADERSHIP_CHANNEL",
+        "text": "={{ $json.text }}",
+        "blocksUi": {
+          "blocksValues": "={{ JSON.stringify($json.blocks) }}"
+        },
+        "otherOptions": {
+          "unfurl_links": false,
+          "unfurl_media": false
+        }
+      },
+      "name": "Post to Slack - Leadership Channel",
+      "type": "n8n-nodes-base.slack",
+      "typeVersion": 2.1,
+      "position": [940, 400],
+      "notes": "Replace C_LEADERSHIP_CHANNEL with the actual Slack channel ID for leadership/management"
+    }
+  ],
+  "connections": {
+    "Schedule - 12PM & 6PM PKT (Mon-Sat)": {
+      "main": [
+        [
+          {
+            "node": "BigQuery - Get Pending Cases by Dept",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "BigQuery - Get Summary Totals",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "BigQuery - Get Pending Cases by Dept": {
+      "main": [
+        [
+          {
+            "node": "Format Slack Message",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "BigQuery - Get Summary Totals": {
+      "main": [
+        [
+          {
+            "node": "Format Slack Message",
+            "type": "main",
+            "index": 1
+          }
+        ]
+      ]
+    },
+    "Format Slack Message": {
+      "main": [
+        [
+          {
+            "node": "Post to Slack - Leadership Channel",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1",
+    "saveManualExecutions": true,
+    "callerPolicy": "workflowsFromSameOwner",
+    "errorWorkflow": ""
+  },
+  "staticData": null,
+  "tags": ["reporting", "slack", "scheduled", "pending-cases"],
+  "triggerCount": 2,
+  "updatedAt": "2026-02-22T00:00:00.000Z",
+  "versionId": "1"
+}

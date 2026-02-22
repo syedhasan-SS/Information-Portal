@@ -21,6 +21,9 @@ import {
   Loader2,
   TicketIcon,
   TrendingUp,
+  ArrowUpDown,
+  ArrowUp,
+  ArrowDown,
 } from "lucide-react";
 import type { Vendor, Ticket } from "@shared/schema";
 
@@ -49,10 +52,54 @@ const REGION_TABS = [
   { id: "in", label: "India" },
 ] as const;
 
+/** Map zone/origin values from BigQuery to a human-readable region label */
+function getRegionLabel(vendor: { region?: string | null; zone?: string | null; country?: string | null }): string {
+  // Prefer the manually-set region field if present
+  if (vendor.region) return vendor.region;
+  // Fall back to zone field (synced from BigQuery aurora_postgres_public.vendors.zone)
+  if (vendor.zone) {
+    const z = vendor.zone.toLowerCase();
+    if (z === "zone") return "Zone (UK)";
+    if (z === "non-zone") return "Non-Zone (UK)";
+    if (z === "row") return "ROW";
+    if (z === "in" || z === "india") return "India";
+    return vendor.zone; // return as-is if unrecognized
+  }
+  if (vendor.country) {
+    const c = vendor.country.toLowerCase();
+    if (c === "gb" || c === "uk") return "UK";
+    if (c === "in") return "India";
+    if (c === "us") return "USA";
+    return vendor.country.toUpperCase();
+  }
+  return "Unknown";
+}
+
+type SortColumn = "total" | "open" | null;
+type SortDirection = "asc" | "desc";
+
 export default function VendorsPage() {
   const [, setLocation] = useLocation();
   const [searchQuery, setSearchQuery] = useState("");
   const [activeTab, setActiveTab] = useState<string>("all");
+  const [sortColumn, setSortColumn] = useState<SortColumn>(null);
+  const [sortDirection, setSortDirection] = useState<SortDirection>("desc");
+
+  const handleSort = (column: SortColumn) => {
+    if (sortColumn === column) {
+      setSortDirection(sortDirection === "desc" ? "asc" : "desc");
+    } else {
+      setSortColumn(column);
+      setSortDirection("desc");
+    }
+  };
+
+  const SortIcon = ({ column }: { column: SortColumn }) => {
+    if (sortColumn !== column) return <ArrowUpDown className="ml-1 h-3 w-3 text-muted-foreground/50" />;
+    return sortDirection === "desc"
+      ? <ArrowDown className="ml-1 h-3 w-3 text-foreground" />
+      : <ArrowUp className="ml-1 h-3 w-3 text-foreground" />;
+  };
 
   const { data: vendors, isLoading: vendorsLoading } = useQuery({
     queryKey: ["vendors"],
@@ -78,34 +125,45 @@ export default function VendorsPage() {
 
   const vendorsWithTickets = vendors?.filter((v) => ticketsByVendor[v.handle]?.total > 0) || [];
 
-  const filteredVendors = vendorsWithTickets.filter((vendor) => {
-    if (searchQuery) {
-      const query = searchQuery.toLowerCase();
-      const matchesHandle = vendor.handle.toLowerCase().includes(query);
-      const matchesName = vendor.name?.toLowerCase().includes(query);
-      if (!matchesHandle && !matchesName) {
-        return false;
+  const filteredVendors = vendorsWithTickets
+    .filter((vendor) => {
+      if (searchQuery) {
+        const query = searchQuery.toLowerCase();
+        const matchesHandle = vendor.handle.toLowerCase().includes(query);
+        const matchesName = vendor.name?.toLowerCase().includes(query);
+        if (!matchesHandle && !matchesName) {
+          return false;
+        }
       }
-    }
 
-    if (activeTab !== "all") {
-      const region = (vendor.region || vendor.zone || "").toLowerCase();
-      const country = (vendor.country || "").toLowerCase();
-      
-      switch (activeTab) {
-        case "zone":
-          return region === "zone";
-        case "non-zone":
-          return (country === "gb" || country === "uk") && region !== "zone";
-        case "in":
-          return country === "in";
-        case "row":
-          return country !== "gb" && country !== "uk" && country !== "in" && region !== "zone";
+      if (activeTab !== "all") {
+        const region = (vendor.region || vendor.zone || "").toLowerCase();
+        const country = (vendor.country || "").toLowerCase();
+
+        switch (activeTab) {
+          case "zone":
+            return region === "zone";
+          case "non-zone":
+            return (country === "gb" || country === "uk") && region !== "zone";
+          case "in":
+            return country === "in";
+          case "row":
+            return country !== "gb" && country !== "uk" && country !== "in" && region !== "zone";
+        }
       }
-    }
-    
-    return true;
-  });
+
+      return true;
+    })
+    .sort((a, b) => {
+      if (!sortColumn) return 0;
+      const aVal = sortColumn === "total"
+        ? (ticketsByVendor[a.handle]?.total || 0)
+        : (ticketsByVendor[a.handle]?.open || 0);
+      const bVal = sortColumn === "total"
+        ? (ticketsByVendor[b.handle]?.total || 0)
+        : (ticketsByVendor[b.handle]?.open || 0);
+      return sortDirection === "desc" ? bVal - aVal : aVal - bVal;
+    });
 
   const topVendors = [...vendorsWithTickets]
     .sort((a, b) => (ticketsByVendor[b.handle]?.total || 0) - (ticketsByVendor[a.handle]?.total || 0))
@@ -231,8 +289,24 @@ export default function VendorsPage() {
                     <TableHead>Vendor Handle</TableHead>
                     <TableHead>Region</TableHead>
                     <TableHead>Tier</TableHead>
-                    <TableHead className="text-center">Total Tickets</TableHead>
-                    <TableHead className="text-center">Open Tickets</TableHead>
+                    <TableHead
+                      className="text-center cursor-pointer select-none hover:text-foreground"
+                      onClick={() => handleSort("total")}
+                    >
+                      <span className="inline-flex items-center justify-center">
+                        Total Tickets
+                        <SortIcon column="total" />
+                      </span>
+                    </TableHead>
+                    <TableHead
+                      className="text-center cursor-pointer select-none hover:text-foreground"
+                      onClick={() => handleSort("open")}
+                    >
+                      <span className="inline-flex items-center justify-center">
+                        Open Tickets
+                        <SortIcon column="open" />
+                      </span>
+                    </TableHead>
                     <TableHead className="text-right">Actions</TableHead>
                   </TableRow>
                 </TableHeader>
@@ -243,7 +317,7 @@ export default function VendorsPage() {
                         {vendor.handle}
                       </TableCell>
                       <TableCell>
-                        <Badge variant="outline">{vendor.region || vendor.zone || "Unknown"}</Badge>
+                        <Badge variant="outline">{getRegionLabel(vendor)}</Badge>
                       </TableCell>
                       <TableCell>
                         {getTierBadge(vendor.gmvTier) || <span className="text-muted-foreground">-</span>}

@@ -64,6 +64,7 @@ import {
   MessageSquare,
   CheckCircle,
   UserPlus,
+  Trash2,
 } from "lucide-react";
 import type { Ticket, Category, Vendor, TicketFieldConfiguration } from "@shared/schema";
 import { getUserColumnPreferences, updateUserColumnPreferences } from "@/lib/api";
@@ -195,6 +196,8 @@ export default function MyTicketsPage() {
   const [showBulkCommentDialog, setShowBulkCommentDialog] = useState(false);
   const [bulkComment, setBulkComment] = useState("");
   const [showBulkSolveDialog, setShowBulkSolveDialog] = useState(false);
+  const [ticketToDelete, setTicketToDelete] = useState<string | null>(null);
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const queryClient = useQueryClient();
   const { toast} = useToast();
 
@@ -707,6 +710,33 @@ export default function MyTicketsPage() {
     },
   });
 
+  // Delete ticket mutation (Owner/Admin only)
+  const deleteTicketMutation = useMutation({
+    mutationFn: async (ticketId: string) => {
+      const userEmail = localStorage.getItem("userEmail");
+      const res = await fetch(`/api/tickets/${ticketId}`, {
+        method: "DELETE",
+        headers: {
+          ...(userEmail ? { "x-user-email": userEmail } : {}),
+        },
+      });
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({ error: "Unknown error" }));
+        throw new Error(err.error || `Failed to delete ticket`);
+      }
+      return res.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["tickets"] });
+      setShowDeleteConfirm(false);
+      setTicketToDelete(null);
+      toast({ title: "Ticket deleted", description: "The ticket has been permanently deleted." });
+    },
+    onError: (error: Error) => {
+      toast({ title: "Error", description: error.message, variant: "destructive" });
+    },
+  });
+
   // Filter tickets by current logged-in user
   const createdTickets = tickets?.filter((t) => t.createdById === user?.id) || [];
 
@@ -1149,14 +1179,31 @@ export default function MyTicketsPage() {
                       )}
                       {isColumnVisible("actions") && (
                         <TableCell className="text-right">
-                          <Button
-                            variant="ghost"
-                            size="sm"
-                            onClick={() => setLocation(`/tickets/${ticket.id}?from=my-tickets`)}
-                            data-testid={`button-view-${ticket.id}`}
-                          >
-                            View
-                          </Button>
+                          <div className="flex items-center justify-end gap-1">
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              onClick={() => setLocation(`/tickets/${ticket.id}?from=my-tickets`)}
+                              data-testid={`button-view-${ticket.id}`}
+                            >
+                              View
+                            </Button>
+                            {hasPermission("delete:tickets") && (
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                className="text-destructive hover:text-destructive hover:bg-destructive/10"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  setTicketToDelete(ticket.id);
+                                  setShowDeleteConfirm(true);
+                                }}
+                                data-testid={`button-delete-${ticket.id}`}
+                              >
+                                <Trash2 className="h-4 w-4" />
+                              </Button>
+                            )}
+                          </div>
                         </TableCell>
                       )}
                     </TableRow>
@@ -1906,6 +1953,58 @@ export default function MyTicketsPage() {
                   </>
                 ) : (
                   "Mark as Solved"
+                )}
+              </Button>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* Delete Ticket Confirmation Dialog */}
+      <Dialog open={showDeleteConfirm} onOpenChange={(open) => {
+        setShowDeleteConfirm(open);
+        if (!open) setTicketToDelete(null);
+      }}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2 text-destructive">
+              <Trash2 className="h-5 w-5" />
+              Delete Ticket
+            </DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4">
+            <p className="text-sm text-muted-foreground">
+              Are you sure you want to permanently delete this ticket? This action{" "}
+              <span className="font-semibold text-foreground">cannot be undone</span>. All
+              comments and history associated with this ticket will also be removed.
+            </p>
+            <div className="flex justify-end gap-2 pt-4">
+              <Button
+                variant="outline"
+                onClick={() => {
+                  setShowDeleteConfirm(false);
+                  setTicketToDelete(null);
+                }}
+              >
+                Cancel
+              </Button>
+              <Button
+                variant="destructive"
+                onClick={() => {
+                  if (ticketToDelete) deleteTicketMutation.mutate(ticketToDelete);
+                }}
+                disabled={deleteTicketMutation.isPending}
+              >
+                {deleteTicketMutation.isPending ? (
+                  <>
+                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                    Deleting...
+                  </>
+                ) : (
+                  <>
+                    <Trash2 className="mr-2 h-4 w-4" />
+                    Delete Permanently
+                  </>
                 )}
               </Button>
             </div>

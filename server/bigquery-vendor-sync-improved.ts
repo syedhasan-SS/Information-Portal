@@ -141,8 +141,8 @@ export async function syncVendorsFromBigQueryImproved(): Promise<{
           END) AS last_3_months_orders,
           SUM(CASE
             WHEN DATE(created_at) >= DATE_SUB(CURRENT_DATE(), INTERVAL 90 DAY)
-              AND CAST(gmv AS FLOAT64) IS NOT NULL
-            THEN CAST(gmv AS FLOAT64)
+              AND ol_financial_status = 'Paid'
+            THEN gmv_post_all_discounts
             ELSE 0
           END) AS gmv_90d
         FROM \`${projectId}.fleek_hub.order_line_details\`

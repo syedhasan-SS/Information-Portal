@@ -14,6 +14,7 @@ import {
   categoryRoutingRules,
   passwordResetTokens,
   users,
+  vendors,
 } from "@shared/schema";
 import { z } from "zod";
 import { eq } from "drizzle-orm";
@@ -837,6 +838,36 @@ export async function registerRoutes(
       }
 
       res.json(ticket);
+    } catch (error: any) {
+      res.status(500).json({ error: error.message });
+    }
+  });
+
+  // Delete ticket (Owner and Admin only)
+  app.delete("/api/tickets/:id", async (req, res) => {
+    try {
+      const currentUser = await getCurrentUser(req);
+      if (!currentUser) {
+        return res.status(401).json({ error: "Authentication required" });
+      }
+
+      // Only Owner and Admin roles can delete tickets
+      const userPermissions = currentUser.permissions || [];
+      if (!userPermissions.includes("delete:tickets")) {
+        return res.status(403).json({ error: "You do not have permission to delete tickets." });
+      }
+
+      const ticket = await storage.getTicketById(req.params.id);
+      if (!ticket) {
+        return res.status(404).json({ error: "Ticket not found" });
+      }
+
+      const deleted = await storage.deleteTicket(req.params.id);
+      if (!deleted) {
+        return res.status(404).json({ error: "Ticket not found" });
+      }
+
+      res.json({ success: true, deleted });
     } catch (error: any) {
       res.status(500).json({ error: error.message });
     }
@@ -3573,6 +3604,40 @@ export async function registerRoutes(
         error: error.message,
         message: "Failed to sync vendors from BigQuery",
       });
+    }
+  });
+
+  // Update a single vendor's GMV directly in the DB (for manual corrections)
+  app.patch("/api/admin/vendors/:handle/gmv", async (req, res) => {
+    try {
+      const { handle } = req.params;
+      const { gmv90Day } = req.body;
+
+      if (typeof gmv90Day !== 'number') {
+        return res.status(400).json({ error: "gmv90Day must be a number" });
+      }
+
+      // Calculate tier
+      function calculateGMVTier(gmv: number): string {
+        if (gmv >= 5000000) return 'Platinum';
+        if (gmv >= 2500000) return 'XL';
+        if (gmv >= 1000000) return 'Gold';
+        if (gmv >= 500000) return 'L';
+        if (gmv >= 250000) return 'Silver';
+        if (gmv >= 100000) return 'M';
+        if (gmv >= 50000) return 'Bronze';
+        return 'S';
+      }
+
+      const gmvTier = calculateGMVTier(gmv90Day);
+
+      await db.update(vendors)
+        .set({ gmv90Day: Math.round(gmv90Day), gmvTier: gmvTier as any, updatedAt: new Date() })
+        .where(eq(vendors.handle, handle));
+
+      res.json({ success: true, handle, gmv90Day: Math.round(gmv90Day), gmvTier });
+    } catch (error: any) {
+      res.status(500).json({ error: error.message });
     }
   });
 
