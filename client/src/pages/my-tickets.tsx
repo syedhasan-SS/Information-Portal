@@ -222,11 +222,11 @@ export default function MyTicketsPage() {
       return "All";
     }
 
-    // CX department: scope by subDepartment if set, otherwise show all (treat as "All")
+    // CX department: scope by subDepartment if set, otherwise default to Customer Support
     if (user.department === "CX") {
       // subDepartment "Seller Support" or "Customer Support" narrows fields shown
-      // null/undefined subDepartment means unscoped CX agent → show all fields
-      return (user.subDepartment as string) || "All";
+      // null/undefined subDepartment means unscoped CX agent → default to Customer Support
+      return (user.subDepartment as string) || "Customer Support";
     }
 
     return undefined;
