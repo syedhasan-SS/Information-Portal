@@ -217,15 +217,16 @@ export default function MyTicketsPage() {
   const userDepartmentType = useMemo(() => {
     if (!user) return undefined;
 
-    // CX department with subdepartment (Customer Support or Seller Support)
-    if (user.department === "CX" && user.subDepartment) {
-      return user.subDepartment; // "Customer Support" or "Seller Support"
-    }
-
     // Owner and Admin roles should see all fields (treat as "All")
-    // This allows them to create tickets for any department type
     if (user.role === "Owner" || user.role === "Admin") {
       return "All";
+    }
+
+    // CX department: scope by subDepartment if set, otherwise show all (treat as "All")
+    if (user.department === "CX") {
+      // subDepartment "Seller Support" or "Customer Support" narrows fields shown
+      // null/undefined subDepartment means unscoped CX agent → show all fields
+      return (user.subDepartment as string) || "All";
     }
 
     return undefined;

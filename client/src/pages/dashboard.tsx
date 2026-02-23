@@ -382,7 +382,17 @@ export default function DashboardPage() {
           <div className="space-y-8">
             <div>
               <h2 className="text-2xl font-semibold mb-1">Dashboard</h2>
-              <p className="text-muted-foreground">Overview of escalations and performance metrics</p>
+              <p className="text-muted-foreground">
+                {user?.role === "Owner" || user?.role === "Admin"
+                  ? "Overview of all escalations and performance metrics"
+                  : user?.department === "CX" && user?.subDepartment
+                  ? `${user.subDepartment} · CX — your team's escalations and performance`
+                  : user?.department === "CX"
+                  ? "CX — overview of escalations and performance metrics"
+                  : user?.department
+                  ? `${user.department} department — your team's escalations and performance`
+                  : "Overview of escalations and performance metrics"}
+              </p>
             </div>
 
             <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
@@ -497,35 +507,59 @@ export default function DashboardPage() {
                 </div>
               </Card>
 
-              <Card className="p-6">
-                <div className="flex items-center gap-2 mb-4">
-                  <h3 className="font-semibold flex items-center gap-2">
-                    <Store className="h-4 w-4" />
-                    Pending Tickets by Department
-                  </h3>
-                  <TooltipProvider>
-                    <Tooltip>
-                      <TooltipTrigger asChild>
-                        <Info className="h-3.5 w-3.5 text-muted-foreground cursor-help" />
-                      </TooltipTrigger>
-                      <TooltipContent className="max-w-xs">
-                        <p className="text-xs">Shows only pending tickets (New, Open, Pending status) grouped by department. Excludes Solved and Closed tickets.</p>
-                      </TooltipContent>
-                    </Tooltip>
-                  </TooltipProvider>
-                </div>
-                <div className="space-y-2">
-                  {Object.entries(departmentBreakdown)
-                    .sort((a, b) => b[1] - a[1])
-                    .slice(0, 5)
-                    .map(([dept, count]) => (
-                      <div key={dept} className="flex items-center justify-between text-sm">
-                        <span className="text-muted-foreground">{dept}</span>
-                        <Badge variant="secondary">{count}</Badge>
+              {(user?.role === "Admin" || user?.role === "Owner") ? (
+                <Card className="p-6">
+                  <div className="flex items-center gap-2 mb-4">
+                    <h3 className="font-semibold flex items-center gap-2">
+                      <Store className="h-4 w-4" />
+                      Pending Tickets by Department
+                    </h3>
+                    <TooltipProvider>
+                      <Tooltip>
+                        <TooltipTrigger asChild>
+                          <Info className="h-3.5 w-3.5 text-muted-foreground cursor-help" />
+                        </TooltipTrigger>
+                        <TooltipContent className="max-w-xs">
+                          <p className="text-xs">Shows only pending tickets (New, Open, Pending status) grouped by department. Excludes Solved and Closed tickets.</p>
+                        </TooltipContent>
+                      </Tooltip>
+                    </TooltipProvider>
+                  </div>
+                  <div className="space-y-2">
+                    {Object.entries(departmentBreakdown)
+                      .sort((a, b) => b[1] - a[1])
+                      .slice(0, 5)
+                      .map(([dept, count]) => (
+                        <div key={dept} className="flex items-center justify-between text-sm">
+                          <span className="text-muted-foreground">{dept}</span>
+                          <Badge variant="secondary">{count}</Badge>
+                        </div>
+                      ))}
+                  </div>
+                </Card>
+              ) : (
+                <Card className="p-6">
+                  <div className="flex items-center gap-2 mb-4">
+                    <h3 className="font-semibold flex items-center gap-2">
+                      <Users className="h-4 w-4" />
+                      My Tickets Overview
+                    </h3>
+                  </div>
+                  <div className="space-y-3">
+                    {[
+                      { label: "Assigned to me", count: tickets?.filter(t => t.assigneeId === user?.id && ["New","Open","Pending"].includes(t.status)).length || 0, color: "text-blue-600" },
+                      { label: "Created by me", count: tickets?.filter(t => t.createdById === user?.id && ["New","Open","Pending"].includes(t.status)).length || 0, color: "text-purple-600" },
+                      { label: "SLA breached", count: tickets?.filter(t => t.assigneeId === user?.id && t.slaStatus === "breached").length || 0, color: "text-red-600" },
+                      { label: "Solved this month", count: tickets?.filter(t => t.assigneeId === user?.id && ["Solved","Closed"].includes(t.status) && new Date(t.updatedAt) >= monthAgo).length || 0, color: "text-green-600" },
+                    ].map(({ label, count, color }) => (
+                      <div key={label} className="flex items-center justify-between text-sm">
+                        <span className="text-muted-foreground">{label}</span>
+                        <span className={`font-semibold ${color}`}>{count}</span>
                       </div>
                     ))}
-                </div>
-              </Card>
+                  </div>
+                </Card>
+              )}
             </div>
 
             <div>

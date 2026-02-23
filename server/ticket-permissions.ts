@@ -4,47 +4,60 @@
 import type { User, Ticket } from "@shared/schema";
 
 /**
+ * Determine which ticket departments a CX user can access based on subDepartment.
+ *
+ * - subDepartment = "Seller Support"  → vendor-side tickets only (ownerTeam/department = "CX" + seller-support categories)
+ *   In practice, we scope by checking the ticket's ownerTeam / department label.
+ *   Seller Support tickets have vendorHandle set and no customer field.
+ *   We use a simple heuristic: if ticket has a vendorHandle it is seller-side.
+ * - subDepartment = "Customer Support" → customer-side tickets only (tickets with customer field set, no vendorHandle)
+ * - subDepartment = null / undefined   → all CX tickets (fallback for unassigned CX agents)
+ */
+function isCXTicketVisible(user: User, ticket: Ticket): boolean {
+  const sub = user.subDepartment;
+  if (!sub) return true; // No subDept set → see everything in CX scope
+
+  if (sub === "Seller Support") {
+    // Seller-side: ticket was raised for a vendor (has vendorHandle OR dept is not CX-customer)
+    return !!(ticket.vendorHandle);
+  }
+  if (sub === "Customer Support") {
+    // Customer-side: ticket was raised for a customer (has customer field set, or no vendorHandle)
+    return !!(ticket.customer) || !ticket.vendorHandle;
+  }
+  return true;
+}
+
+/**
  * Check if user can view a specific ticket based on department rules
  *
  * Rules:
- * - CX users: Can view ALL tickets (across all departments)
- * - Non-CX users: Can ONLY view tickets in their own department
- * - Admins/Owners: Can view ALL tickets
+ * - Admin/Owner: Can view ALL tickets
+ * - CX + Seller Support subDept: vendor tickets only (has vendorHandle)
+ * - CX + Customer Support subDept: customer tickets only (has customer / no vendorHandle)
+ * - CX + no subDept: all tickets
+ * - Non-CX: only tickets in their own department
  */
 export function canViewTicket(user: User, ticket: Ticket): boolean {
-  // Admin/Owner can view everything
-  if (user.role === "Admin" || user.role === "Owner") {
-    return true;
-  }
+  if (user.role === "Admin" || user.role === "Owner") return true;
 
-  // CX department users can view all tickets
   if (user.department === "CX") {
-    return true;
+    return isCXTicketVisible(user, ticket);
   }
 
-  // Non-CX users can only view tickets in their department
   return ticket.department === user.department;
 }
 
 /**
  * Filter tickets based on user's department access
- *
- * @param tickets - Array of all tickets
- * @param user - Current user
- * @returns Filtered array of tickets user can access
  */
 export function filterTicketsByDepartmentAccess(tickets: Ticket[], user: User): Ticket[] {
-  // Admin/Owner can see everything
-  if (user.role === "Admin" || user.role === "Owner") {
-    return tickets;
-  }
+  if (user.role === "Admin" || user.role === "Owner") return tickets;
 
-  // CX department users can see all tickets
   if (user.department === "CX") {
-    return tickets;
+    return tickets.filter(ticket => isCXTicketVisible(user, ticket));
   }
 
-  // Non-CX users can only see tickets in their department
   return tickets.filter(ticket => ticket.department === user.department);
 }
 
@@ -61,17 +74,8 @@ export function filterTicketsByDepartmentAccess(tickets: Ticket[], user: User): 
  * - Admins/Owners: Can edit everything
  */
 export function canEditTicketDetails(user: User, ticket: Ticket): boolean {
-  // Admin/Owner can edit everything
-  if (user.role === "Admin" || user.role === "Owner") {
-    return true;
-  }
-
-  // CX department users can edit all ticket details
-  if (user.department === "CX") {
-    return true;
-  }
-
-  // Non-CX users cannot edit core ticket details
+  if (user.role === "Admin" || user.role === "Owner") return true;
+  if (user.department === "CX") return isCXTicketVisible(user, ticket);
   return false;
 }
 
@@ -84,17 +88,8 @@ export function canEditTicketDetails(user: User, ticket: Ticket): boolean {
  * - Must be in the same department as the ticket
  */
 export function canPerformLimitedUpdate(user: User, ticket: Ticket): boolean {
-  // Admin/Owner can do anything
-  if (user.role === "Admin" || user.role === "Owner") {
-    return true;
-  }
-
-  // CX users can do anything
-  if (user.department === "CX") {
-    return true;
-  }
-
-  // Non-CX users can only update tickets in their department
+  if (user.role === "Admin" || user.role === "Owner") return true;
+  if (user.department === "CX") return isCXTicketVisible(user, ticket);
   return ticket.department === user.department;
 }
 
@@ -117,8 +112,11 @@ export function validateTicketUpdate(
     return null;
   }
 
-  // CX users can update anything
+  // CX users can update tickets within their subDepartment scope
   if (user.department === "CX") {
+    if (!isCXTicketVisible(user, ticket)) {
+      return `Access denied. You can only update ${user.subDepartment || "CX"} tickets.`;
+    }
     return null;
   }
 
