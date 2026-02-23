@@ -46,37 +46,35 @@ async function getTickets(): Promise<Ticket[]> {
 
 const REGION_TABS = [
   { id: "all", label: "All Vendors" },
-  { id: "zone", label: "Zone" },
-  { id: "non-zone", label: "Non-Zone (UK)" },
+  { id: "pk-zone", label: "PK Zone" },
+  { id: "pk-nonzone", label: "PK Non-Zone" },
+  { id: "uk", label: "UK" },
+  { id: "india", label: "India" },
   { id: "row", label: "ROW" },
-  { id: "in", label: "India" },
 ] as const;
 
-/** Map country code to human-readable country name */
-function countryLabel(code: string): string {
-  const map: Record<string, string> = {
-    pk: "Pakistan", gb: "UK", uk: "UK", in: "India",
-    us: "USA", uae: "UAE", ae: "UAE",
-  };
-  return map[code.toLowerCase()] || code.toUpperCase();
-}
+/**
+ * Classify a vendor into one of the five buckets:
+ *   "PK Zone" | "PK Non-Zone" | "UK" | "India" | "ROW"
+ *
+ * Rules (as specified):
+ *   - Zone/Non-Zone distinction only exists for PK vendors.
+ *   - country/region = PK + zone = "Zone"      → PK Zone
+ *   - country/region = PK + zone = "Non Zone"  → PK Non-Zone
+ *   - country/region = GB or UK                → UK
+ *   - country/region = IN                      → India
+ *   - everything else (UAE, US, null, …)       → ROW
+ */
+function getRegionBucket(vendor: { region?: string | null; zone?: string | null; country?: string | null }): string {
+  const countryCode = (vendor.country || vendor.region || "").trim().toLowerCase();
+  const zLower = (vendor.zone || "").trim().toLowerCase().replace(/[^a-z]/g, ""); // strip spaces/hyphens
 
-/** Build a readable region label from zone + country fields */
-function getRegionLabel(vendor: { region?: string | null; zone?: string | null; country?: string | null }): string {
-  const zone = vendor.zone?.trim() ?? "";
-  // Normalise zone: "Zone" / "Non Zone" / "Non-Zone" etc.
-  const zLower = zone.toLowerCase().replace(/[^a-z]/g, ""); // strip spaces/hyphens
-  const isZone = zLower === "zone";
-  const isNonZone = zLower === "nonzone";
-
-  // Determine country from country field (or fall back to region which also stores codes)
-  const countryCode = (vendor.country || vendor.region || "").trim();
-  const country = countryCode ? countryLabel(countryCode) : "";
-
-  if (isZone) return country ? `Zone · ${country}` : "Zone";
-  if (isNonZone) return country ? `Non-Zone · ${country}` : "Non-Zone";
-  if (country) return country;
-  return "Unknown";
+  if (countryCode === "pk") {
+    return zLower === "zone" ? "PK Zone" : "PK Non-Zone";
+  }
+  if (countryCode === "gb" || countryCode === "uk") return "UK";
+  if (countryCode === "in") return "India";
+  return "ROW";
 }
 
 type SortColumn = "total" | "open" | null;
@@ -141,18 +139,13 @@ export default function VendorsPage() {
       }
 
       if (activeTab !== "all") {
-        const region = (vendor.region || vendor.zone || "").toLowerCase();
-        const country = (vendor.country || "").toLowerCase();
-
+        const bucket = getRegionBucket(vendor);
         switch (activeTab) {
-          case "zone":
-            return region === "zone";
-          case "non-zone":
-            return (country === "gb" || country === "uk") && region !== "zone";
-          case "in":
-            return country === "in";
-          case "row":
-            return country !== "gb" && country !== "uk" && country !== "in" && region !== "zone";
+          case "pk-zone":    return bucket === "PK Zone";
+          case "pk-nonzone": return bucket === "PK Non-Zone";
+          case "uk":         return bucket === "UK";
+          case "india":      return bucket === "India";
+          case "row":        return bucket === "ROW";
         }
       }
 
@@ -321,7 +314,7 @@ export default function VendorsPage() {
                         {vendor.handle}
                       </TableCell>
                       <TableCell>
-                        <Badge variant="outline">{getRegionLabel(vendor)}</Badge>
+                        <Badge variant="outline">{getRegionBucket(vendor)}</Badge>
                       </TableCell>
                       <TableCell>
                         {getTierBadge(vendor.gmvTier) || <span className="text-muted-foreground">-</span>}
