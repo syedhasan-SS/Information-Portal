@@ -792,42 +792,51 @@ export class DatabaseStorage implements IStorage {
       };
     };
 
-    // Build from L4 categories (those with names - Seller Support case)
+    // Build from L4 categories (those with names - Seller Support named entries)
     const l4Objects = l4Categories
       .filter(l4 => l4.name && l4.name.trim() !== "")
       .map(buildCategoryObject);
 
-    // Get IDs of all L4 categories that have been added (to avoid duplicates)
+    // Get IDs of all L4 categories that have been added as named entries
     const l4ObjectIds = new Set(l4Objects.map(obj => obj.id));
 
-    // Build from L3 categories (those without L4 or with empty L4 - Customer Support case)
-    const l3Objects = l3Categories
-      .filter(l3 => {
-        // Don't include this L3 if we already have its L4 counterpart
-        const childL4 = l4Categories.find(l4 => l4.parentId === l3.id);
-        if (childL4 && l4ObjectIds.has(childL4.id)) {
-          return false; // Skip this L3, we already have the L4
-        }
+    // Build from L3 categories — handle each L4 child variant separately
+    // This supports L3s that have multiple L4 children (e.g. one Seller Support + one Customer Support)
+    const l3Objects: any[] = [];
+    for (const l3 of l3Categories) {
+      const childL4s = l4Categories.filter(l4 => l4.parentId === l3.id);
 
-        // Include L3 if it has a child L4 with departmentType but empty name
-        if (childL4 && childL4.departmentType && childL4.departmentType !== "All") {
-          return true;
+      if (childL4s.length === 0) {
+        // No L4 children — include L3 itself if it has a specific departmentType
+        if (l3.departmentType && l3.departmentType !== "All") {
+          l3Objects.push(buildCategoryObject(l3));
         }
-        // Or if L3 itself has departmentType set
-        return l3.departmentType && l3.departmentType !== "All";
-      })
-      .map(l3 => {
-        // Check if L3 has a child L4 with departmentType
-        const childL4 = l4Categories.find(l4 => l4.parentId === l3.id);
-        const effectiveDepartmentType = childL4?.departmentType || l3.departmentType || "All";
+        continue;
+      }
 
-        const obj = buildCategoryObject(l3);
-        return {
-          ...obj,
-          id: childL4?.id || l3.id, // Use L4 ID if exists for consistency
-          departmentType: effectiveDepartmentType
-        };
-      });
+      // Process each L4 child
+      for (const childL4 of childL4s) {
+        // Skip if already represented as a named L4 object
+        if (l4ObjectIds.has(childL4.id)) continue;
+
+        // This is an unnamed L4 (empty name) — represents a department-specific variant
+        // Use the L3 as the display object but tag with the L4's departmentType and ID
+        if (childL4.departmentType && childL4.departmentType !== "All") {
+          const obj = buildCategoryObject(l3);
+          l3Objects.push({
+            ...obj,
+            id: childL4.id, // Use L4 ID so resolved-fields lookup works correctly
+            departmentType: childL4.departmentType,
+          });
+        }
+      }
+
+      // If no L4 children were processed and L3 has its own departmentType, add L3 itself
+      const allChildrenAlreadyAdded = childL4s.every(l4 => l4ObjectIds.has(l4.id));
+      if (allChildrenAlreadyAdded && l3.departmentType && l3.departmentType !== "All") {
+        l3Objects.push(buildCategoryObject(l3));
+      }
+    }
 
     let allCategoryObjects = [...l4Objects, ...l3Objects];
 
