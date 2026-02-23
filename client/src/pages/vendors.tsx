@@ -52,26 +52,30 @@ const REGION_TABS = [
   { id: "in", label: "India" },
 ] as const;
 
-/** Map zone/origin values from BigQuery to a human-readable region label */
+/** Map country code to human-readable country name */
+function countryLabel(code: string): string {
+  const map: Record<string, string> = {
+    pk: "Pakistan", gb: "UK", uk: "UK", in: "India",
+    us: "USA", uae: "UAE", ae: "UAE",
+  };
+  return map[code.toLowerCase()] || code.toUpperCase();
+}
+
+/** Build a readable region label from zone + country fields */
 function getRegionLabel(vendor: { region?: string | null; zone?: string | null; country?: string | null }): string {
-  // Prefer the manually-set region field if present
-  if (vendor.region) return vendor.region;
-  // Fall back to zone field (synced from BigQuery aurora_postgres_public.vendors.zone)
-  if (vendor.zone) {
-    const z = vendor.zone.toLowerCase();
-    if (z === "zone") return "Zone (UK)";
-    if (z === "non-zone") return "Non-Zone (UK)";
-    if (z === "row") return "ROW";
-    if (z === "in" || z === "india") return "India";
-    return vendor.zone; // return as-is if unrecognized
-  }
-  if (vendor.country) {
-    const c = vendor.country.toLowerCase();
-    if (c === "gb" || c === "uk") return "UK";
-    if (c === "in") return "India";
-    if (c === "us") return "USA";
-    return vendor.country.toUpperCase();
-  }
+  const zone = vendor.zone?.trim() ?? "";
+  // Normalise zone: "Zone" / "Non Zone" / "Non-Zone" etc.
+  const zLower = zone.toLowerCase().replace(/[^a-z]/g, ""); // strip spaces/hyphens
+  const isZone = zLower === "zone";
+  const isNonZone = zLower === "nonzone";
+
+  // Determine country from country field (or fall back to region which also stores codes)
+  const countryCode = (vendor.country || vendor.region || "").trim();
+  const country = countryCode ? countryLabel(countryCode) : "";
+
+  if (isZone) return country ? `Zone · ${country}` : "Zone";
+  if (isNonZone) return country ? `Non-Zone · ${country}` : "Non-Zone";
+  if (country) return country;
   return "Unknown";
 }
 
