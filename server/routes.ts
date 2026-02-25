@@ -846,16 +846,12 @@ export async function registerRoutes(
   // Delete ticket (Owner and Admin only)
   app.delete("/api/tickets/:id", async (req, res) => {
     try {
-      const currentUser = await getCurrentUser(req);
-      if (!currentUser) {
-        return res.status(401).json({ error: "Authentication required" });
-      }
-
-      // Only Owner and Admin roles can delete tickets
-      const deleteCheck = checkPermission(currentUser, "delete:tickets");
+      const deleteCheck = await checkPermission(req, "delete:tickets");
       if (!deleteCheck.hasPermission) {
-        return res.status(403).json({ error: "You do not have permission to delete tickets." });
+        return res.status(deleteCheck.error === "Authentication required" || deleteCheck.error === "No authentication header found" ? 401 : 403)
+          .json({ error: deleteCheck.error || "You do not have permission to delete tickets." });
       }
+      const currentUser = deleteCheck.user;
 
       const ticket = await storage.getTicketById(req.params.id);
       if (!ticket) {
