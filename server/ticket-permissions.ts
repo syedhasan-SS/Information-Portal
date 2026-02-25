@@ -41,6 +41,9 @@ function isCXTicketVisible(user: User, ticket: Ticket): boolean {
 export function canViewTicket(user: User, ticket: Ticket): boolean {
   if (user.role === "Admin" || user.role === "Owner") return true;
 
+  // Users can always see tickets assigned to them, regardless of department
+  if (ticket.assigneeId === user.id) return true;
+
   if (user.department === "CX") {
     return isCXTicketVisible(user, ticket);
   }
@@ -55,10 +58,15 @@ export function filterTicketsByDepartmentAccess(tickets: Ticket[], user: User): 
   if (user.role === "Admin" || user.role === "Owner") return tickets;
 
   if (user.department === "CX") {
-    return tickets.filter(ticket => isCXTicketVisible(user, ticket));
+    return tickets.filter(ticket =>
+      ticket.assigneeId === user.id || isCXTicketVisible(user, ticket)
+    );
   }
 
-  return tickets.filter(ticket => ticket.department === user.department);
+  // Always include tickets assigned to the user, plus all tickets in their department
+  return tickets.filter(ticket =>
+    ticket.assigneeId === user.id || ticket.department === user.department
+  );
 }
 
 /**
