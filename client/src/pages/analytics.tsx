@@ -1,8 +1,9 @@
-import { useState } from "react";
+import { useState, useMemo } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
+import { Badge } from "@/components/ui/badge";
 import {
   Select,
   SelectContent,
@@ -21,18 +22,24 @@ import {
   ArrowLeft,
   BarChart3,
   TrendingUp,
+  TrendingDown,
   Clock,
   CheckCircle2,
   AlertCircle,
   Loader2,
   Calendar,
-  CalendarRange,
   X,
+  Download,
+  Ticket,
+  ShieldAlert,
+  Activity,
+  Users,
+  Zap,
 } from "lucide-react";
-import { format } from "date-fns";
+import { format, subDays, startOfWeek, endOfWeek } from "date-fns";
 import {
-  LineChart,
-  Line,
+  AreaChart,
+  Area,
   BarChart,
   Bar,
   PieChart,
@@ -45,260 +52,338 @@ import {
   Legend,
   ResponsiveContainer,
 } from "recharts";
-import type { Ticket } from "@shared/schema";
+import type { Ticket as TicketType } from "@shared/schema";
 
-const TIME_GROUPINGS = ["Daily", "Weekly", "Monthly", "Quarterly", "Half Year"] as const;
+const TIME_GROUPINGS = ["Daily", "Weekly", "Monthly"] as const;
 const ISSUE_TYPES = ["All", "Complaint", "Request"] as const;
 
-interface AnalyticsData {
-  totalTickets: number;
-  totalPending: number;
-  totalSolved: number;
-  totalNew: number;
-  regionWiseStatus: Record<string, { open: number; closed: number; pending: number }>;
-  timelineData: Array<{ date: string; count: number }>;
-  slaData: { inSLA: number; outOfSLA: number };
-  departmentData: Array<{ department: string; count: number; percentage: number }>;
-  departmentSLA: Array<{ department: string; compliance: number }>;
-  categoryData: Array<{ category: string; count: number; percentage: number }>;
-}
+const CHART_COLORS = ["#8b5cf6", "#3b82f6", "#10b981", "#f59e0b", "#ec4899", "#ef4444", "#06b6d4", "#84cc16"];
 
-async function getTickets(): Promise<Ticket[]> {
+const STATUS_COLORS: Record<string, string> = {
+  New: "#8b5cf6",
+  Open: "#3b82f6",
+  Pending: "#f59e0b",
+  Solved: "#10b981",
+  Closed: "#6b7280",
+};
+
+const PRIORITY_COLORS: Record<string, string> = {
+  P0: "#ef4444",
+  P1: "#f97316",
+  P2: "#f59e0b",
+  P3: "#10b981",
+};
+
+async function getTickets(): Promise<TicketType[]> {
   const userEmail = localStorage.getItem("userEmail");
   const res = await fetch("/api/tickets", {
-    headers: {
-      ...(userEmail ? { "x-user-email": userEmail } : {}),
-    },
+    headers: { ...(userEmail ? { "x-user-email": userEmail } : {}) },
   });
   if (!res.ok) throw new Error("Failed to fetch tickets");
   return res.json();
 }
 
-async function getTicketAnalytics() {
-  const res = await fetch("/api/analytics/ticket-counts");
-  if (!res.ok) throw new Error("Failed to fetch analytics");
+async function getUsers() {
+  const userEmail = localStorage.getItem("userEmail");
+  const res = await fetch("/api/users", {
+    headers: { ...(userEmail ? { "x-user-email": userEmail } : {}) },
+  });
+  if (!res.ok) return [];
   return res.json();
 }
 
-function processAnalyticsData(
-  tickets: Ticket[],
-  timeGrouping: string,
-  issueType: string,
-  startDate?: Date,
-  endDate?: Date
-): AnalyticsData {
-  let filtered = tickets;
-
-  // Filter by issue type
-  if (issueType !== "All") {
-    filtered = filtered.filter((t) => t.issueType === issueType);
+// Custom Tooltip for charts
+const CustomTooltip = ({ active, payload, label }: any) => {
+  if (active && payload && payload.length) {
+    return (
+      <div className="rounded-lg border border-border bg-card p-3 shadow-lg">
+        <p className="mb-1 text-xs font-medium text-muted-foreground">{label}</p>
+        {payload.map((entry: any, i: number) => (
+          <p key={i} className="text-sm font-semibold" style={{ color: entry.color }}>
+            {entry.name}: {entry.value}
+          </p>
+        ))}
+      </div>
+    );
   }
+  return null;
+};
 
-  // Filter by date range
-  if (startDate && endDate) {
-    filtered = filtered.filter((t) => {
-      const ticketDate = new Date(t.createdAt);
-      return ticketDate >= startDate && ticketDate <= endDate;
-    });
-  }
+// Stat card component
+function StatCard({
+  title,
+  value,
+  subtitle,
+  icon: Icon,
+  color,
+  trend,
+}: {
+  title: string;
+  value: number | string;
+  subtitle?: string;
+  icon: any;
+  color: string;
+  trend?: { value: number; label: string };
+}) {
+  return (
+    <Card className="p-5">
+      <div className="flex items-start justify-between">
+        <div className="space-y-1">
+          <p className="text-sm text-muted-foreground">{title}</p>
+          <p className="text-3xl font-bold tracking-tight">{value}</p>
+          {subtitle && <p className="text-xs text-muted-foreground">{subtitle}</p>}
+        </div>
+        <div className={`flex h-11 w-11 items-center justify-center rounded-xl ${color}`}>
+          <Icon className="h-5 w-5" />
+        </div>
+      </div>
+      {trend && (
+        <div className={`mt-3 flex items-center gap-1 text-xs font-medium ${trend.value >= 0 ? "text-green-600" : "text-red-500"}`}>
+          {trend.value >= 0 ? <TrendingUp className="h-3 w-3" /> : <TrendingDown className="h-3 w-3" />}
+          {trend.label}
+        </div>
+      )}
+    </Card>
+  );
+}
 
-  // Calculate metrics
-  const totalTickets = filtered.length;
-  const totalPending = filtered.filter((t) => t.status === "Pending").length;
-  const totalSolved = filtered.filter((t) => t.status === "Solved").length;
-  const totalNew = filtered.filter((t) => t.status === "New").length;
+// Progress bar row
+function ProgressRow({
+  label,
+  value,
+  total,
+  color,
+  extra,
+}: {
+  label: string;
+  value: number;
+  total: number;
+  color: string;
+  extra?: string;
+}) {
+  const pct = total > 0 ? Math.round((value / total) * 100) : 0;
+  return (
+    <div className="space-y-1.5">
+      <div className="flex items-center justify-between text-sm">
+        <span className="font-medium">{label}</span>
+        <div className="flex items-center gap-2">
+          {extra && <span className="text-xs text-muted-foreground">{extra}</span>}
+          <span className="font-semibold">{value}</span>
+          <span className="text-xs text-muted-foreground">({pct}%)</span>
+        </div>
+      </div>
+      <div className="h-2 w-full overflow-hidden rounded-full bg-muted">
+        <div className="h-full rounded-full transition-all" style={{ width: `${pct}%`, backgroundColor: color }} />
+      </div>
+    </div>
+  );
+}
 
-  // Department-wise status (replacing region-wise as tickets don't have region directly)
-  const regionWiseStatus: Record<string, { open: number; closed: number; pending: number }> = {};
-  filtered.forEach((ticket) => {
-    const dept = ticket.department || "Unassigned";
-    if (!regionWiseStatus[dept]) {
-      regionWiseStatus[dept] = { open: 0, closed: 0, pending: 0 };
-    }
-    if (ticket.status === "New" || ticket.status === "Open") {
-      regionWiseStatus[dept].open++;
-    } else if (ticket.status === "Solved" || ticket.status === "Closed") {
-      regionWiseStatus[dept].closed++;
-    } else if (ticket.status === "Pending") {
-      regionWiseStatus[dept].pending++;
-    }
-  });
+function exportToCSV(tickets: TicketType[]) {
+  const headers = ["Ticket #", "Subject", "Status", "Priority", "Department", "Issue Type", "Assignee", "SLA Status", "Created At", "Resolved At"];
+  const rows = tickets.map((t) => [
+    t.ticketNumber || "",
+    (t.subject || "").replace(/,/g, ";"),
+    t.status || "",
+    t.priorityBadge || "",
+    t.department || "",
+    t.issueType || "",
+    t.assigneeId || "",
+    t.slaStatus || "",
+    t.createdAt ? format(new Date(t.createdAt), "yyyy-MM-dd HH:mm") : "",
+    t.resolvedAt ? format(new Date(t.resolvedAt), "yyyy-MM-dd HH:mm") : "",
+  ]);
 
-  // Timeline data (grouped by time grouping)
-  const timelineMap = new Map<string, number>();
-  filtered.forEach((ticket) => {
-    const date = new Date(ticket.createdAt);
-    let key: string;
-
-    if (timeGrouping === "Daily") {
-      key = date.toISOString().split("T")[0];
-    } else if (timeGrouping === "Weekly") {
-      const weekStart = new Date(date);
-      weekStart.setDate(date.getDate() - date.getDay());
-      key = weekStart.toISOString().split("T")[0];
-    } else if (timeGrouping === "Monthly") {
-      key = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}`;
-    } else if (timeGrouping === "Quarterly") {
-      const quarter = Math.floor(date.getMonth() / 3) + 1;
-      key = `${date.getFullYear()}-Q${quarter}`;
-    } else if (timeGrouping === "Half Year") {
-      const half = date.getMonth() < 6 ? 1 : 2;
-      key = `${date.getFullYear()}-H${half}`;
-    } else {
-      key = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}`;
-    }
-
-    timelineMap.set(key, (timelineMap.get(key) || 0) + 1);
-  });
-
-  const timelineData = Array.from(timelineMap.entries())
-    .map(([date, count]) => ({ date, count }))
-    .sort((a, b) => a.date.localeCompare(b.date));
-
-  // SLA data (assuming tickets have an slaStatus field or we check against createdAt)
-  const now = new Date();
-  let inSLA = 0;
-  let outOfSLA = 0;
-
-  filtered.forEach((ticket) => {
-    const createdAt = new Date(ticket.createdAt);
-    const hoursSinceCreation = (now.getTime() - createdAt.getTime()) / (1000 * 60 * 60);
-
-    // Assume SLA is 24 hours for this example
-    if (ticket.status === "Solved" || ticket.status === "Closed" || hoursSinceCreation <= 24) {
-      inSLA++;
-    } else {
-      outOfSLA++;
-    }
-  });
-
-  const slaData = { inSLA, outOfSLA };
-
-  // Department-wise data
-  const deptMap = new Map<string, number>();
-  filtered.forEach((ticket) => {
-    const dept = ticket.department || "Unassigned";
-    deptMap.set(dept, (deptMap.get(dept) || 0) + 1);
-  });
-
-  const departmentData = Array.from(deptMap.entries()).map(([department, count]) => ({
-    department,
-    count,
-    percentage: (count / totalTickets) * 100,
-  }));
-
-  // Department SLA compliance (simplified calculation)
-  const departmentSLA = Array.from(deptMap.keys()).map((department) => {
-    const deptTickets = filtered.filter((t) => (t.department || "Unassigned") === department);
-    const deptInSLA = deptTickets.filter((t) => {
-      const createdAt = new Date(t.createdAt);
-      const hoursSinceCreation = (now.getTime() - createdAt.getTime()) / (1000 * 60 * 60);
-      return t.status === "Solved" || t.status === "Closed" || hoursSinceCreation <= 24;
-    }).length;
-
-    return {
-      department,
-      compliance: deptTickets.length > 0 ? (deptInSLA / deptTickets.length) * 100 : 0,
-    };
-  });
-
-  // Issue Type data (since tickets have issueType field)
-  const categoryMap = new Map<string, number>();
-  filtered.forEach((ticket) => {
-    const issueType = ticket.issueType || "Uncategorized";
-    categoryMap.set(issueType, (categoryMap.get(issueType) || 0) + 1);
-  });
-
-  const categoryData = Array.from(categoryMap.entries()).map(([category, count]) => ({
-    category,
-    count,
-    percentage: (count / totalTickets) * 100,
-  }));
-
-  return {
-    totalTickets,
-    totalPending,
-    totalSolved,
-    totalNew,
-    regionWiseStatus,
-    timelineData,
-    slaData,
-    departmentData,
-    departmentSLA,
-    categoryData,
-  };
+  const csv = [headers, ...rows].map((r) => r.join(",")).join("\n");
+  const blob = new Blob([csv], { type: "text/csv" });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = `tickets-export-${format(new Date(), "yyyy-MM-dd")}.csv`;
+  a.click();
+  URL.revokeObjectURL(url);
 }
 
 export default function AnalyticsPage() {
   const [, setLocation] = useLocation();
   const [timeGrouping, setTimeGrouping] = useState<string>("Daily");
-  const [issueType, setIssueType] = useState<string>("All");
-  const [dateRange, setDateRange] = useState<{ start?: Date; end?: Date }>({});
-  const [datePreset, setDatePreset] = useState<string>("all");
+  const [issueTypeFilter, setIssueTypeFilter] = useState<string>("All");
+  const [datePreset, setDatePreset] = useState<string>("last30");
   const [customDateStart, setCustomDateStart] = useState<Date | undefined>();
   const [customDateEnd, setCustomDateEnd] = useState<Date | undefined>();
+  const [showCustomPicker, setShowCustomPicker] = useState(false);
 
-  // Helper function to set date range based on preset
-  const applyDatePreset = (preset: string) => {
-    setDatePreset(preset);
-    const now = new Date();
-    const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
-
-    switch (preset) {
-      case "all":
-        setDateRange({});
-        break;
-      case "today":
-        setDateRange({ start: today, end: new Date(today.getTime() + 24 * 60 * 60 * 1000 - 1) });
-        break;
-      case "yesterday":
-        const yesterday = new Date(today);
-        yesterday.setDate(yesterday.getDate() - 1);
-        setDateRange({ start: yesterday, end: new Date(yesterday.getTime() + 24 * 60 * 60 * 1000 - 1) });
-        break;
-      case "last7":
-        const last7 = new Date(today);
-        last7.setDate(last7.getDate() - 7);
-        setDateRange({ start: last7, end: now });
-        break;
-      case "last15":
-        const last15 = new Date(today);
-        last15.setDate(last15.getDate() - 15);
-        setDateRange({ start: last15, end: now });
-        break;
-      case "last30":
-        const last30 = new Date(today);
-        last30.setDate(last30.getDate() - 30);
-        setDateRange({ start: last30, end: now });
-        break;
-      case "previousWeek":
-        // Previous week: Sunday to Saturday
-        const currentDay = now.getDay();
-        const lastSunday = new Date(today);
-        lastSunday.setDate(lastSunday.getDate() - currentDay - 7);
-        const lastSaturday = new Date(lastSunday);
-        lastSaturday.setDate(lastSaturday.getDate() + 6);
-        setDateRange({ start: lastSunday, end: new Date(lastSaturday.getTime() + 24 * 60 * 60 * 1000 - 1) });
-        break;
-      case "custom":
-        if (customDateStart && customDateEnd) {
-          setDateRange({ start: customDateStart, end: customDateEnd });
-        }
-        break;
-      default:
-        setDateRange({});
-    }
-  };
-
-  const { data: tickets, isLoading } = useQuery({
+  const { data: tickets = [], isLoading } = useQuery({
     queryKey: ["tickets"],
     queryFn: getTickets,
   });
 
-  const { data: reportingAnalytics, isLoading: isLoadingAnalytics } = useQuery({
-    queryKey: ["ticket-analytics"],
-    queryFn: getTicketAnalytics,
+  const { data: users = [] } = useQuery({
+    queryKey: ["users"],
+    queryFn: getUsers,
   });
+
+  // Compute date range from preset
+  const dateRange = useMemo(() => {
+    const now = new Date();
+    const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+    switch (datePreset) {
+      case "today": return { start: today, end: now };
+      case "yesterday": {
+        const y = subDays(today, 1);
+        return { start: y, end: new Date(y.getTime() + 86400000 - 1) };
+      }
+      case "last7": return { start: subDays(today, 7), end: now };
+      case "last15": return { start: subDays(today, 15), end: now };
+      case "last30": return { start: subDays(today, 30), end: now };
+      case "last90": return { start: subDays(today, 90), end: now };
+      case "previousWeek": {
+        const start = startOfWeek(subDays(today, 7));
+        const end = endOfWeek(subDays(today, 7));
+        return { start, end };
+      }
+      case "custom": return { start: customDateStart, end: customDateEnd };
+      default: return { start: undefined, end: undefined };
+    }
+  }, [datePreset, customDateStart, customDateEnd]);
+
+  // Filter tickets
+  const filtered = useMemo(() => {
+    let result = tickets;
+    if (issueTypeFilter !== "All") result = result.filter((t) => t.issueType === issueTypeFilter);
+    if (dateRange.start && dateRange.end) {
+      result = result.filter((t) => {
+        const d = new Date(t.createdAt);
+        return d >= dateRange.start! && d <= dateRange.end!;
+      });
+    }
+    return result;
+  }, [tickets, issueTypeFilter, dateRange]);
+
+  // ── Metrics ──────────────────────────────────────────────────────────────
+  const totalTickets = filtered.length;
+  const openTickets = filtered.filter((t) => t.status === "New" || t.status === "Open").length;
+  const pendingTickets = filtered.filter((t) => t.status === "Pending").length;
+  const solvedTickets = filtered.filter((t) => t.status === "Solved" || t.status === "Closed").length;
+  const breachedTickets = filtered.filter((t) => t.slaStatus === "breached").length;
+  const atRiskTickets = filtered.filter((t) => t.slaStatus === "at_risk").length;
+  const resolutionRate = totalTickets > 0 ? Math.round((solvedTickets / totalTickets) * 100) : 0;
+
+  // ── Timeline ─────────────────────────────────────────────────────────────
+  const timelineData = useMemo(() => {
+    const map = new Map<string, { created: number; solved: number }>();
+    filtered.forEach((t) => {
+      const d = new Date(t.createdAt);
+      let key: string;
+      if (timeGrouping === "Daily") key = format(d, "MMM d");
+      else if (timeGrouping === "Weekly") key = `W${format(startOfWeek(d), "MM/dd")}`;
+      else key = format(d, "MMM yyyy");
+      const cur = map.get(key) || { created: 0, solved: 0 };
+      cur.created++;
+      if (t.status === "Solved" || t.status === "Closed") cur.solved++;
+      map.set(key, cur);
+    });
+    return Array.from(map.entries())
+      .map(([date, v]) => ({ date, ...v }))
+      .sort((a, b) => a.date.localeCompare(b.date));
+  }, [filtered, timeGrouping]);
+
+  // ── Status breakdown ─────────────────────────────────────────────────────
+  const statusData = useMemo(() => {
+    const map = new Map<string, number>();
+    filtered.forEach((t) => {
+      const s = t.status || "Unknown";
+      map.set(s, (map.get(s) || 0) + 1);
+    });
+    return Array.from(map.entries()).map(([status, count]) => ({ status, count }));
+  }, [filtered]);
+
+  // ── Department breakdown ─────────────────────────────────────────────────
+  const departmentData = useMemo(() => {
+    const map = new Map<string, { total: number; open: number; pending: number; solved: number; breached: number }>();
+    filtered.forEach((t) => {
+      const dept = t.department || "Unassigned";
+      const cur = map.get(dept) || { total: 0, open: 0, pending: 0, solved: 0, breached: 0 };
+      cur.total++;
+      if (t.status === "New" || t.status === "Open") cur.open++;
+      else if (t.status === "Pending") cur.pending++;
+      else if (t.status === "Solved" || t.status === "Closed") cur.solved++;
+      if (t.slaStatus === "breached") cur.breached++;
+      map.set(dept, cur);
+    });
+    return Array.from(map.entries())
+      .map(([department, v]) => ({ department, ...v }))
+      .sort((a, b) => b.total - a.total);
+  }, [filtered]);
+
+  // ── Priority breakdown ───────────────────────────────────────────────────
+  const priorityData = useMemo(() => {
+    const map = new Map<string, number>();
+    filtered.forEach((t) => {
+      const p = t.priorityBadge || "P3";
+      map.set(p, (map.get(p) || 0) + 1);
+    });
+    return ["P0", "P1", "P2", "P3"]
+      .filter((p) => map.has(p))
+      .map((p) => ({ priority: p, count: map.get(p) || 0 }));
+  }, [filtered]);
+
+  // ── Issue type breakdown ─────────────────────────────────────────────────
+  const issueTypeData = useMemo(() => {
+    const map = new Map<string, number>();
+    filtered.forEach((t) => {
+      const it = t.issueType || "Unclassified";
+      map.set(it, (map.get(it) || 0) + 1);
+    });
+    return Array.from(map.entries()).map(([type, count]) => ({ type, count }));
+  }, [filtered]);
+
+  // ── Agent leaderboard ────────────────────────────────────────────────────
+  const agentData = useMemo(() => {
+    const map = new Map<string, { total: number; solved: number; breached: number }>();
+    filtered.forEach((t) => {
+      if (!t.assigneeId) return;
+      const cur = map.get(t.assigneeId) || { total: 0, solved: 0, breached: 0 };
+      cur.total++;
+      if (t.status === "Solved" || t.status === "Closed") cur.solved++;
+      if (t.slaStatus === "breached") cur.breached++;
+      map.set(t.assigneeId, cur);
+    });
+    const userMap = new Map((users as any[]).map((u: any) => [u.id, u.name || u.email]));
+    return Array.from(map.entries())
+      .map(([id, v]) => ({
+        name: (userMap.get(id) as string) || "Unknown",
+        ...v,
+        rate: v.total > 0 ? Math.round((v.solved / v.total) * 100) : 0,
+      }))
+      .sort((a, b) => b.total - a.total)
+      .slice(0, 10);
+  }, [filtered, users]);
+
+  // ── SLA Summary ──────────────────────────────────────────────────────────
+  const slaData = useMemo(() => {
+    const onTrack = filtered.filter((t) => t.slaStatus === "on_track").length;
+    const atRisk = filtered.filter((t) => t.slaStatus === "at_risk").length;
+    const breached = filtered.filter((t) => t.slaStatus === "breached").length;
+    const unknown = filtered.filter((t) => !t.slaStatus).length;
+    return [
+      { name: "On Track", value: onTrack, color: "#10b981" },
+      { name: "At Risk", value: atRisk, color: "#f59e0b" },
+      { name: "Breached", value: breached, color: "#ef4444" },
+      { name: "No SLA", value: unknown, color: "#9ca3af" },
+    ].filter((d) => d.value > 0);
+  }, [filtered]);
+
+  const PRESETS = [
+    { key: "all", label: "All Time" },
+    { key: "today", label: "Today" },
+    { key: "yesterday", label: "Yesterday" },
+    { key: "last7", label: "Last 7d" },
+    { key: "last15", label: "Last 15d" },
+    { key: "last30", label: "Last 30d" },
+    { key: "last90", label: "Last 90d" },
+    { key: "previousWeek", label: "Prev. Week" },
+  ];
 
   if (isLoading) {
     return (
@@ -308,12 +393,6 @@ export default function AnalyticsPage() {
     );
   }
 
-  const analyticsData = tickets
-    ? processAnalyticsData(tickets, timeGrouping, issueType, dateRange.start, dateRange.end)
-    : null;
-
-  const COLORS = ["#8b5cf6", "#ec4899", "#f59e0b", "#10b981", "#3b82f6", "#ef4444"];
-
   return (
     <div className="min-h-screen bg-background">
       {/* Header */}
@@ -321,11 +400,7 @@ export default function AnalyticsPage() {
         <div className="mx-auto max-w-[1600px] px-6">
           <div className="flex h-16 items-center justify-between">
             <div className="flex items-center gap-4">
-              <Button
-                variant="ghost"
-                size="sm"
-                onClick={() => setLocation("/dashboard")}
-              >
+              <Button variant="ghost" size="sm" onClick={() => setLocation("/dashboard")}>
                 <ArrowLeft className="h-4 w-4" />
                 Back
               </Button>
@@ -334,488 +409,363 @@ export default function AnalyticsPage() {
                   <BarChart3 className="h-5 w-5 text-accent-foreground" />
                 </div>
                 <div>
-                  <h1 className="font-serif text-xl font-semibold tracking-tight text-foreground">
-                    Analytics
-                  </h1>
-                  <p className="text-xs text-muted-foreground">Ticket metrics and insights</p>
+                  <h1 className="font-serif text-xl font-semibold tracking-tight">Analytics & Reporting</h1>
+                  <p className="text-xs text-muted-foreground">
+                    {totalTickets} tickets · {datePreset === "all" ? "All time" : PRESETS.find(p => p.key === datePreset)?.label}
+                  </p>
                 </div>
               </div>
             </div>
+            <Button variant="outline" size="sm" onClick={() => exportToCSV(filtered)}>
+              <Download className="mr-2 h-4 w-4" />
+              Export CSV
+            </Button>
           </div>
         </div>
       </header>
 
-      <main className="mx-auto max-w-[1600px] px-6 py-8">
-        {/* Filters */}
-        <Card className="mb-6 p-6">
-          <h2 className="mb-4 text-lg font-semibold">Filters</h2>
-          <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-            <div className="space-y-2">
-              <Label htmlFor="time-grouping">Time Grouping</Label>
-              <Select value={timeGrouping} onValueChange={setTimeGrouping}>
-                <SelectTrigger id="time-grouping">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent className="max-h-[300px] overflow-y-auto">
-                  {TIME_GROUPINGS.map((grouping) => (
-                    <SelectItem key={grouping} value={grouping}>
-                      {grouping}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
+      <main className="mx-auto max-w-[1600px] space-y-6 px-6 py-6">
 
-            <div className="space-y-2">
-              <Label htmlFor="issue-type">Issue Type</Label>
-              <Select value={issueType} onValueChange={setIssueType}>
-                <SelectTrigger id="issue-type">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent className="max-h-[300px] overflow-y-auto">
-                  {ISSUE_TYPES.map((type) => (
-                    <SelectItem key={type} value={type}>
-                      {type}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-
-            <div className="space-y-2">
-              <Label>Date Range</Label>
-              <div className="flex gap-2">
-                {dateRange.start && dateRange.end ? (
-                  <div className="flex flex-1 items-center gap-2 rounded-md border border-input bg-background px-3 py-2 text-sm">
-                    <CalendarRange className="h-4 w-4 text-muted-foreground" />
-                    <span>
-                      {format(dateRange.start, "MMM d, yyyy")} - {format(dateRange.end, "MMM d, yyyy")}
-                    </span>
+        {/* ── Filter Bar ── */}
+        <Card className="p-4">
+          <div className="flex flex-wrap items-end gap-4">
+            {/* Date Presets */}
+            <div className="space-y-1.5">
+              <Label className="text-xs text-muted-foreground">Date Range</Label>
+              <div className="flex flex-wrap gap-1.5">
+                {PRESETS.map((p) => (
+                  <Button
+                    key={p.key}
+                    size="sm"
+                    variant={datePreset === p.key ? "default" : "outline"}
+                    className="h-8 text-xs"
+                    onClick={() => setDatePreset(p.key)}
+                  >
+                    {p.label}
+                  </Button>
+                ))}
+                <Popover open={showCustomPicker} onOpenChange={setShowCustomPicker}>
+                  <PopoverTrigger asChild>
                     <Button
-                      variant="ghost"
                       size="sm"
-                      className="ml-auto h-4 w-4 p-0"
-                      onClick={() => {
-                        setDateRange({});
-                        setDatePreset("all");
-                      }}
+                      variant={datePreset === "custom" ? "default" : "outline"}
+                      className="h-8 text-xs"
                     >
-                      <X className="h-3 w-3" />
+                      <Calendar className="mr-1.5 h-3 w-3" />
+                      Custom
                     </Button>
-                  </div>
-                ) : (
-                  <span className="flex flex-1 items-center rounded-md border border-input bg-background px-3 py-2 text-sm text-muted-foreground">
-                    All Time
-                  </span>
-                )}
+                  </PopoverTrigger>
+                  <PopoverContent className="w-auto p-4" align="start">
+                    <div className="flex gap-4">
+                      <div className="space-y-2">
+                        <Label className="text-xs">Start Date</Label>
+                        <CalendarComponent
+                          mode="single"
+                          selected={customDateStart}
+                          onSelect={setCustomDateStart}
+                          disabled={(d) => d > new Date()}
+                        />
+                      </div>
+                      <div className="space-y-2">
+                        <Label className="text-xs">End Date</Label>
+                        <CalendarComponent
+                          mode="single"
+                          selected={customDateEnd}
+                          onSelect={setCustomDateEnd}
+                          disabled={(d) => d > new Date() || (!!customDateStart && d < customDateStart)}
+                        />
+                      </div>
+                    </div>
+                    <Button
+                      className="mt-3 w-full"
+                      size="sm"
+                      disabled={!customDateStart || !customDateEnd}
+                      onClick={() => { setDatePreset("custom"); setShowCustomPicker(false); }}
+                    >
+                      Apply
+                    </Button>
+                  </PopoverContent>
+                </Popover>
               </div>
             </div>
-          </div>
 
-          {/* Date Preset Buttons */}
-          <div className="mt-4 space-y-2">
-            <Label className="text-xs text-muted-foreground">Quick Filters</Label>
-            <div className="flex flex-wrap gap-2">
-              <Button
-                variant={datePreset === "all" ? "default" : "outline"}
-                size="sm"
-                onClick={() => applyDatePreset("all")}
-              >
-                All Time
-              </Button>
-              <Button
-                variant={datePreset === "today" ? "default" : "outline"}
-                size="sm"
-                onClick={() => applyDatePreset("today")}
-              >
-                Today
-              </Button>
-              <Button
-                variant={datePreset === "yesterday" ? "default" : "outline"}
-                size="sm"
-                onClick={() => applyDatePreset("yesterday")}
-              >
-                Yesterday
-              </Button>
-              <Button
-                variant={datePreset === "last7" ? "default" : "outline"}
-                size="sm"
-                onClick={() => applyDatePreset("last7")}
-              >
-                Last 7 Days
-              </Button>
-              <Button
-                variant={datePreset === "last15" ? "default" : "outline"}
-                size="sm"
-                onClick={() => applyDatePreset("last15")}
-              >
-                Last 15 Days
-              </Button>
-              <Button
-                variant={datePreset === "last30" ? "default" : "outline"}
-                size="sm"
-                onClick={() => applyDatePreset("last30")}
-              >
-                Last 30 Days
-              </Button>
-              <Button
-                variant={datePreset === "previousWeek" ? "default" : "outline"}
-                size="sm"
-                onClick={() => applyDatePreset("previousWeek")}
-              >
-                Previous Week
-              </Button>
-              <Popover>
-                <PopoverTrigger asChild>
-                  <Button variant={datePreset === "custom" ? "default" : "outline"} size="sm">
-                    <Calendar className="mr-2 h-4 w-4" />
-                    Custom Range
-                  </Button>
-                </PopoverTrigger>
-                <PopoverContent className="w-auto p-4" align="start">
-                  <div className="space-y-4">
-                    <div className="space-y-2">
-                      <Label>Start Date</Label>
-                      <CalendarComponent
-                        mode="single"
-                        selected={customDateStart}
-                        onSelect={setCustomDateStart}
-                        disabled={(date) => date > new Date()}
-                      />
-                    </div>
-                    <div className="space-y-2">
-                      <Label>End Date</Label>
-                      <CalendarComponent
-                        mode="single"
-                        selected={customDateEnd}
-                        onSelect={setCustomDateEnd}
-                        disabled={(date) => {
-                          if (date > new Date()) return true;
-                          if (customDateStart && date < customDateStart) return true;
-                          return false;
-                        }}
-                      />
-                    </div>
-                    <Button
-                      className="w-full"
-                      onClick={() => {
-                        if (customDateStart && customDateEnd) {
-                          applyDatePreset("custom");
-                        }
-                      }}
-                      disabled={!customDateStart || !customDateEnd}
-                    >
-                      Apply Custom Range
-                    </Button>
-                  </div>
-                </PopoverContent>
-              </Popover>
+            <div className="ml-auto flex items-end gap-3">
+              {/* Issue Type */}
+              <div className="space-y-1.5">
+                <Label className="text-xs text-muted-foreground">Issue Type</Label>
+                <Select value={issueTypeFilter} onValueChange={setIssueTypeFilter}>
+                  <SelectTrigger className="h-8 w-[140px] text-xs">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {ISSUE_TYPES.map((t) => <SelectItem key={t} value={t}>{t}</SelectItem>)}
+                  </SelectContent>
+                </Select>
+              </div>
+              {/* Time Grouping */}
+              <div className="space-y-1.5">
+                <Label className="text-xs text-muted-foreground">Grouping</Label>
+                <Select value={timeGrouping} onValueChange={setTimeGrouping}>
+                  <SelectTrigger className="h-8 w-[120px] text-xs">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {TIME_GROUPINGS.map((t) => <SelectItem key={t} value={t}>{t}</SelectItem>)}
+                  </SelectContent>
+                </Select>
+              </div>
+              {/* Clear custom */}
+              {(issueTypeFilter !== "All" || datePreset !== "last30") && (
+                <Button variant="ghost" size="sm" className="h-8 text-xs" onClick={() => { setIssueTypeFilter("All"); setDatePreset("last30"); }}>
+                  <X className="mr-1 h-3 w-3" /> Reset
+                </Button>
+              )}
             </div>
           </div>
         </Card>
 
-        {/* Metrics Cards */}
-        {analyticsData && (
-          <>
-            <div className="mb-6 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-              <Card className="p-6">
-                <div className="flex items-center justify-between">
-                  <div>
-                    <p className="text-sm text-muted-foreground">Total Tickets</p>
-                    <p className="mt-2 text-3xl font-bold">{analyticsData.totalTickets}</p>
-                  </div>
-                  <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-blue-500/10">
-                    <BarChart3 className="h-6 w-6 text-blue-600" />
-                  </div>
-                </div>
-              </Card>
+        {/* ── KPI Cards ── */}
+        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-5">
+          <StatCard title="Total Tickets" value={totalTickets} icon={Ticket} color="bg-blue-500/10 text-blue-600" subtitle={`${resolutionRate}% resolved`} />
+          <StatCard title="Open / New" value={openTickets} icon={Activity} color="bg-purple-500/10 text-purple-600" subtitle="Needs attention" />
+          <StatCard title="Pending" value={pendingTickets} icon={Clock} color="bg-amber-500/10 text-amber-600" subtitle="Awaiting response" />
+          <StatCard title="Solved" value={solvedTickets} icon={CheckCircle2} color="bg-green-500/10 text-green-600" subtitle={`${resolutionRate}% rate`} />
+          <StatCard title="SLA Breached" value={breachedTickets} icon={ShieldAlert} color="bg-red-500/10 text-red-600" subtitle={atRiskTickets > 0 ? `+${atRiskTickets} at risk` : "No tickets at risk"} />
+        </div>
 
-              <Card className="p-6">
-                <div className="flex items-center justify-between">
-                  <div>
-                    <p className="text-sm text-muted-foreground">Pending Tickets</p>
-                    <p className="mt-2 text-3xl font-bold">{analyticsData.totalPending}</p>
-                  </div>
-                  <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-amber-500/10">
-                    <Clock className="h-6 w-6 text-amber-600" />
-                  </div>
-                </div>
-              </Card>
-
-              <Card className="p-6">
-                <div className="flex items-center justify-between">
-                  <div>
-                    <p className="text-sm text-muted-foreground">Solved Tickets</p>
-                    <p className="mt-2 text-3xl font-bold">{analyticsData.totalSolved}</p>
-                  </div>
-                  <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-green-500/10">
-                    <CheckCircle2 className="h-6 w-6 text-green-600" />
-                  </div>
-                </div>
-              </Card>
-
-              <Card className="p-6">
-                <div className="flex items-center justify-between">
-                  <div>
-                    <p className="text-sm text-muted-foreground">New Tickets</p>
-                    <p className="mt-2 text-3xl font-bold">{analyticsData.totalNew}</p>
-                  </div>
-                  <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-purple-500/10">
-                    <AlertCircle className="h-6 w-6 text-purple-600" />
-                  </div>
-                </div>
-              </Card>
+        {/* ── Timeline (full width) ── */}
+        <Card className="p-6">
+          <div className="mb-4 flex items-center justify-between">
+            <div>
+              <h2 className="text-base font-semibold">Ticket Volume Over Time</h2>
+              <p className="text-xs text-muted-foreground">Created vs Resolved — {timeGrouping}</p>
             </div>
+            <Badge variant="outline" className="text-xs">{timelineData.length} periods</Badge>
+          </div>
+          {timelineData.length > 0 ? (
+            <ResponsiveContainer width="100%" height={280}>
+              <AreaChart data={timelineData} margin={{ top: 4, right: 16, left: 0, bottom: 0 }}>
+                <defs>
+                  <linearGradient id="gradCreated" x1="0" y1="0" x2="0" y2="1">
+                    <stop offset="5%" stopColor="#8b5cf6" stopOpacity={0.15} />
+                    <stop offset="95%" stopColor="#8b5cf6" stopOpacity={0} />
+                  </linearGradient>
+                  <linearGradient id="gradSolved" x1="0" y1="0" x2="0" y2="1">
+                    <stop offset="5%" stopColor="#10b981" stopOpacity={0.15} />
+                    <stop offset="95%" stopColor="#10b981" stopOpacity={0} />
+                  </linearGradient>
+                </defs>
+                <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
+                <XAxis dataKey="date" tick={{ fontSize: 11 }} tickLine={false} axisLine={false} />
+                <YAxis tick={{ fontSize: 11 }} tickLine={false} axisLine={false} allowDecimals={false} />
+                <Tooltip content={<CustomTooltip />} />
+                <Legend iconType="circle" iconSize={8} wrapperStyle={{ fontSize: 12 }} />
+                <Area type="monotone" dataKey="created" name="Created" stroke="#8b5cf6" strokeWidth={2} fill="url(#gradCreated)" dot={false} activeDot={{ r: 4 }} />
+                <Area type="monotone" dataKey="solved" name="Solved" stroke="#10b981" strokeWidth={2} fill="url(#gradSolved)" dot={false} activeDot={{ r: 4 }} />
+              </AreaChart>
+            </ResponsiveContainer>
+          ) : (
+            <div className="flex h-[280px] items-center justify-center text-sm text-muted-foreground">No data for selected range</div>
+          )}
+        </Card>
 
-            {/* Department-wise Status */}
-            <Card className="mb-6 p-6">
-              <h2 className="mb-4 text-lg font-semibold">Department-wise Ticket Status</h2>
-              <div className="space-y-4">
-                {Object.entries(analyticsData.regionWiseStatus).map(([region, stats]) => (
-                  <div key={region} className="space-y-2">
-                    <div className="flex items-center justify-between text-sm">
-                      <span className="font-medium">{region}</span>
-                      <span className="text-muted-foreground">
-                        {stats.open + stats.closed + stats.pending} tickets
+        {/* ── Row 2: Status + SLA ── */}
+        <div className="grid gap-6 lg:grid-cols-2">
+          {/* Status Distribution */}
+          <Card className="p-6">
+            <h2 className="mb-4 text-base font-semibold">Status Breakdown</h2>
+            <div className="space-y-3">
+              {statusData
+                .sort((a, b) => b.count - a.count)
+                .map((s) => (
+                  <ProgressRow
+                    key={s.status}
+                    label={s.status}
+                    value={s.count}
+                    total={totalTickets}
+                    color={STATUS_COLORS[s.status] || "#6b7280"}
+                  />
+                ))}
+            </div>
+          </Card>
+
+          {/* SLA Summary */}
+          <Card className="p-6">
+            <h2 className="mb-4 text-base font-semibold">SLA Compliance</h2>
+            {slaData.length > 0 ? (
+              <div className="flex items-center gap-6">
+                <ResponsiveContainer width={160} height={160}>
+                  <PieChart>
+                    <Pie
+                      data={slaData}
+                      cx="50%"
+                      cy="50%"
+                      innerRadius={45}
+                      outerRadius={70}
+                      paddingAngle={3}
+                      dataKey="value"
+                    >
+                      {slaData.map((entry, i) => (
+                        <Cell key={i} fill={entry.color} />
+                      ))}
+                    </Pie>
+                    <Tooltip content={<CustomTooltip />} />
+                  </PieChart>
+                </ResponsiveContainer>
+                <div className="flex-1 space-y-3">
+                  {slaData.map((s) => (
+                    <div key={s.name} className="flex items-center gap-2 text-sm">
+                      <div className="h-2.5 w-2.5 rounded-full flex-shrink-0" style={{ backgroundColor: s.color }} />
+                      <span className="flex-1 text-muted-foreground">{s.name}</span>
+                      <span className="font-semibold">{s.value}</span>
+                      <span className="text-xs text-muted-foreground">
+                        ({totalTickets > 0 ? Math.round((s.value / totalTickets) * 100) : 0}%)
                       </span>
                     </div>
-                    <div className="grid grid-cols-3 gap-2 text-xs">
-                      <div className="rounded-lg bg-blue-500/10 p-2 text-center">
-                        <p className="text-blue-600">Open: {stats.open}</p>
-                      </div>
-                      <div className="rounded-lg bg-amber-500/10 p-2 text-center">
-                        <p className="text-amber-600">Pending: {stats.pending}</p>
-                      </div>
-                      <div className="rounded-lg bg-green-500/10 p-2 text-center">
-                        <p className="text-green-600">Closed: {stats.closed}</p>
+                  ))}
+                </div>
+              </div>
+            ) : (
+              <div className="flex h-40 items-center justify-center text-sm text-muted-foreground">No SLA data available</div>
+            )}
+          </Card>
+        </div>
+
+        {/* ── Row 3: Department + Priority ── */}
+        <div className="grid gap-6 lg:grid-cols-3">
+          {/* Department Breakdown */}
+          <Card className="p-6 lg:col-span-2">
+            <h2 className="mb-4 text-base font-semibold">Department Breakdown</h2>
+            {departmentData.length > 0 ? (
+              <div className="space-y-4">
+                <div className="grid grid-cols-5 text-xs font-medium text-muted-foreground mb-2 px-1">
+                  <span className="col-span-2">Department</span>
+                  <span className="text-center">Open</span>
+                  <span className="text-center">Pending</span>
+                  <span className="text-center">Solved</span>
+                </div>
+                {departmentData.map((d) => (
+                  <div key={d.department} className="space-y-1.5">
+                    <div className="grid grid-cols-5 items-center gap-2 px-1 text-sm">
+                      <span className="col-span-2 font-medium truncate">{d.department}</span>
+                      <span className="text-center font-medium text-purple-600">{d.open}</span>
+                      <span className="text-center font-medium text-amber-600">{d.pending}</span>
+                      <span className="text-center font-medium text-green-600">{d.solved}</span>
+                    </div>
+                    <div className="h-1.5 w-full overflow-hidden rounded-full bg-muted">
+                      <div className="flex h-full">
+                        <div className="bg-purple-500 transition-all" style={{ width: `${totalTickets > 0 ? (d.open / totalTickets) * 100 : 0}%` }} />
+                        <div className="bg-amber-500 transition-all" style={{ width: `${totalTickets > 0 ? (d.pending / totalTickets) * 100 : 0}%` }} />
+                        <div className="bg-green-500 transition-all" style={{ width: `${totalTickets > 0 ? (d.solved / totalTickets) * 100 : 0}%` }} />
                       </div>
                     </div>
                   </div>
                 ))}
               </div>
-            </Card>
-
-            {/* Charts */}
-            <div className="grid gap-6 lg:grid-cols-2">
-              {/* Timeline Chart */}
-              <Card className="p-6">
-                <h2 className="mb-4 text-lg font-semibold">Tickets Timeline</h2>
-                <ResponsiveContainer width="100%" height={300}>
-                  <LineChart data={analyticsData.timelineData}>
-                    <CartesianGrid strokeDasharray="3 3" />
-                    <XAxis dataKey="date" />
-                    <YAxis />
-                    <Tooltip />
-                    <Legend />
-                    <Line type="monotone" dataKey="count" stroke="#8b5cf6" strokeWidth={2} />
-                  </LineChart>
-                </ResponsiveContainer>
-              </Card>
-
-              {/* SLA Compliance */}
-              <Card className="p-6">
-                <h2 className="mb-4 text-lg font-semibold">SLA Compliance</h2>
-                <ResponsiveContainer width="100%" height={300}>
-                  <PieChart>
-                    <Pie
-                      data={[
-                        { name: "In SLA", value: analyticsData.slaData.inSLA },
-                        { name: "Out of SLA", value: analyticsData.slaData.outOfSLA },
-                      ]}
-                      cx="50%"
-                      cy="50%"
-                      labelLine={false}
-                      label={(entry) => `${entry.name}: ${entry.value}`}
-                      outerRadius={100}
-                      fill="#8884d8"
-                      dataKey="value"
-                    >
-                      <Cell fill="#10b981" />
-                      <Cell fill="#ef4444" />
-                    </Pie>
-                    <Tooltip />
-                    <Legend />
-                  </PieChart>
-                </ResponsiveContainer>
-              </Card>
-
-              {/* Department Distribution */}
-              <Card className="p-6">
-                <h2 className="mb-4 text-lg font-semibold">Department-wise Distribution</h2>
-                <ResponsiveContainer width="100%" height={300}>
-                  <BarChart data={analyticsData.departmentData}>
-                    <CartesianGrid strokeDasharray="3 3" />
-                    <XAxis dataKey="department" />
-                    <YAxis />
-                    <Tooltip />
-                    <Legend />
-                    <Bar dataKey="count" fill="#8b5cf6" />
-                  </BarChart>
-                </ResponsiveContainer>
-              </Card>
-
-              {/* Department SLA Compliance */}
-              <Card className="p-6">
-                <h2 className="mb-4 text-lg font-semibold">Department SLA Compliance</h2>
-                <ResponsiveContainer width="100%" height={300}>
-                  <BarChart data={analyticsData.departmentSLA}>
-                    <CartesianGrid strokeDasharray="3 3" />
-                    <XAxis dataKey="department" />
-                    <YAxis />
-                    <Tooltip />
-                    <Legend />
-                    <Bar dataKey="compliance" fill="#10b981" />
-                  </BarChart>
-                </ResponsiveContainer>
-              </Card>
-
-              {/* Issue Type Distribution */}
-              <Card className="p-6 lg:col-span-2">
-                <h2 className="mb-4 text-lg font-semibold">Issue Type Distribution</h2>
-                <ResponsiveContainer width="100%" height={300}>
-                  <PieChart>
-                    <Pie
-                      data={analyticsData.categoryData}
-                      cx="50%"
-                      cy="50%"
-                      labelLine={false}
-                      label={(entry) => `${entry.category}: ${entry.count}`}
-                      outerRadius={100}
-                      fill="#8884d8"
-                      dataKey="count"
-                    >
-                      {analyticsData.categoryData.map((entry, index) => (
-                        <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
-                      ))}
-                    </Pie>
-                    <Tooltip />
-                    <Legend />
-                  </PieChart>
-                </ResponsiveContainer>
-              </Card>
-            </div>
-
-            {/* Category Hierarchy Breakdowns */}
-            {reportingAnalytics && (
-              <>
-                <h2 className="my-6 text-2xl font-semibold">Category Hierarchy Breakdown</h2>
-                <div className="grid gap-6 lg:grid-cols-2">
-                  {/* L1 Categories */}
-                  {reportingAnalytics.byL1 && reportingAnalytics.byL1.length > 0 && (
-                    <Card className="p-6">
-                      <h2 className="mb-4 text-lg font-semibold">L1 Category Distribution</h2>
-                      <ResponsiveContainer width="100%" height={300}>
-                        <BarChart data={reportingAnalytics.byL1}>
-                          <CartesianGrid strokeDasharray="3 3" />
-                          <XAxis dataKey="category" />
-                          <YAxis />
-                          <Tooltip />
-                          <Legend />
-                          <Bar dataKey="count" fill="#8b5cf6" />
-                        </BarChart>
-                      </ResponsiveContainer>
-                    </Card>
-                  )}
-
-                  {/* L2 Categories */}
-                  {reportingAnalytics.byL2 && reportingAnalytics.byL2.length > 0 && (
-                    <Card className="p-6">
-                      <h2 className="mb-4 text-lg font-semibold">L2 Category Distribution</h2>
-                      <ResponsiveContainer width="100%" height={300}>
-                        <BarChart data={reportingAnalytics.byL2}>
-                          <CartesianGrid strokeDasharray="3 3" />
-                          <XAxis dataKey="category" />
-                          <YAxis />
-                          <Tooltip />
-                          <Legend />
-                          <Bar dataKey="count" fill="#ec4899" />
-                        </BarChart>
-                      </ResponsiveContainer>
-                    </Card>
-                  )}
-
-                  {/* L3 Categories */}
-                  {reportingAnalytics.byL3 && reportingAnalytics.byL3.length > 0 && (
-                    <Card className="p-6">
-                      <h2 className="mb-4 text-lg font-semibold">L3 Category Distribution</h2>
-                      <ResponsiveContainer width="100%" height={300}>
-                        <BarChart data={reportingAnalytics.byL3}>
-                          <CartesianGrid strokeDasharray="3 3" />
-                          <XAxis dataKey="category" />
-                          <YAxis />
-                          <Tooltip />
-                          <Legend />
-                          <Bar dataKey="count" fill="#f59e0b" />
-                        </BarChart>
-                      </ResponsiveContainer>
-                    </Card>
-                  )}
-
-                  {/* L4 Categories */}
-                  {reportingAnalytics.byL4 && reportingAnalytics.byL4.length > 0 && (
-                    <Card className="p-6">
-                      <h2 className="mb-4 text-lg font-semibold">L4 Category Distribution</h2>
-                      <ResponsiveContainer width="100%" height={300}>
-                        <BarChart data={reportingAnalytics.byL4}>
-                          <CartesianGrid strokeDasharray="3 3" />
-                          <XAxis dataKey="category" />
-                          <YAxis />
-                          <Tooltip />
-                          <Legend />
-                          <Bar dataKey="count" fill="#10b981" />
-                        </BarChart>
-                      </ResponsiveContainer>
-                    </Card>
-                  )}
-
-                  {/* Priority Distribution */}
-                  {reportingAnalytics.byPriority && reportingAnalytics.byPriority.length > 0 && (
-                    <Card className="p-6">
-                      <h2 className="mb-4 text-lg font-semibold">Priority Distribution</h2>
-                      <ResponsiveContainer width="100%" height={300}>
-                        <PieChart>
-                          <Pie
-                            data={reportingAnalytics.byPriority}
-                            cx="50%"
-                            cy="50%"
-                            labelLine={false}
-                            label={(entry) => `${entry.priority}: ${entry.count}`}
-                            outerRadius={100}
-                            fill="#8884d8"
-                            dataKey="count"
-                          >
-                            {reportingAnalytics.byPriority.map((entry: any, index: number) => (
-                              <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
-                            ))}
-                          </Pie>
-                          <Tooltip />
-                          <Legend />
-                        </PieChart>
-                      </ResponsiveContainer>
-                    </Card>
-                  )}
-
-                  {/* Status Distribution */}
-                  {reportingAnalytics.byStatus && reportingAnalytics.byStatus.length > 0 && (
-                    <Card className="p-6">
-                      <h2 className="mb-4 text-lg font-semibold">Status Distribution</h2>
-                      <ResponsiveContainer width="100%" height={300}>
-                        <BarChart data={reportingAnalytics.byStatus}>
-                          <CartesianGrid strokeDasharray="3 3" />
-                          <XAxis dataKey="status" />
-                          <YAxis />
-                          <Tooltip />
-                          <Legend />
-                          <Bar dataKey="count" fill="#3b82f6" />
-                        </BarChart>
-                      </ResponsiveContainer>
-                    </Card>
-                  )}
-                </div>
-              </>
+            ) : (
+              <div className="flex h-40 items-center justify-center text-sm text-muted-foreground">No data</div>
             )}
-          </>
-        )}
+          </Card>
+
+          {/* Priority Distribution */}
+          <Card className="p-6">
+            <h2 className="mb-4 text-base font-semibold">Priority Distribution</h2>
+            {priorityData.length > 0 ? (
+              <div className="space-y-3">
+                {priorityData.map((p) => (
+                  <ProgressRow
+                    key={p.priority}
+                    label={p.priority}
+                    value={p.count}
+                    total={totalTickets}
+                    color={PRIORITY_COLORS[p.priority] || "#6b7280"}
+                  />
+                ))}
+                <div className="mt-4 pt-4 border-t border-border">
+                  <ResponsiveContainer width="100%" height={140}>
+                    <BarChart data={priorityData} margin={{ top: 0, right: 0, left: -20, bottom: 0 }}>
+                      <XAxis dataKey="priority" tick={{ fontSize: 11 }} tickLine={false} axisLine={false} />
+                      <YAxis tick={{ fontSize: 11 }} tickLine={false} axisLine={false} allowDecimals={false} />
+                      <Tooltip content={<CustomTooltip />} />
+                      <Bar dataKey="count" name="Tickets" radius={[4, 4, 0, 0]}>
+                        {priorityData.map((entry, i) => (
+                          <Cell key={i} fill={PRIORITY_COLORS[entry.priority] || "#6b7280"} />
+                        ))}
+                      </Bar>
+                    </BarChart>
+                  </ResponsiveContainer>
+                </div>
+              </div>
+            ) : (
+              <div className="flex h-40 items-center justify-center text-sm text-muted-foreground">No priority data</div>
+            )}
+          </Card>
+        </div>
+
+        {/* ── Row 4: Issue Type + Agent Table ── */}
+        <div className="grid gap-6 lg:grid-cols-2">
+          {/* Issue Type Distribution */}
+          <Card className="p-6">
+            <h2 className="mb-4 text-base font-semibold">Issue Type Distribution</h2>
+            {issueTypeData.length > 0 ? (
+              <div className="space-y-3">
+                {issueTypeData.sort((a, b) => b.count - a.count).map((it, i) => (
+                  <ProgressRow
+                    key={it.type}
+                    label={it.type}
+                    value={it.count}
+                    total={totalTickets}
+                    color={CHART_COLORS[i % CHART_COLORS.length]}
+                  />
+                ))}
+              </div>
+            ) : (
+              <div className="flex h-40 items-center justify-center text-sm text-muted-foreground">No data</div>
+            )}
+          </Card>
+
+          {/* Agent Leaderboard */}
+          <Card className="p-6">
+            <div className="mb-4 flex items-center gap-2">
+              <Users className="h-4 w-4 text-muted-foreground" />
+              <h2 className="text-base font-semibold">Agent Performance</h2>
+            </div>
+            {agentData.length > 0 ? (
+              <div className="space-y-2">
+                <div className="grid grid-cols-4 text-xs font-medium text-muted-foreground mb-1 px-1">
+                  <span className="col-span-2">Agent</span>
+                  <span className="text-center">Total</span>
+                  <span className="text-center">Resolved %</span>
+                </div>
+                {agentData.map((a, i) => (
+                  <div key={a.name} className="grid grid-cols-4 items-center gap-2 rounded-lg px-1 py-1.5 hover:bg-muted/50 transition-colors">
+                    <div className="col-span-2 flex items-center gap-2">
+                      <span className="flex h-5 w-5 items-center justify-center rounded-full bg-muted text-xs font-medium">{i + 1}</span>
+                      <span className="truncate text-sm font-medium">{a.name}</span>
+                    </div>
+                    <span className="text-center text-sm font-semibold">{a.total}</span>
+                    <div className="flex items-center justify-center gap-1">
+                      <span className={`text-sm font-semibold ${a.rate >= 70 ? "text-green-600" : a.rate >= 40 ? "text-amber-600" : "text-red-500"}`}>
+                        {a.rate}%
+                      </span>
+                      {a.breached > 0 && (
+                        <Badge variant="destructive" className="h-4 px-1 text-[10px]">{a.breached} SLA</Badge>
+                      )}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <div className="flex h-40 items-center justify-center text-sm text-muted-foreground">
+                <div className="text-center">
+                  <Zap className="mx-auto mb-2 h-8 w-8 text-muted-foreground/40" />
+                  No assigned tickets in range
+                </div>
+              </div>
+            )}
+          </Card>
+        </div>
+
       </main>
     </div>
   );
