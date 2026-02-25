@@ -48,7 +48,10 @@ export function canViewTicket(user: User, ticket: Ticket): boolean {
     return isCXTicketVisible(user, ticket);
   }
 
-  return ticket.department === user.department;
+  // Match ticket department against user's department OR sub-department
+  // e.g. user dept=Supply, subDept=Marketplace can see dept=Supply AND dept=Marketplace tickets
+  return ticket.department === user.department ||
+    (!!user.subDepartment && ticket.department === user.subDepartment);
 }
 
 /**
@@ -63,9 +66,12 @@ export function filterTicketsByDepartmentAccess(tickets: Ticket[], user: User): 
     );
   }
 
-  // Always include tickets assigned to the user, plus all tickets in their department
+  // Match by assignee, department, or sub-department
+  // e.g. Supply/Marketplace user sees all Supply tickets, all Marketplace tickets, and their assigned tickets
   return tickets.filter(ticket =>
-    ticket.assigneeId === user.id || ticket.department === user.department
+    ticket.assigneeId === user.id ||
+    ticket.department === user.department ||
+    (!!user.subDepartment && ticket.department === user.subDepartment)
   );
 }
 
