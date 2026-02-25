@@ -51,6 +51,7 @@ import {
   ChevronDown,
   MessageSquare,
   UserPlus,
+  Trash2,
 } from "lucide-react";
 import type { Ticket, Category, Department, SubDepartment } from "@shared/schema";
 
@@ -132,6 +133,7 @@ export default function AllTicketsPage() {
   const [showBulkCommentDialog, setShowBulkCommentDialog] = useState(false);
   const [bulkComment, setBulkComment] = useState("");
   const [showBulkSolveDialog, setShowBulkSolveDialog] = useState(false);
+  const [showBulkDeleteDialog, setShowBulkDeleteDialog] = useState(false);
   const queryClient = useQueryClient();
   const { toast } = useToast();
 
@@ -309,6 +311,38 @@ export default function AllTicketsPage() {
     },
   });
 
+  // Bulk delete mutation (Owner/Admin only)
+  const bulkDeleteMutation = useMutation({
+    mutationFn: async (ticketIds: string[]) => {
+      const userEmail = localStorage.getItem("userEmail");
+      const results = await Promise.all(
+        ticketIds.map(async (ticketId) => {
+          const res = await fetch(`/api/tickets/${ticketId}`, {
+            method: "DELETE",
+            headers: {
+              ...(userEmail ? { "x-user-email": userEmail } : {}),
+            },
+          });
+          if (!res.ok) {
+            const err = await res.json().catch(() => ({ error: "Unknown error" }));
+            throw new Error(err.error || `Failed to delete ticket ${ticketId}`);
+          }
+          return res.json();
+        })
+      );
+      return results;
+    },
+    onSuccess: (_, ticketIds) => {
+      queryClient.invalidateQueries({ queryKey: ["tickets"] });
+      setSelectedTickets(new Set());
+      setShowBulkDeleteDialog(false);
+      toast({ title: "Tickets deleted", description: `${ticketIds.length} ticket(s) permanently deleted.` });
+    },
+    onError: (error: Error) => {
+      toast({ title: "Error", description: error.message, variant: "destructive" });
+    },
+  });
+
   // Bulk selection handlers
   const handleSelectTicket = (ticketId: string) => {
     const newSelected = new Set(selectedTickets);
@@ -350,6 +384,14 @@ export default function AllTicketsPage() {
       return;
     }
     setShowBulkSolveDialog(true);
+  };
+
+  const handleBulkDelete = () => {
+    if (selectedTickets.size === 0) {
+      toast({ title: "No tickets selected", description: "Please select tickets to delete", variant: "destructive" });
+      return;
+    }
+    setShowBulkDeleteDialog(true);
   };
 
   // Department-based ticket access filtering
@@ -595,6 +637,15 @@ export default function AllTicketsPage() {
                         <CheckCircle className="mr-2 h-4 w-4" />
                         Mark as Solved
                       </DropdownMenuItem>
+                      {hasPermission("delete:tickets") && (
+                        <DropdownMenuItem
+                          onClick={handleBulkDelete}
+                          className="text-destructive focus:text-destructive"
+                        >
+                          <Trash2 className="mr-2 h-4 w-4" />
+                          Delete Selected
+                        </DropdownMenuItem>
+                      )}
                     </DropdownMenuContent>
                   </DropdownMenu>
                   <Button
@@ -1131,6 +1182,48 @@ export default function AllTicketsPage() {
                   </>
                 ) : (
                   "Mark as Solved"
+                )}
+              </Button>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* Bulk Delete Confirmation Dialog */}
+      <Dialog open={showBulkDeleteDialog} onOpenChange={setShowBulkDeleteDialog}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2 text-destructive">
+              <Trash2 className="h-5 w-5" />
+              Delete {selectedTickets.size} Ticket(s)
+            </DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4">
+            <p className="text-sm text-muted-foreground">
+              Are you sure you want to permanently delete{" "}
+              <span className="font-semibold text-foreground">{selectedTickets.size} ticket(s)</span>?
+              This action <span className="font-semibold text-foreground">cannot be undone</span>.
+              All comments and history will also be removed.
+            </p>
+            <div className="flex justify-end gap-2 pt-4">
+              <Button variant="outline" onClick={() => setShowBulkDeleteDialog(false)}>
+                Cancel
+              </Button>
+              <Button
+                variant="destructive"
+                onClick={() => bulkDeleteMutation.mutate(Array.from(selectedTickets))}
+                disabled={bulkDeleteMutation.isPending}
+              >
+                {bulkDeleteMutation.isPending ? (
+                  <>
+                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                    Deleting...
+                  </>
+                ) : (
+                  <>
+                    <Trash2 className="mr-2 h-4 w-4" />
+                    Delete Permanently
+                  </>
                 )}
               </Button>
             </div>
