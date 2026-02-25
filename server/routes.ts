@@ -852,8 +852,8 @@ export async function registerRoutes(
       }
 
       // Only Owner and Admin roles can delete tickets
-      const userPermissions = currentUser.permissions || [];
-      if (!userPermissions.includes("delete:tickets")) {
+      const deleteCheck = checkPermission(currentUser, "delete:tickets");
+      if (!deleteCheck.hasPermission) {
         return res.status(403).json({ error: "You do not have permission to delete tickets." });
       }
 

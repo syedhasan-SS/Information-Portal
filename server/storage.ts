@@ -849,8 +849,8 @@ export class DatabaseStorage implements IStorage {
     });
     allCategoryObjects = Array.from(uniqueCategoryMap.values());
 
-    // Filter by departmentType if specified
-    if (filters?.departmentType) {
+    // Filter by departmentType if specified (skip filter for "All" - show everything)
+    if (filters?.departmentType && filters.departmentType !== "All") {
       allCategoryObjects = allCategoryObjects.filter(cat =>
         cat.departmentType === filters.departmentType || cat.departmentType === "All"
       );
