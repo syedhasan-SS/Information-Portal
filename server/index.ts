@@ -4,6 +4,7 @@ import { registerRoutes } from "./routes";
 import { serveStatic } from "./static";
 import { createServer } from "http";
 import { storage } from "./storage";
+import { startDailyReportScheduler } from "./slack-reporter";
 
 const app = express();
 const httpServer = createServer(app);
@@ -109,6 +110,9 @@ app.use((req, res, next) => {
 
   // Fix field department types on startup
   await fixFieldDepartmentTypes();
+
+  // Start Slack daily report scheduler (fires at 08:00 PKT / 03:00 UTC)
+  startDailyReportScheduler();
 
   app.use((err: any, _req: Request, res: Response, next: NextFunction) => {
     const status = err.status || err.statusCode || 500;

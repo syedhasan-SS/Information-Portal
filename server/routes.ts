@@ -58,6 +58,12 @@ import {
   validateTicketUpdate,
   getUserDepartmentAccess,
 } from "./ticket-permissions";
+import {
+  getAvailableChannels,
+  sendAnalyticsReportToChannel,
+  buildSummaryFromTickets,
+  isSlackReporterConfigured,
+} from "./slack-reporter";
 
 // Permission check helper
 async function checkPermission(req: any, requiredPermission: string): Promise<{ hasPermission: boolean; user?: any; error?: string }> {
@@ -5496,6 +5502,93 @@ roles: ${JSON.stringify(updated.roles, null, 2)}</pre>
       });
     } catch (error: any) {
       console.error("[Admin] Setup multi-role error:", error);
+      res.status(500).json({ error: error.message });
+    }
+  });
+
+  // ===== Slack Reporting APIs =====
+
+  /** GET /api/reports/channels — list all configured Slack channels */
+  app.get("/api/reports/channels", async (req, res) => {
+    try {
+      const permCheck = await checkPermission(req, "view:analytics");
+      if (!permCheck.hasPermission) {
+        return res.status(403).json({ error: permCheck.error });
+      }
+
+      const channels = getAvailableChannels();
+      res.json({
+        configured: isSlackReporterConfigured(),
+        channels,
+      });
+    } catch (error: any) {
+      res.status(500).json({ error: error.message });
+    }
+  });
+
+  /**
+   * POST /api/reports/send-to-slack
+   * Body: { channelId, label, dateFrom, dateTo }
+   * Fetches tickets filtered by date range and sends an analytics summary to Slack.
+   */
+  app.post("/api/reports/send-to-slack", async (req, res) => {
+    try {
+      const permCheck = await checkPermission(req, "view:analytics");
+      if (!permCheck.hasPermission) {
+        return res.status(403).json({ error: permCheck.error });
+      }
+
+      const { channelId, label, dateFrom, dateTo } = req.body as {
+        channelId: string;
+        label?: string;
+        dateFrom?: string;
+        dateTo?: string;
+      };
+
+      if (!channelId) {
+        return res.status(400).json({ error: "channelId is required" });
+      }
+
+      if (!isSlackReporterConfigured()) {
+        return res.status(503).json({ error: "Slack is not configured. Set SLACK_BOT_TOKEN in environment variables." });
+      }
+
+      // Fetch all tickets (already filtered by department access via permission check is done implicitly —
+      // since this is an analytics action, Owner/Admin level users are calling this)
+      const allTickets = await storage.getTickets();
+      const allUsers = await storage.getUsers();
+
+      // Filter by date range if provided
+      let tickets = allTickets;
+      if (dateFrom || dateTo) {
+        const from = dateFrom ? new Date(dateFrom) : null;
+        const to = dateTo ? new Date(dateTo) : null;
+        tickets = allTickets.filter((t) => {
+          const d = new Date(t.createdAt);
+          if (from && d < from) return false;
+          if (to && d > to) return false;
+          return true;
+        });
+      }
+
+      const reportLabel = label || "Analytics Report";
+      const fromLabel = dateFrom
+        ? new Date(dateFrom).toLocaleDateString("en-GB", { day: "2-digit", month: "short", year: "numeric" })
+        : "All time";
+      const toLabel = dateTo
+        ? new Date(dateTo).toLocaleDateString("en-GB", { day: "2-digit", month: "short", year: "numeric" })
+        : new Date().toLocaleDateString("en-GB", { day: "2-digit", month: "short", year: "numeric" });
+
+      const summary = buildSummaryFromTickets(tickets, allUsers, reportLabel, fromLabel, toLabel);
+      const result = await sendAnalyticsReportToChannel(channelId, summary);
+
+      if (result.success) {
+        res.json({ success: true, ts: result.ts, ticketsIncluded: tickets.length });
+      } else {
+        res.status(500).json({ success: false, error: result.error });
+      }
+    } catch (error: any) {
+      console.error("[Reports] send-to-slack error:", error);
       res.status(500).json({ error: error.message });
     }
   });

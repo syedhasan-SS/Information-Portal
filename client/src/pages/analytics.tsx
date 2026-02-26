@@ -1,5 +1,5 @@
 import { useState, useMemo } from "react";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useMutation } from "@tanstack/react-query";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
@@ -16,8 +16,17 @@ import {
   PopoverContent,
   PopoverTrigger,
 } from "@/components/ui/popover";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 import { Calendar as CalendarComponent } from "@/components/ui/calendar";
 import { useLocation } from "wouter";
+import { toast } from "sonner";
 import {
   ArrowLeft,
   BarChart3,
@@ -35,6 +44,7 @@ import {
   Activity,
   Users,
   Zap,
+  Send,
 } from "lucide-react";
 import { format, subDays, startOfWeek, endOfWeek } from "date-fns";
 import {
@@ -89,6 +99,37 @@ async function getUsers() {
     headers: { ...(userEmail ? { "x-user-email": userEmail } : {}) },
   });
   if (!res.ok) return [];
+  return res.json();
+}
+
+async function getSlackChannels() {
+  const userEmail = localStorage.getItem("userEmail");
+  const res = await fetch("/api/reports/channels", {
+    headers: { ...(userEmail ? { "x-user-email": userEmail } : {}) },
+  });
+  if (!res.ok) return { configured: false, channels: [] };
+  return res.json();
+}
+
+async function sendReportToSlack(payload: {
+  channelId: string;
+  label: string;
+  dateFrom?: string;
+  dateTo?: string;
+}) {
+  const userEmail = localStorage.getItem("userEmail");
+  const res = await fetch("/api/reports/send-to-slack", {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      ...(userEmail ? { "x-user-email": userEmail } : {}),
+    },
+    body: JSON.stringify(payload),
+  });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({ error: "Unknown error" }));
+    throw new Error(err.error || "Failed to send report");
+  }
   return res.json();
 }
 
@@ -213,6 +254,10 @@ export default function AnalyticsPage() {
   const [customDateEnd, setCustomDateEnd] = useState<Date | undefined>();
   const [showCustomPicker, setShowCustomPicker] = useState(false);
 
+  // Slack report dialog state
+  const [showSlackDialog, setShowSlackDialog] = useState(false);
+  const [slackChannelId, setSlackChannelId] = useState<string>("");
+
   const { data: tickets = [], isLoading } = useQuery({
     queryKey: ["tickets"],
     queryFn: getTickets,
@@ -221,6 +266,24 @@ export default function AnalyticsPage() {
   const { data: users = [] } = useQuery({
     queryKey: ["users"],
     queryFn: getUsers,
+  });
+
+  const { data: slackData } = useQuery({
+    queryKey: ["slack-channels"],
+    queryFn: getSlackChannels,
+  });
+  const slackChannels: Array<{ id: string; name: string }> = slackData?.channels ?? [];
+  const slackConfigured: boolean = slackData?.configured ?? false;
+
+  const sendToSlackMutation = useMutation({
+    mutationFn: sendReportToSlack,
+    onSuccess: (data) => {
+      setShowSlackDialog(false);
+      toast.success(`Report sent! Included ${data.ticketsIncluded} tickets.`);
+    },
+    onError: (err: Error) => {
+      toast.error(err.message || "Failed to send report to Slack");
+    },
   });
 
   // Compute date range from preset
@@ -416,10 +479,22 @@ export default function AnalyticsPage() {
                 </div>
               </div>
             </div>
-            <Button variant="outline" size="sm" onClick={() => exportToCSV(filtered)}>
-              <Download className="mr-2 h-4 w-4" />
-              Export CSV
-            </Button>
+            <div className="flex items-center gap-2">
+              <Button variant="outline" size="sm" onClick={() => exportToCSV(filtered)}>
+                <Download className="mr-2 h-4 w-4" />
+                Export CSV
+              </Button>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => setShowSlackDialog(true)}
+                disabled={!slackConfigured}
+                title={!slackConfigured ? "Slack is not configured" : "Send current report to Slack"}
+              >
+                <Send className="mr-2 h-4 w-4" />
+                Send to Slack
+              </Button>
+            </div>
           </div>
         </div>
       </header>
@@ -767,6 +842,90 @@ export default function AnalyticsPage() {
         </div>
 
       </main>
+
+      {/* ── Send to Slack Dialog ── */}
+      <Dialog open={showSlackDialog} onOpenChange={setShowSlackDialog}>
+        <DialogContent className="sm:max-w-[440px]">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Send className="h-4 w-4" />
+              Send Report to Slack
+            </DialogTitle>
+            <DialogDescription>
+              Send the current analytics summary ({filtered.length} tickets,{" "}
+              {PRESETS.find((p) => p.key === datePreset)?.label ?? "custom range"}) to a Slack channel.
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="space-y-4 py-2">
+            {/* Channel selector */}
+            <div className="space-y-1.5">
+              <Label className="text-sm">Destination Channel</Label>
+              {slackChannels.length > 0 ? (
+                <Select value={slackChannelId} onValueChange={setSlackChannelId}>
+                  <SelectTrigger>
+                    <SelectValue placeholder="Select a channel…" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {slackChannels.map((ch) => (
+                      <SelectItem key={ch.id} value={ch.id}>
+                        {ch.name}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              ) : (
+                <p className="rounded-md border border-dashed border-border p-3 text-sm text-muted-foreground">
+                  No Slack channels configured. Add channel IDs to your environment variables
+                  (e.g. <code className="text-xs">SLACK_CHANNEL_MANAGERS</code>).
+                </p>
+              )}
+            </div>
+
+            {/* Summary preview */}
+            {filtered.length > 0 && (
+              <div className="rounded-lg bg-muted/50 p-3 text-xs space-y-1 text-muted-foreground">
+                <p className="font-medium text-foreground text-sm">Report preview</p>
+                <p>📋 {filtered.length} tickets total</p>
+                <p>✅ {filtered.filter((t) => t.status === "Solved" || t.status === "Closed").length} solved</p>
+                <p>🔵 {filtered.filter((t) => t.status === "New" || t.status === "Open").length} open / new</p>
+                <p>⏳ {filtered.filter((t) => t.status === "Pending").length} pending</p>
+                <p>🔴 {filtered.filter((t) => t.slaStatus === "breached").length} SLA breached</p>
+              </div>
+            )}
+          </div>
+
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setShowSlackDialog(false)}>
+              Cancel
+            </Button>
+            <Button
+              disabled={!slackChannelId || sendToSlackMutation.isPending}
+              onClick={() => {
+                const label = `Analytics Report — ${PRESETS.find((p) => p.key === datePreset)?.label ?? "Custom Range"}`;
+                sendToSlackMutation.mutate({
+                  channelId: slackChannelId,
+                  label,
+                  dateFrom: dateRange.start?.toISOString(),
+                  dateTo: dateRange.end?.toISOString(),
+                });
+              }}
+            >
+              {sendToSlackMutation.isPending ? (
+                <>
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                  Sending…
+                </>
+              ) : (
+                <>
+                  <Send className="mr-2 h-4 w-4" />
+                  Send Report
+                </>
+              )}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
