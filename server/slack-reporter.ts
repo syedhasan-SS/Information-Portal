@@ -351,7 +351,6 @@ function buildReportBlocks(summary: ReportSummary): any[] {
   if (summary.departments.length > 0) {
     blocks.push({
       type: 'image',
-      title: { type: 'plain_text', text: 'Department Breakdown', emoji: false },
       image_url: buildDeptChartUrl(summary.departments),
       alt_text: 'Stacked bar chart: ticket status by department',
     });
@@ -362,7 +361,6 @@ function buildReportBlocks(summary: ReportSummary): any[] {
   if (summary.total > 0) {
     blocks.push({
       type: 'image',
-      title: { type: 'plain_text', text: 'SLA Compliance', emoji: false },
       image_url: buildSlaChartUrl(summary, slaEmoji, slaHealth),
       alt_text: 'Doughnut chart: SLA compliance breakdown',
     });
@@ -385,7 +383,6 @@ function buildReportBlocks(summary: ReportSummary): any[] {
     if (summary.topAgents.length > 1) {
       blocks.push({
         type: 'image',
-        title: { type: 'plain_text', text: 'Agent Performance', emoji: false },
         image_url: buildAgentChartUrl(summary.topAgents),
         alt_text: 'Bar chart: tickets solved/active/breached per agent',
       });
