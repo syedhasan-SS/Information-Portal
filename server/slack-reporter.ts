@@ -6,6 +6,8 @@
 
 import { WebClient } from '@slack/web-api';
 import { storage } from './storage';
+import { buildPendingReportData, buildPendingReportHtml } from './report-html-builder';
+import { renderHtmlToPng, cacheReportImage } from './report-image';
 
 // ── Slack client ──────────────────────────────────────────────────────────────
 
@@ -570,12 +572,186 @@ async function sendDailyReport(): Promise<void> {
   }
 }
 
+// ── Pending Complaints Image Report ──────────────────────────────────────────
+
+/**
+ * Builds the list of manager Slack mentions for departments that have pending/breached tickets.
+ * Returns a mrkdwn string like "<@U123> <@U456>" for use in the companion Slack text message.
+ */
+function buildManagerMentions(
+  pendingTickets: any[],
+  allUsers: any[]
+): string {
+  // Collect departments with pending tickets
+  const activeDepts = new Set(pendingTickets.map(t => t.department).filter(Boolean));
+
+  // Find all Managers and Heads in those departments who have a slackUserId
+  const managers = allUsers.filter(
+    (u: any) =>
+      (u.role === 'Manager' || u.role === 'Head') &&
+      u.department &&
+      activeDepts.has(u.department) &&
+      u.slackUserId
+  );
+
+  if (managers.length === 0) return '';
+
+  // Deduplicate by slackUserId
+  const seen = new Set<string>();
+  const mentions = managers
+    .filter((u: any) => {
+      if (seen.has(u.slackUserId)) return false;
+      seen.add(u.slackUserId);
+      return true;
+    })
+    .map((u: any) => `<@${u.slackUserId}>`)
+    .join(' ');
+
+  return mentions;
+}
+
+/**
+ * Send the styled pending complaints report as an image to a Slack channel.
+ * Also posts a companion text message that tags relevant department managers.
+ */
+export async function sendPendingComplaintsReport(
+  channelId: string
+): Promise<{ success: boolean; ts?: string; error?: string }> {
+  const client = getSlackClient();
+  if (!client) {
+    return { success: false, error: 'SLACK_BOT_TOKEN not configured' };
+  }
+
+  console.log('[SlackReporter] Generating pending complaints image report...');
+
+  try {
+    const [allTickets, allUsers] = await Promise.all([
+      storage.getTickets(),
+      storage.getUsers(),
+    ]);
+
+    // Only active (pending) tickets
+    const pendingTickets = allTickets.filter(
+      t => t.status === 'New' || t.status === 'Open' || t.status === 'Pending'
+    );
+
+    const data    = buildPendingReportData(allTickets, allUsers);
+    const html    = buildPendingReportHtml(data);
+    const pngBuf  = await renderHtmlToPng(html, 900);
+
+    if (!pngBuf) {
+      return { success: false, error: 'Image rendering failed — Chrome not available on this server' };
+    }
+
+    // Build manager mention string
+    const mentions = buildManagerMentions(pendingTickets, allUsers);
+    const totalBreached = data.sla.breached;
+    const totalAtRisk   = data.sla.atRisk;
+
+    const introText = [
+      mentions ? `👋 Hey ${mentions}` : '👋 Hi everyone,',
+      `\n*Please find below the pending complaints report as of ${data.generatedAt}.*`,
+      `\n📋 *${data.totalPending} total pending* · 🔴 *${totalBreached} breached* · 🟠 *${totalAtRisk} at risk* · ✅ *${data.totalOnTrack} within SLA*`,
+      totalBreached > 0 ? '\n⚠️ *Please action SLA-breached cases immediately.*' : '',
+    ].filter(Boolean).join('');
+
+    // ── Attempt 1: Upload as file (requires files:write scope) ─────────────
+    try {
+      const uploadResult = await client.filesUploadV2({
+        channel_id: channelId,
+        initial_comment: introText,
+        filename: `pending-report-${new Date().toISOString().slice(0, 10)}.png`,
+        file: pngBuf,
+      });
+
+      const ts = (uploadResult as any)?.files?.[0]?.shares?.public?.[channelId]?.[0]?.ts ||
+                 (uploadResult as any)?.file?.shares?.public?.[channelId]?.[0]?.ts || '';
+
+      console.log(`[SlackReporter] Pending complaints image report sent (file upload) to ${channelId}`);
+      return { success: true, ts };
+
+    } catch (uploadErr: any) {
+      // Only fall back on scope errors; re-throw anything else
+      const errCode = uploadErr?.data?.error || uploadErr?.message || '';
+      const isScopeError = errCode.includes('missing_scope') || errCode.includes('not_allowed_token_type');
+
+      if (!isScopeError) throw uploadErr;
+
+      console.warn('[SlackReporter] files:write scope missing — falling back to URL-based image block');
+
+      // ── Fallback: cache PNG in memory and post as a Slack image block URL ──
+      const token   = cacheReportImage(pngBuf);
+      const appUrl  = (process.env.APP_URL || 'https://information-portal-beryl.vercel.app').replace(/\/$/, '');
+      const imageUrl = `${appUrl}/api/reports/temp-image/${token}`;
+
+      // Try posting the image as a URL-based block (works when server is public)
+      try {
+        const result = await client.chat.postMessage({
+          channel: channelId,
+          text: introText,
+          blocks: [
+            {
+              type: 'section',
+              text: { type: 'mrkdwn', text: introText },
+            },
+            {
+              type: 'image',
+              image_url: imageUrl,
+              alt_text: `Pending complaints report — ${data.generatedAt}`,
+            },
+          ],
+          unfurl_links: false,
+          unfurl_media: true,
+        });
+
+        console.log(`[SlackReporter] Pending complaints report sent (URL fallback) to ${channelId} ts: ${result.ts}`);
+        return { success: true, ts: result.ts as string };
+
+      } catch (imageBlockErr: any) {
+        // Image URL unreachable (e.g. local dev server not public) — send text-only
+        console.warn(
+          '[SlackReporter] Image block failed (URL unreachable?), sending text-only:',
+          imageBlockErr.message
+        );
+
+        const textResult = await client.chat.postMessage({
+          channel: channelId,
+          text: introText,
+          blocks: [
+            {
+              type: 'section',
+              text: { type: 'mrkdwn', text: introText },
+            },
+            {
+              type: 'context',
+              elements: [{
+                type: 'mrkdwn',
+                text: `⚠️ _Image report unavailable. To enable inline image upload, add the \`files:write\` scope to the Slack app at <https://api.slack.com/apps|api.slack.com>._`,
+              }],
+            },
+          ],
+        });
+
+        console.log(`[SlackReporter] Text-only report sent to ${channelId} ts: ${textResult.ts}`);
+        return { success: true, ts: textResult.ts as string };
+      }
+    }
+
+  } catch (error: any) {
+    console.error('[SlackReporter] Failed to send pending complaints report:', error.message);
+    return { success: false, error: error.message };
+  }
+}
+
 // ── Scheduler ─────────────────────────────────────────────────────────────────
 
 /**
  * Starts the daily report scheduler.
  * Fires at TARGET_HOUR_UTC:TARGET_MINUTE_UTC every day → 08:00 AM PKT (03:00 UTC).
  * Uses a recursive setTimeout so it re-syncs wall-clock time after each fire.
+ * Sends BOTH:
+ *   1. The analytics chart-based summary (existing)
+ *   2. The pending complaints image report (new)
  */
 export function startDailyReportScheduler(): void {
   const TARGET_HOUR_UTC = 3;   // 08:00 PKT
@@ -593,11 +769,19 @@ export function startDailyReportScheduler(): void {
     const msUntilNext = next.getTime() - now.getTime();
     const hoursUntil = Math.round(msUntilNext / 3600000);
     console.log(
-      `[SlackReporter] Daily report scheduled in ~${hoursUntil}h (${next.toISOString()} UTC)`
+      `[SlackReporter] Daily reports scheduled in ~${hoursUntil}h (${next.toISOString()} UTC)`
     );
 
     setTimeout(async () => {
+      // 1. Analytics chart summary
       await sendDailyReport();
+
+      // 2. Pending complaints image report (to the managers channel)
+      const managersChannel = process.env.SLACK_CHANNEL_MANAGERS;
+      if (managersChannel) {
+        await sendPendingComplaintsReport(managersChannel);
+      }
+
       scheduleNext();
     }, msUntilNext);
   }

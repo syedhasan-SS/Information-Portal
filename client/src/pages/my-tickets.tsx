@@ -257,6 +257,21 @@ export default function MyTicketsPage() {
     queryFn: getUsers,
   });
 
+  // Fetch active departments dynamically (synced from department manager)
+  const { data: departmentList } = useQuery({
+    queryKey: ["departments"],
+    queryFn: async () => {
+      const res = await fetch("/api/departments");
+      if (!res.ok) return [];
+      const depts = await res.json();
+      // Return just the names of active departments, sorted
+      return (depts as any[])
+        .filter((d: any) => d.isActive !== false)
+        .map((d: any) => d.name as string)
+        .sort();
+    },
+  });
+
   // Fetch all field configurations for display order
   const { data: fieldConfigs } = useQuery({
     queryKey: ["field-configurations"],
@@ -1327,14 +1342,14 @@ export default function MyTicketsPage() {
                           <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
                         </Button>
                       </PopoverTrigger>
-                      <PopoverContent className="w-[400px] p-0" align="start">
+                      <PopoverContent className="w-[400px] p-0" align="start" style={{ zIndex: 9999 }}>
                         <Command shouldFilter={false}>
                           <CommandInput
                             placeholder="Search vendor by name or handle..."
                             value={vendorSearchValue}
                             onValueChange={setVendorSearchValue}
                           />
-                          <CommandList className="max-h-[300px] overflow-y-auto">
+                          <CommandList style={{ maxHeight: "280px", overflowY: "auto" }}>
                             {!vendorSearchValue && vendors && vendors.length > 200 && (
                               <div className="px-3 py-2 text-xs text-muted-foreground bg-muted/50 border-b">
                                 Showing first 200 of {vendors.length} vendors. Type to search all...
@@ -1433,7 +1448,7 @@ export default function MyTicketsPage() {
                         <SelectValue placeholder="Select department" />
                       </SelectTrigger>
                       <SelectContent className="max-h-[300px] overflow-y-auto">
-                        {DEPARTMENTS.map((d) => (
+                        {(departmentList && departmentList.length > 0 ? departmentList : ["Finance", "Operations", "Marketplace", "Tech", "Experience", "CX"]).map((d) => (
                           <SelectItem key={d} value={d}>{d}</SelectItem>
                         ))}
                       </SelectContent>

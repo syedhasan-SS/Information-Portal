@@ -134,7 +134,20 @@ export function validateTicketUpdate(
     return null;
   }
 
-  // Check if user is trying to update a ticket outside their department
+  // Fields that any authenticated non-CX user can update on ANY ticket
+  // (cross-department safe operations: assigning to someone, labelling with tags)
+  const crossDeptAllowedFields = ["assigneeId", "tags"];
+
+  // If the user is ONLY updating cross-department-safe fields, allow it regardless of department
+  const updatingFields = Object.keys(updates);
+  const onlyCrossDeptFields = updatingFields.length > 0 &&
+    updatingFields.every(f => crossDeptAllowedFields.includes(f));
+
+  if (onlyCrossDeptFields) {
+    return null; // Always allowed: reassigning or tagging any ticket
+  }
+
+  // For all other operations (status changes, etc.) user must be in the same department
   if (ticket.department !== user.department) {
     return `Access denied. You can only update tickets in ${user.department} department.`;
   }

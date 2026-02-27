@@ -63,7 +63,9 @@ import {
   sendAnalyticsReportToChannel,
   buildSummaryFromTickets,
   isSlackReporterConfigured,
+  sendPendingComplaintsReport,
 } from "./slack-reporter";
+import { getCachedImage } from "./report-image";
 
 // Permission check helper
 async function checkPermission(req: any, requiredPermission: string): Promise<{ hasPermission: boolean; user?: any; error?: string }> {
@@ -3044,6 +3046,15 @@ export async function registerRoutes(
         }
       }
 
+      // Update field overrides if provided
+      if (updates.fieldOverrides && Array.isArray(updates.fieldOverrides)) {
+        // Delete all existing overrides for this category first, then re-create
+        await storage.deleteCategoryFieldOverridesByCategoryId(id);
+        if (updates.fieldOverrides.length > 0) {
+          await storage.upsertCategoryFieldOverrides(id, updates.fieldOverrides, updates.userId);
+        }
+      }
+
       res.json({ message: "Configuration updated successfully" });
     } catch (error: any) {
       console.error("Error updating ticket config:", error);
@@ -5591,6 +5602,59 @@ roles: ${JSON.stringify(updated.roles, null, 2)}</pre>
       console.error("[Reports] send-to-slack error:", error);
       res.status(500).json({ error: error.message });
     }
+  });
+
+  /**
+   * POST /api/reports/send-pending-report
+   * Body: { channelId? }   — defaults to SLACK_CHANNEL_MANAGERS if omitted
+   * Renders the full NPS-style pending complaints image report and uploads it to Slack.
+   */
+  app.post("/api/reports/send-pending-report", async (req, res) => {
+    try {
+      const permCheck = await checkPermission(req, "view:analytics");
+      if (!permCheck.hasPermission) {
+        return res.status(403).json({ error: permCheck.error });
+      }
+
+      if (!isSlackReporterConfigured()) {
+        return res.status(503).json({ error: "Slack is not configured. Set SLACK_BOT_TOKEN." });
+      }
+
+      const channelId: string =
+        req.body?.channelId || process.env.SLACK_CHANNEL_MANAGERS || "";
+
+      if (!channelId) {
+        return res.status(400).json({ error: "channelId is required (or set SLACK_CHANNEL_MANAGERS)" });
+      }
+
+      const result = await sendPendingComplaintsReport(channelId);
+
+      if (result.success) {
+        res.json({ success: true, ts: result.ts });
+      } else {
+        res.status(500).json({ success: false, error: result.error });
+      }
+    } catch (error: any) {
+      console.error("[Reports] send-pending-report error:", error);
+      res.status(500).json({ error: error.message });
+    }
+  });
+
+  /**
+   * GET /api/reports/temp-image/:token
+   * Serves a cached PNG report image by token (10-minute TTL).
+   * Used as a fallback when the Slack bot lacks the files:write scope —
+   * the PNG is cached in memory and Slack fetches it via this public URL
+   * as an image block.
+   */
+  app.get("/api/reports/temp-image/:token", (req, res) => {
+    const png = getCachedImage(req.params.token);
+    if (!png) {
+      return res.status(404).json({ error: "Image not found or expired" });
+    }
+    res.set("Content-Type", "image/png");
+    res.set("Cache-Control", "public, max-age=600");
+    res.send(png);
   });
 
   // Register page access control routes

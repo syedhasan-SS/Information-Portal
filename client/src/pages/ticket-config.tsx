@@ -151,6 +151,8 @@ export default function TicketConfigPage() {
     placeholder: "",
     helpText: "",
     options: [] as Array<{ label: string; value: string }>,
+    categoryScope: "all" as "all" | "multiple" | "specific",
+    selectedCategoryIds: [] as string[],
   });
 
   // Fetch configurations
@@ -453,7 +455,33 @@ export default function TicketConfigPage() {
       if (!res.ok) throw new Error("Failed to create custom field");
       return res.json();
     },
-    onSuccess: () => {
+    onSuccess: async (createdField: any) => {
+      // If specific/multiple categories selected, add overrides to hide field in non-selected categories
+      if (
+        (fieldFormData.categoryScope === "specific" || fieldFormData.categoryScope === "multiple") &&
+        fieldFormData.selectedCategoryIds.length > 0 &&
+        configs
+      ) {
+        // Get all category IDs that SHOULD NOT have this field visible
+        const allCategoryIds = configs.map(c => c.id);
+        const hiddenCategoryIds = allCategoryIds.filter(id => !fieldFormData.selectedCategoryIds.includes(id));
+        // Create "hidden" overrides for all non-selected categories
+        await Promise.all(
+          hiddenCategoryIds.map(catId =>
+            fetch(`/api/config/categories/${catId}/field-overrides`, {
+              method: "PUT",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({
+                overrides: [{
+                  fieldConfigurationId: createdField.id,
+                  visibilityOverride: "hidden",
+                  requiredOverride: null,
+                }],
+              }),
+            })
+          )
+        );
+      }
       queryClient.invalidateQueries({ queryKey: ["custom-fields"] });
       setShowFieldDialog(false);
       setEditingField(null);
@@ -468,6 +496,8 @@ export default function TicketConfigPage() {
         placeholder: "",
         helpText: "",
         options: [],
+        categoryScope: "all",
+        selectedCategoryIds: [],
       });
       toast({ title: "Success", description: "Custom field created successfully" });
     },
@@ -501,6 +531,8 @@ export default function TicketConfigPage() {
         placeholder: "",
         helpText: "",
         options: [],
+        categoryScope: "all",
+        selectedCategoryIds: [],
       });
       toast({ title: "Success", description: "Custom field updated successfully" });
     },
@@ -896,7 +928,7 @@ export default function TicketConfigPage() {
     };
 
     if (editingConfig) {
-      // Update existing configuration
+      // Update existing configuration (include field overrides)
       updateConfigMutation.mutate({
         id: editingConfig.id,
         data: {
@@ -904,6 +936,7 @@ export default function TicketConfigPage() {
           isActive: data.isActive,
           slaResponseHours: data.slaResponseHours,
           slaResolutionHours: data.slaResolutionHours,
+          fieldOverrides: data.fieldOverrides,
         },
       });
     } else {
@@ -1768,19 +1801,41 @@ export default function TicketConfigPage() {
                               size="sm"
                               onClick={() => {
                                 setEditingConfig(config);
-                                setWizardData({
-                                  issueType: config.issueType as "Complaint" | "Request" | "Information",
-                                  l1: config.l1,
-                                  l2: config.l2,
-                                  l3: config.l3,
-                                  l4: config.l4,
-                                  description: config.description || "",
-                                  departmentType: config.departmentType,
-                                  isActive: config.isActive,
-                                  slaResponseHours: config.slaResponseHours?.toString() || "",
-                                  slaResolutionHours: config.slaResolutionHours?.toString() || "",
-                                  fieldOverrides: [],
-                                });
+                                // Load existing field overrides from server before opening wizard
+                                fetch(`/api/config/categories/${config.id}/field-overrides`)
+                                  .then(r => r.ok ? r.json() : [])
+                                  .then((overrides: any[]) => {
+                                    setWizardData({
+                                      issueType: config.issueType as "Complaint" | "Request" | "Information",
+                                      l1: config.l1,
+                                      l2: config.l2,
+                                      l3: config.l3,
+                                      l4: config.l4,
+                                      description: config.description || "",
+                                      departmentType: config.departmentType,
+                                      isActive: config.isActive,
+                                      slaResponseHours: config.slaResponseHours?.toString() || "",
+                                      slaResolutionHours: config.slaResolutionHours?.toString() || "",
+                                      // Map DB overrides → wizard format
+                                      fieldOverrides: overrides.map((o: any) => ({
+                                        fieldConfigurationId: o.fieldConfigurationId,
+                                        visibilityOverride: o.visibilityOverride ?? null,
+                                        requiredOverride: o.requiredOverride ?? null,
+                                      })),
+                                    });
+                                  })
+                                  .catch(() => {
+                                    setWizardData({
+                                      issueType: config.issueType as "Complaint" | "Request" | "Information",
+                                      l1: config.l1, l2: config.l2, l3: config.l3, l4: config.l4,
+                                      description: config.description || "",
+                                      departmentType: config.departmentType,
+                                      isActive: config.isActive,
+                                      slaResponseHours: config.slaResponseHours?.toString() || "",
+                                      slaResolutionHours: config.slaResolutionHours?.toString() || "",
+                                      fieldOverrides: [],
+                                    });
+                                  });
                                 setCurrentStep(1);
                                 setShowWizard(true);
                               }}
@@ -2944,6 +2999,77 @@ export default function TicketConfigPage() {
                 onChange={(e) => setFieldFormData({ ...fieldFormData, helpText: e.target.value })}
                 placeholder="Enter help text for users"
               />
+            </div>
+
+            {/* Category Scope — which categories should show this field */}
+            <div className="space-y-3 border rounded-lg p-4 bg-muted/30">
+              <div>
+                <Label className="text-sm font-medium">Apply To</Label>
+                <p className="text-xs text-muted-foreground mt-0.5">
+                  Choose which categories this field should appear in
+                </p>
+              </div>
+              <Select
+                value={fieldFormData.categoryScope}
+                onValueChange={(value) => setFieldFormData({
+                  ...fieldFormData,
+                  categoryScope: value as "all" | "multiple" | "specific",
+                  selectedCategoryIds: [],
+                })}
+              >
+                <SelectTrigger>
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">All categories</SelectItem>
+                  <SelectItem value="multiple">Multiple categories</SelectItem>
+                  <SelectItem value="specific">Specific category</SelectItem>
+                </SelectContent>
+              </Select>
+
+              {/* Category picker for specific/multiple scopes */}
+              {(fieldFormData.categoryScope === "specific" || fieldFormData.categoryScope === "multiple") && configs && (
+                <div className="space-y-2 max-h-[200px] overflow-y-auto border rounded-md p-2 bg-background">
+                  <p className="text-xs text-muted-foreground px-1 pb-1 border-b">
+                    {fieldFormData.categoryScope === "specific"
+                      ? "Select exactly one category:"
+                      : "Select all categories this field applies to:"}
+                  </p>
+                  {configs.map((cat) => {
+                    const label = [cat.l1, cat.l2, cat.l3, cat.l4].filter(Boolean).join(" › ");
+                    const isSelected = fieldFormData.selectedCategoryIds.includes(cat.id);
+                    return (
+                      <div key={cat.id} className="flex items-center gap-2 px-1 py-0.5 hover:bg-muted/50 rounded cursor-pointer"
+                        onClick={() => {
+                          if (fieldFormData.categoryScope === "specific") {
+                            setFieldFormData({ ...fieldFormData, selectedCategoryIds: [cat.id] });
+                          } else {
+                            setFieldFormData({
+                              ...fieldFormData,
+                              selectedCategoryIds: isSelected
+                                ? fieldFormData.selectedCategoryIds.filter(id => id !== cat.id)
+                                : [...fieldFormData.selectedCategoryIds, cat.id],
+                            });
+                          }
+                        }}
+                      >
+                        <Checkbox
+                          checked={isSelected}
+                          className="pointer-events-none"
+                        />
+                        <span className="text-xs">{label}</span>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+
+              {(fieldFormData.categoryScope === "specific" || fieldFormData.categoryScope === "multiple") &&
+                fieldFormData.selectedCategoryIds.length > 0 && (
+                <p className="text-xs text-green-600 font-medium">
+                  ✓ {fieldFormData.selectedCategoryIds.length} categor{fieldFormData.selectedCategoryIds.length === 1 ? "y" : "ies"} selected
+                </p>
+              )}
             </div>
 
             {/* Options section for select/multiselect fields */}
