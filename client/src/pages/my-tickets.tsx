@@ -1343,13 +1343,13 @@ export default function MyTicketsPage() {
                         </Button>
                       </PopoverTrigger>
                       <PopoverContent className="w-[400px] p-0" align="start" style={{ zIndex: 9999 }}>
-                        <Command shouldFilter={false}>
+                        <Command shouldFilter={false} className="overflow-visible">
                           <CommandInput
                             placeholder="Search vendor by name or handle..."
                             value={vendorSearchValue}
                             onValueChange={setVendorSearchValue}
                           />
-                          <CommandList style={{ maxHeight: "280px", overflowY: "auto" }}>
+                          <CommandList style={{ maxHeight: "280px", overflowY: "scroll", overflowX: "hidden" }}>
                             {!vendorSearchValue && vendors && vendors.length > 200 && (
                               <div className="px-3 py-2 text-xs text-muted-foreground bg-muted/50 border-b">
                                 Showing first 200 of {vendors.length} vendors. Type to search all...
@@ -1518,14 +1518,14 @@ export default function MyTicketsPage() {
                           <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
                         </Button>
                       </PopoverTrigger>
-                      <PopoverContent className="w-[400px] p-0" align="start">
-                        <Command shouldFilter={false}>
+                      <PopoverContent className="w-[400px] p-0" align="start" style={{ zIndex: 9999 }}>
+                        <Command shouldFilter={false} className="overflow-visible">
                           <CommandInput
                             placeholder="Type to search categories..."
                             value={categorySearchValue}
                             onValueChange={setCategorySearchValue}
                           />
-                          <CommandList className="max-h-[300px] overflow-y-auto">
+                          <CommandList style={{ maxHeight: "280px", overflowY: "scroll", overflowX: "hidden" }}>
                             <CommandEmpty>
                               <p className="text-sm text-muted-foreground p-2">
                                 No categories found matching "{categorySearchValue}"
@@ -1678,14 +1678,14 @@ export default function MyTicketsPage() {
                           <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
                         </Button>
                       </PopoverTrigger>
-                      <PopoverContent className="w-full p-0" align="start">
-                        <Command shouldFilter={false}>
+                      <PopoverContent className="w-full p-0" align="start" style={{ zIndex: 9999 }}>
+                        <Command shouldFilter={false} className="overflow-visible">
                           <CommandInput
                             placeholder="Search or type order ID..."
                             value={orderIdSearchValue}
                             onValueChange={setOrderIdSearchValue}
                           />
-                          <CommandList className="max-h-[300px] overflow-y-auto">
+                          <CommandList style={{ maxHeight: "280px", overflowY: "scroll", overflowX: "hidden" }}>
                             <CommandEmpty>
                               <div className="p-2">
                                 <p className="text-sm text-muted-foreground mb-2">
