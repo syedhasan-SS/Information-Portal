@@ -636,14 +636,6 @@ export async function sendPendingComplaintsReport(
     );
 
     const data    = buildPendingReportData(allTickets, allUsers);
-    const html    = buildPendingReportHtml(data);
-    const pngBuf  = await renderHtmlToPng(html, 900);
-
-    if (!pngBuf) {
-      return { success: false, error: 'Image rendering failed — Chrome not available on this server' };
-    }
-
-    // Build manager mention string
     const mentions = buildManagerMentions(pendingTickets, allUsers);
     const totalBreached = data.sla.breached;
     const totalAtRisk   = data.sla.atRisk;
@@ -655,87 +647,129 @@ export async function sendPendingComplaintsReport(
       totalBreached > 0 ? '\n⚠️ *Please action SLA-breached cases immediately.*' : '',
     ].filter(Boolean).join('');
 
-    // ── Attempt 1: Upload as file (requires files:write scope) ─────────────
-    try {
-      const uploadResult = await client.filesUploadV2({
-        channel_id: channelId,
-        initial_comment: introText,
-        filename: `pending-report-${new Date().toISOString().slice(0, 10)}.png`,
-        file: pngBuf,
-      });
+    // ── Attempt 1: Chrome screenshot → file upload ───────────────────────────
+    // Only attempted when Chrome is available (local dev / dedicated server).
+    const html   = buildPendingReportHtml(data);
+    const pngBuf = await renderHtmlToPng(html, 900);
 
-      const ts = (uploadResult as any)?.files?.[0]?.shares?.public?.[channelId]?.[0]?.ts ||
-                 (uploadResult as any)?.file?.shares?.public?.[channelId]?.[0]?.ts || '';
-
-      console.log(`[SlackReporter] Pending complaints image report sent (file upload) to ${channelId}`);
-      return { success: true, ts };
-
-    } catch (uploadErr: any) {
-      // Only fall back on scope errors; re-throw anything else
-      const errCode = uploadErr?.data?.error || uploadErr?.message || '';
-      const isScopeError = errCode.includes('missing_scope') || errCode.includes('not_allowed_token_type');
-
-      if (!isScopeError) throw uploadErr;
-
-      console.warn('[SlackReporter] files:write scope missing — falling back to URL-based image block');
-
-      // ── Fallback: cache PNG in memory and post as a Slack image block URL ──
-      const token   = cacheReportImage(pngBuf);
-      const appUrl  = (process.env.APP_URL || 'https://information-portal-beryl.vercel.app').replace(/\/$/, '');
-      const imageUrl = `${appUrl}/api/reports/temp-image/${token}`;
-
-      // Try posting the image as a URL-based block (works when server is public)
+    if (pngBuf) {
       try {
-        const result = await client.chat.postMessage({
-          channel: channelId,
-          text: introText,
-          blocks: [
-            {
-              type: 'section',
-              text: { type: 'mrkdwn', text: introText },
-            },
-            {
-              type: 'image',
-              image_url: imageUrl,
-              alt_text: `Pending complaints report — ${data.generatedAt}`,
-            },
-          ],
-          unfurl_links: false,
-          unfurl_media: true,
+        const uploadResult = await client.filesUploadV2({
+          channel_id: channelId,
+          initial_comment: introText,
+          filename: `pending-report-${new Date().toISOString().slice(0, 10)}.png`,
+          file: pngBuf,
         });
-
-        console.log(`[SlackReporter] Pending complaints report sent (URL fallback) to ${channelId} ts: ${result.ts}`);
-        return { success: true, ts: result.ts as string };
-
-      } catch (imageBlockErr: any) {
-        // Image URL unreachable (e.g. local dev server not public) — send text-only
-        console.warn(
-          '[SlackReporter] Image block failed (URL unreachable?), sending text-only:',
-          imageBlockErr.message
-        );
-
-        const textResult = await client.chat.postMessage({
-          channel: channelId,
-          text: introText,
-          blocks: [
-            {
-              type: 'section',
-              text: { type: 'mrkdwn', text: introText },
-            },
-            {
-              type: 'context',
-              elements: [{
-                type: 'mrkdwn',
-                text: `⚠️ _Image report unavailable. To enable inline image upload, add the \`files:write\` scope to the Slack app at <https://api.slack.com/apps|api.slack.com>._`,
-              }],
-            },
-          ],
-        });
-
-        console.log(`[SlackReporter] Text-only report sent to ${channelId} ts: ${textResult.ts}`);
-        return { success: true, ts: textResult.ts as string };
+        const ts = (uploadResult as any)?.files?.[0]?.shares?.public?.[channelId]?.[0]?.ts ||
+                   (uploadResult as any)?.file?.shares?.public?.[channelId]?.[0]?.ts || '';
+        console.log(`[SlackReporter] Pending complaints image report sent (file upload) to ${channelId}`);
+        return { success: true, ts };
+      } catch (uploadErr: any) {
+        // Non-scope errors bubble up; scope errors fall through to Block Kit
+        const errCode = uploadErr?.data?.error || uploadErr?.message || '';
+        const isScopeError = errCode.includes('missing_scope') || errCode.includes('not_allowed_token_type');
+        if (!isScopeError) throw uploadErr;
+        console.warn('[SlackReporter] files:write scope missing — falling back to Block Kit report');
       }
+    } else {
+      console.warn('[SlackReporter] Chrome not available — using Block Kit report');
     }
+
+    // ── Attempt 2: Rich Block Kit report with QuickChart.io images ───────────
+    // Serverless-compatible: no Chrome needed, charts fetched from QuickChart.io.
+
+    // SLA doughnut chart
+    const slaTotal = data.sla.onTrack + data.sla.atRisk + data.sla.breached;
+    const slaChartUrl = chartUrl({
+      type: 'doughnut',
+      data: {
+        labels: ['On Track', 'At Risk', 'Breached'],
+        datasets: [{
+          data: [data.sla.onTrack, data.sla.atRisk, data.sla.breached],
+          backgroundColor: ['#22c55e', '#f97316', '#ef4444'],
+          borderWidth: 2,
+        }],
+      },
+      options: {
+        plugins: {
+          legend: { position: 'right' },
+          title: { display: true, text: `SLA Status — ${slaTotal} tickets` },
+        },
+        cutout: '60%',
+      },
+    }, 500, 260);
+
+    // Department bar chart
+    const deptChartUrl = chartUrl({
+      type: 'bar',
+      data: {
+        labels: data.byDepartment.map(d => d.dept),
+        datasets: [
+          {
+            label: 'On Track',
+            data: data.byDepartment.map(d => d.count - d.breached),
+            backgroundColor: '#22c55e',
+          },
+          {
+            label: 'Breached',
+            data: data.byDepartment.map(d => d.breached),
+            backgroundColor: '#ef4444',
+          },
+        ],
+      },
+      options: {
+        indexAxis: 'y',
+        plugins: {
+          title: { display: true, text: 'Pending by Department' },
+          legend: { position: 'bottom' },
+        },
+        scales: { x: { stacked: true }, y: { stacked: true } },
+      },
+    }, 600, Math.max(200, data.byDepartment.length * 36 + 60));
+
+    // Assignee table (top 10)
+    const assigneeLines = data.byAssignee.slice(0, 10).map((a, i) =>
+      `${i + 1}. *${a.name}* (${a.dept}) — ${a.count} ticket${a.count !== 1 ? 's' : ''}${a.breached > 0 ? ` · 🔴 ${a.breached} breached` : ''}`
+    ).join('\n');
+
+    const blocks: any[] = [
+      { type: 'section', text: { type: 'mrkdwn', text: introText } },
+      { type: 'divider' },
+      {
+        type: 'image',
+        image_url: slaChartUrl,
+        alt_text: 'SLA Status Doughnut Chart',
+      },
+      {
+        type: 'image',
+        image_url: deptChartUrl,
+        alt_text: 'Pending by Department Bar Chart',
+      },
+    ];
+
+    if (assigneeLines) {
+      blocks.push({ type: 'divider' });
+      blocks.push({
+        type: 'section',
+        text: { type: 'mrkdwn', text: `*👤 Top Assignees by Pending Tickets:*\n${assigneeLines}` },
+      });
+    }
+
+    blocks.push({
+      type: 'context',
+      elements: [{ type: 'mrkdwn', text: `_Generated ${data.generatedAt}_` }],
+    });
+
+    const result = await client.chat.postMessage({
+      channel: channelId,
+      text: introText,
+      blocks,
+      unfurl_links: false,
+      unfurl_media: false,
+    });
+
+    console.log(`[SlackReporter] Pending complaints Block Kit report sent to ${channelId} ts: ${result.ts}`);
+    return { success: true, ts: result.ts as string };
 
   } catch (error: any) {
     console.error('[SlackReporter] Failed to send pending complaints report:', error.message);
