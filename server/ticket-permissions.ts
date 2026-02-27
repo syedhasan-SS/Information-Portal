@@ -4,6 +4,29 @@
 import type { User, Ticket } from "@shared/schema";
 
 /**
+ * Role hierarchy levels (higher = more access)
+ * Owner > Admin > Head > Manager > Lead > Associate > Agent
+ */
+const ROLE_LEVEL: Record<string, number> = {
+  Owner:     6,
+  Admin:     5,
+  Head:      4,
+  Manager:   3,
+  Lead:      2,
+  Associate: 1,
+  Agent:     0,
+};
+
+/**
+ * Returns true if the user's role is at or above the given level.
+ * Head / Manager / Lead are "elevated" — they get cross-department visibility.
+ */
+function isElevatedRole(user: User): boolean {
+  const level = ROLE_LEVEL[user.role] ?? 0;
+  return level >= ROLE_LEVEL["Lead"]; // Lead, Manager, Head, Admin, Owner
+}
+
+/**
  * Determine which ticket departments a CX user can access based on subDepartment.
  *
  * - subDepartment = "Seller Support"  → vendor-side tickets only (ownerTeam/department = "CX" + seller-support categories)
@@ -33,13 +56,17 @@ function isCXTicketVisible(user: User, ticket: Ticket): boolean {
  *
  * Rules:
  * - Admin/Owner: Can view ALL tickets
+ * - Head/Manager/Lead: Can view ALL tickets across all departments
  * - CX + Seller Support subDept: vendor tickets only (has vendorHandle)
  * - CX + Customer Support subDept: customer tickets only (has customer / no vendorHandle)
  * - CX + no subDept: all tickets
- * - Non-CX: only tickets in their own department
+ * - Non-CX (Associate/Agent): only tickets in their own department + assigned to them
  */
 export function canViewTicket(user: User, ticket: Ticket): boolean {
   if (user.role === "Admin" || user.role === "Owner") return true;
+
+  // Head / Manager / Lead can see all tickets across all departments
+  if (isElevatedRole(user)) return true;
 
   // Users can always see tickets assigned to them, regardless of department
   if (ticket.assigneeId === user.id) return true;
@@ -59,6 +86,9 @@ export function canViewTicket(user: User, ticket: Ticket): boolean {
  */
 export function filterTicketsByDepartmentAccess(tickets: Ticket[], user: User): Ticket[] {
   if (user.role === "Admin" || user.role === "Owner") return tickets;
+
+  // Head / Manager / Lead can see all tickets across all departments
+  if (isElevatedRole(user)) return tickets;
 
   if (user.department === "CX") {
     return tickets.filter(ticket =>
@@ -90,6 +120,8 @@ export function filterTicketsByDepartmentAccess(tickets: Ticket[], user: User): 
 export function canEditTicketDetails(user: User, ticket: Ticket): boolean {
   if (user.role === "Admin" || user.role === "Owner") return true;
   if (user.department === "CX") return isCXTicketVisible(user, ticket);
+  // Head/Manager/Lead can edit operational fields but not CX-specific details
+  // (core detail editing still restricted to CX/Admin)
   return false;
 }
 
@@ -103,8 +135,11 @@ export function canEditTicketDetails(user: User, ticket: Ticket): boolean {
  */
 export function canPerformLimitedUpdate(user: User, ticket: Ticket): boolean {
   if (user.role === "Admin" || user.role === "Owner") return true;
+  // Head/Manager/Lead can do limited updates on any ticket
+  if (isElevatedRole(user)) return true;
   if (user.department === "CX") return isCXTicketVisible(user, ticket);
-  return ticket.department === user.department;
+  // Associate/Agent: same department OR ticket is assigned to them
+  return ticket.department === user.department || ticket.assigneeId === user.id;
 }
 
 /**
@@ -134,6 +169,21 @@ export function validateTicketUpdate(
     return null;
   }
 
+  // Head / Manager / Lead can update any ticket's operational fields
+  if (isElevatedRole(user)) {
+    // They still cannot edit core CX-owned detail fields
+    const restrictedForElevated = [
+      "subject", "description", "categoryId", "issueType", "department",
+      "ownerTeam", "priorityScore", "priorityTier", "vendorHandle",
+      "customer", "fleekOrderIds", "attachments"
+    ];
+    const bad = Object.keys(updates).filter(f => restrictedForElevated.includes(f));
+    if (bad.length > 0) {
+      return `Access denied. Only CX users can edit: ${bad.join(", ")}.`;
+    }
+    return null;
+  }
+
   // Fields that any authenticated non-CX user can update on ANY ticket
   // (cross-department safe operations: assigning to someone, labelling with tags)
   const crossDeptAllowedFields = ["assigneeId", "tags"];
@@ -145,6 +195,23 @@ export function validateTicketUpdate(
 
   if (onlyCrossDeptFields) {
     return null; // Always allowed: reassigning or tagging any ticket
+  }
+
+  // If the ticket is assigned to this user, they can perform all limited operational
+  // updates (status, assignee, tags, slaStatus) even if it's from another department.
+  // (A cross-department assignment means they're explicitly responsible for it.)
+  if (ticket.assigneeId === user.id) {
+    // Still cannot edit core detail fields
+    const restrictedFields = [
+      "subject", "description", "categoryId", "issueType", "department",
+      "ownerTeam", "priorityScore", "priorityTier", "vendorHandle",
+      "customer", "fleekOrderIds", "attachments"
+    ];
+    const bad = Object.keys(updates).filter(f => restrictedFields.includes(f));
+    if (bad.length > 0) {
+      return `Access denied. Cannot edit core ticket details: ${bad.join(", ")}.`;
+    }
+    return null; // status / tags / assigneeId / slaStatus all allowed
   }
 
   // For all other operations (status changes, etc.) user must be in the same department
@@ -211,16 +278,19 @@ export function getUserDepartmentAccess(user: User): {
 } {
   const isAdmin = user.role === "Admin" || user.role === "Owner";
   const isCX = user.department === "CX";
+  const elevated = isElevatedRole(user); // Lead, Manager, Head
 
   return {
-    canViewAllDepartments: isAdmin || isCX,
-    canEditAllTickets: isAdmin || isCX,
-    departments: isAdmin || isCX ? ["All"] : [user.department || "None"],
-    restrictions: isAdmin || isCX
-      ? []
+    canViewAllDepartments: isAdmin || isCX || elevated,
+    canEditAllTickets: isAdmin || isCX || elevated,
+    departments: isAdmin || isCX || elevated ? ["All"] : [user.department || "None"],
+    restrictions: isAdmin || isCX || elevated
+      ? elevated && !isAdmin
+        ? ["Cannot edit core ticket details (subject, description, category, department)"]
+        : []
       : [
-          "Can only view tickets in your department",
-          "Can only update: assignee, status, tags",
+          "Can only view tickets in your department (+ assigned tickets)",
+          "Can only update: assignee, status, tags on same-dept or assigned tickets",
           "Cannot edit: subject, description, category, priority"
         ]
   };
