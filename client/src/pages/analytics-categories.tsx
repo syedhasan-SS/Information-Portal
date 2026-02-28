@@ -103,8 +103,14 @@ function p90(values: number[]): number {
   return sorted[Math.max(0, idx)];
 }
 
-function getTickets(): Promise<TicketType[]> {
-  return fetch("/api/tickets").then((r) => r.json());
+async function getTickets(): Promise<TicketType[]> {
+  const userEmail = localStorage.getItem("userEmail");
+  const res = await fetch("/api/tickets", {
+    headers: { ...(userEmail ? { "x-user-email": userEmail } : {}) },
+  });
+  if (!res.ok) throw new Error("Failed to fetch tickets");
+  const data = await res.json();
+  return Array.isArray(data) ? data : [];
 }
 
 function shortLabel(path: string, maxLen = 28): string {
