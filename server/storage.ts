@@ -323,9 +323,41 @@ export class DatabaseStorage implements IStorage {
     return results[0];
   }
 
+  // ── SLA Status Helper ───────────────────────────────────────────────────────
+  /**
+   * Compute the real-time SLA status for a ticket based on its resolve target.
+   * - No target → null (keep whatever is stored; frontend hides it)
+   * - Resolved/Closed → don't change (SLA was met or not at close time)
+   * - Past deadline → "breached"
+   * - Within 2 hours of deadline → "at_risk"
+   * - Otherwise → "on_track"
+   */
+  private computeSlaStatus(ticket: Ticket): Ticket {
+    const { slaResolveTarget, status } = ticket;
+    if (!slaResolveTarget) return ticket;
+    if (status === "Solved" || status === "Closed") return ticket;
+
+    const now = Date.now();
+    const target = new Date(slaResolveTarget).getTime();
+    const msUntilDue = target - now;
+    const twoHoursMs = 2 * 60 * 60 * 1000;
+
+    let slaStatus: "on_track" | "at_risk" | "breached";
+    if (msUntilDue <= 0) {
+      slaStatus = "breached";
+    } else if (msUntilDue <= twoHoursMs) {
+      slaStatus = "at_risk";
+    } else {
+      slaStatus = "on_track";
+    }
+
+    return { ...ticket, slaStatus };
+  }
+
   // Tickets
   async getTickets(): Promise<Ticket[]> {
-    return await db.select().from(tickets).orderBy(desc(tickets.createdAt));
+    const rows = await db.select().from(tickets).orderBy(desc(tickets.createdAt));
+    return rows.map(t => this.computeSlaStatus(t));
   }
 
   async getTicketById(id: string): Promise<Ticket | undefined> {
@@ -339,7 +371,7 @@ export class DatabaseStorage implements IStorage {
       )
       .limit(1);
     console.log(`[Storage] Found ticket:`, results[0] ? `YES (${results[0].ticketNumber})` : 'NO');
-    return results[0];
+    return results[0] ? this.computeSlaStatus(results[0]) : undefined;
   }
 
   async createTicket(ticket: InsertTicket): Promise<Ticket> {
@@ -421,7 +453,7 @@ export class DatabaseStorage implements IStorage {
     }
 
     const [slaConfig, tagsData] = await Promise.all([
-      this.findMatchingSlaConfiguration(ticketData.categoryId, ticketData.department),
+      this.findMatchingSlaConfiguration(ticketData.categoryId, ticketData.issueType),
       ticketData.tags ? this.getTagsByNames(ticketData.tags) : Promise.resolve([]),
     ]);
 
@@ -493,6 +525,9 @@ export class DatabaseStorage implements IStorage {
     return {
       categorySnapshot,
       slaSnapshot,
+      // Also populate the dedicated timestamp columns so the frontend can display them directly
+      slaResolveTarget:   slaSnapshot.resolveTarget  ? new Date(slaSnapshot.resolveTarget)  : null,
+      slaResponseTarget:  slaSnapshot.responseTarget ? new Date(slaSnapshot.responseTarget) : null,
       prioritySnapshot,
       tagsSnapshot,
       snapshotVersion: 1,
@@ -511,33 +546,82 @@ export class DatabaseStorage implements IStorage {
   }
 
   /**
-   * Finds matching SLA configuration for a category and department
+   * Finds the best-matching SLA configuration for a ticket.
+   *
+   * The slaConfigurations table uses issueTypeId + l1/l2/l3/l4CategoryId
+   * (NOT a flat categoryId or department field).
+   *
+   * Matching strategy (most-specific wins):
+   *   - Walk the categoryHierarchy tree upward from the leaf node to collect
+   *     l1/l2/l3/l4 ancestor IDs.
+   *   - Resolve the issueType name → issueTypeId.
+   *   - A config "matches" if every non-null field it declares equals the
+   *     ticket's corresponding value (null fields act as wildcards).
+   *   - Among all matching configs, the one with the most non-null fields wins
+   *     (most specific).
    */
   private async findMatchingSlaConfiguration(
-    categoryId: string,
-    department: string
+    categoryId: string | null | undefined,
+    issueType: string | null | undefined
   ): Promise<SlaConfiguration | undefined> {
     const allConfigs = await this.getSlaConfigurations();
+    const activeConfigs = allConfigs.filter(c => c.isActive);
+    if (activeConfigs.length === 0) return undefined;
 
-    // Try to find exact match first
-    let match = allConfigs.find(
-      config =>
-        config.isActive &&
-        config.categoryId === categoryId &&
-        config.department === department
-    );
-
-    // Fallback to "All" department if no exact match
-    if (!match) {
-      match = allConfigs.find(
-        config =>
-          config.isActive &&
-          config.categoryId === categoryId &&
-          config.department === "All"
-      );
+    // ── Resolve issueType name → ID ──────────────────────────────────────────
+    let issueTypeId: string | null = null;
+    if (issueType) {
+      const allIssueTypes = await this.getIssueTypes();
+      const found = allIssueTypes.find(it => it.name === issueType);
+      issueTypeId = found?.id || null;
     }
 
-    return match;
+    // ── Walk the category tree upward to collect l1/l2/l3/l4 IDs ────────────
+    let l1Id: string | null = null;
+    let l2Id: string | null = null;
+    let l3Id: string | null = null;
+    let l4Id: string | null = null;
+
+    if (categoryId) {
+      const allCats = await db
+        .select()
+        .from(categoryHierarchy)
+        .where(sql`${categoryHierarchy.deletedAt} IS NULL`);
+      const catMap = new Map(allCats.map(c => [c.id, c]));
+
+      // Build ancestor chain from root → leaf
+      const chain: (typeof allCats)[0][] = [];
+      let cur = catMap.get(categoryId);
+      while (cur) {
+        chain.unshift(cur);
+        cur = cur.parentId ? catMap.get(cur.parentId) : undefined;
+      }
+
+      for (const node of chain) {
+        if (node.level === 1) l1Id = node.id;
+        else if (node.level === 2) l2Id = node.id;
+        else if (node.level === 3) l3Id = node.id;
+        else if (node.level === 4) l4Id = node.id;
+      }
+    }
+
+    // ── Score each config: null fields = wildcard, non-null must match ───────
+    const specificity = (c: SlaConfiguration) =>
+      [c.issueTypeId, c.l1CategoryId, c.l2CategoryId, c.l3CategoryId, c.l4CategoryId]
+        .filter(Boolean).length;
+
+    const matches = activeConfigs
+      .filter(c => {
+        if (c.issueTypeId   && c.issueTypeId   !== issueTypeId) return false;
+        if (c.l1CategoryId  && c.l1CategoryId  !== l1Id)        return false;
+        if (c.l2CategoryId  && c.l2CategoryId  !== l2Id)        return false;
+        if (c.l3CategoryId  && c.l3CategoryId  !== l3Id)        return false;
+        if (c.l4CategoryId  && c.l4CategoryId  !== l4Id)        return false;
+        return true;
+      })
+      .sort((a, b) => specificity(b) - specificity(a));
+
+    return matches[0];
   }
 
   /**
