@@ -146,20 +146,22 @@ export default function DashboardPage() {
   const solvedLastMonth = ticketsLastMonthList.filter((t) => ["Solved", "Closed"].includes(t.status)).length;
   const resolutionRateLastMonth = ticketsLastMonth.length > 0 ? Math.round((solvedLastMonth / ticketsLastMonth.length) * 100) : 0;
 
-  // SLA Compliance - based on current month tickets only
-  const onTrackThisMonth = ticketsThisMonthList.filter((t) => t.slaStatus === "on_track").length;
-  const atRiskThisMonth = ticketsThisMonthList.filter((t) => t.slaStatus === "at_risk").length;
-  const breachedThisMonth = ticketsThisMonthList.filter((t) => t.slaStatus === "breached").length;
-  const slaCompliance = ticketsThisMonth > 0
-    ? Math.round(((onTrackThisMonth + atRiskThisMonth * 0.5) / ticketsThisMonth) * 100)
-    : 100;
+  // SLA Compliance - only tickets that have a real SLA deadline configured
+  const slaTicketsThisMonth = ticketsThisMonthList.filter((t) => t.slaResolveTarget);
+  const onTrackThisMonth = slaTicketsThisMonth.filter((t) => t.slaStatus === "on_track").length;
+  const atRiskThisMonth = slaTicketsThisMonth.filter((t) => t.slaStatus === "at_risk").length;
+  const breachedThisMonth = slaTicketsThisMonth.filter((t) => t.slaStatus === "breached").length;
+  const slaCompliance = slaTicketsThisMonth.length > 0
+    ? Math.round(((onTrackThisMonth + atRiskThisMonth * 0.5) / slaTicketsThisMonth.length) * 100)
+    : 0;
 
   // SLA Compliance for last month (for comparison)
-  const onTrackLastMonth = ticketsLastMonthList.filter((t) => t.slaStatus === "on_track").length;
-  const atRiskLastMonth = ticketsLastMonthList.filter((t) => t.slaStatus === "at_risk").length;
-  const slaComplianceLastMonth = ticketsLastMonth.length > 0
-    ? Math.round(((onTrackLastMonth + atRiskLastMonth * 0.5) / ticketsLastMonth.length) * 100)
-    : 100;
+  const slaTicketsLastMonth = ticketsLastMonthList.filter((t) => t.slaResolveTarget);
+  const onTrackLastMonth = slaTicketsLastMonth.filter((t) => t.slaStatus === "on_track").length;
+  const atRiskLastMonth = slaTicketsLastMonth.filter((t) => t.slaStatus === "at_risk").length;
+  const slaComplianceLastMonth = slaTicketsLastMonth.length > 0
+    ? Math.round(((onTrackLastMonth + atRiskLastMonth * 0.5) / slaTicketsLastMonth.length) * 100)
+    : 0;
 
   // Priority Breakdown - PENDING TICKETS ONLY
   const pendingTickets = tickets?.filter((t) => ["New", "Open", "Pending"].includes(t.status)) || [];
@@ -176,11 +178,12 @@ export default function DashboardPage() {
     return acc;
   }, {} as Record<string, number>);
 
-  // SLA Status Breakdown - PENDING TICKETS ONLY
+  // SLA Status Breakdown - PENDING TICKETS WITH SLA ONLY
+  const pendingWithSla = pendingTickets.filter((t) => t.slaResolveTarget);
   const slaStatusBreakdown = {
-    onTrack: pendingTickets.filter((t) => t.slaStatus === "on_track").length,
-    atRisk: pendingTickets.filter((t) => t.slaStatus === "at_risk").length,
-    breached: pendingTickets.filter((t) => t.slaStatus === "breached").length,
+    onTrack: pendingWithSla.filter((t) => t.slaStatus === "on_track").length,
+    atRisk: pendingWithSla.filter((t) => t.slaStatus === "at_risk").length,
+    breached: pendingWithSla.filter((t) => t.slaStatus === "breached").length,
   };
 
   // Filter users based on current user's department for Heads/Managers

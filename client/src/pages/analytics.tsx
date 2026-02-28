@@ -425,10 +425,12 @@ export default function AnalyticsPage() {
 
   // ── SLA Summary ──────────────────────────────────────────────────────────
   const slaData = useMemo(() => {
-    const onTrack = filtered.filter((t) => t.slaStatus === "on_track").length;
-    const atRisk = filtered.filter((t) => t.slaStatus === "at_risk").length;
-    const breached = filtered.filter((t) => t.slaStatus === "breached").length;
-    const unknown = filtered.filter((t) => !t.slaStatus).length;
+    // Only count tickets that actually have an SLA deadline configured
+    const withSla = filtered.filter((t) => t.slaResolveTarget);
+    const onTrack = withSla.filter((t) => t.slaStatus === "on_track").length;
+    const atRisk = withSla.filter((t) => t.slaStatus === "at_risk").length;
+    const breached = withSla.filter((t) => t.slaStatus === "breached").length;
+    const unknown = filtered.filter((t) => !t.slaResolveTarget).length;
     return [
       { name: "On Track", value: onTrack, color: "#10b981" },
       { name: "At Risk", value: atRisk, color: "#f59e0b" },

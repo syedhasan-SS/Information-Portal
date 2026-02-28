@@ -334,7 +334,8 @@ export class DatabaseStorage implements IStorage {
    */
   private computeSlaStatus(ticket: Ticket): Ticket {
     const { slaResolveTarget, status } = ticket;
-    if (!slaResolveTarget) return ticket;
+    // No SLA configured — explicitly null out slaStatus so analytics counts it as "No SLA"
+    if (!slaResolveTarget) return { ...ticket, slaStatus: null as any };
     if (status === "Solved" || status === "Closed") return ticket;
 
     const now = Date.now();
