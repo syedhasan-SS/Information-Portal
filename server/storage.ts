@@ -625,6 +625,73 @@ export class DatabaseStorage implements IStorage {
   }
 
   /**
+   * Backfill SLA targets for existing tickets that have null slaResolveTarget.
+   * Uses the current active SLA configurations to compute targets based on
+   * each ticket's createdAt date + matching config's resolutionTimeHours.
+   */
+  async backfillSlaTargets(): Promise<{ updated: number; skipped: number; errors: number }> {
+    const { isNull } = await import("drizzle-orm");
+
+    // Fetch all tickets missing SLA resolve target
+    const allTickets = await db
+      .select()
+      .from(tickets)
+      .where(isNull(tickets.slaResolveTarget));
+
+    let updated = 0;
+    let skipped = 0;
+    let errors = 0;
+
+    for (const ticket of allTickets) {
+      try {
+        const slaConfig = await this.findMatchingSlaConfiguration(
+          ticket.categoryId,
+          ticket.issueType
+        );
+
+        if (!slaConfig) {
+          skipped++;
+          continue;
+        }
+
+        const resolveTargetStr = this.calculateSlaTarget(
+          ticket.createdAt,
+          slaConfig.resolutionTimeHours,
+          slaConfig.useBusinessHours || false
+        );
+        const responseTargetStr = slaConfig.responseTimeHours
+          ? this.calculateSlaTarget(ticket.createdAt, slaConfig.responseTimeHours, slaConfig.useBusinessHours || false)
+          : null;
+
+        const slaSnapshot = {
+          configurationId: slaConfig.id,
+          responseTimeHours: slaConfig.responseTimeHours || null,
+          resolutionTimeHours: slaConfig.resolutionTimeHours,
+          useBusinessHours: slaConfig.useBusinessHours || false,
+          responseTarget: responseTargetStr,
+          resolveTarget: resolveTargetStr,
+        };
+
+        await db
+          .update(tickets)
+          .set({
+            slaResolveTarget: new Date(resolveTargetStr),
+            slaResponseTarget: responseTargetStr ? new Date(responseTargetStr) : null,
+            slaSnapshot,
+          })
+          .where(eq(tickets.id, ticket.id));
+
+        updated++;
+      } catch (err) {
+        console.error(`SLA backfill failed for ticket ${ticket.ticketNumber}:`, err);
+        errors++;
+      }
+    }
+
+    return { updated, skipped, errors };
+  }
+
+  /**
    * Gets tags by their names
    */
   private async getTagsByNames(tagNames: string[]): Promise<Tag[]> {

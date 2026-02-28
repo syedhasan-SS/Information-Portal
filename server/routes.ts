@@ -1657,6 +1657,21 @@ export async function registerRoutes(
     }
   });
 
+  // Admin endpoint to backfill SLA targets for existing tickets
+  app.post("/api/admin/backfill-sla-targets", async (_req, res) => {
+    try {
+      const result = await storage.backfillSlaTargets();
+      res.json({
+        success: true,
+        message: `SLA backfill complete. Updated: ${result.updated}, Skipped (no config): ${result.skipped}, Errors: ${result.errors}`,
+        ...result,
+      });
+    } catch (error: any) {
+      console.error('SLA backfill error:', error);
+      res.status(500).json({ error: error.message });
+    }
+  });
+
   // Authentication
   app.post("/api/auth/login", async (req, res) => {
     try {
