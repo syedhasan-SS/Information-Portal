@@ -45,7 +45,15 @@ import {
   Users,
   Zap,
   Send,
+  ChevronDown,
 } from "lucide-react";
+import { Checkbox } from "@/components/ui/checkbox";
+import {
+  Command,
+  CommandGroup,
+  CommandItem,
+  CommandList,
+} from "@/components/ui/command";
 import { format, subDays, startOfWeek, endOfWeek } from "date-fns";
 import {
   AreaChart,
@@ -249,9 +257,15 @@ function exportToCSV(tickets: TicketType[]) {
 export default function AnalyticsPage() {
   const [, setLocation] = useLocation();
   const [timeGrouping, setTimeGrouping] = useState<string>("Daily");
-  const [issueTypeFilter, setIssueTypeFilter] = useState<string>("All");
-  const [statusFilter, setStatusFilter] = useState<string>("All");
+  const [issueTypeFilters, setIssueTypeFilters] = useState<string[]>([]);
+  const [statusFilters, setStatusFilters] = useState<string[]>([]);
+  const [issueTypeFilterOpen, setIssueTypeFilterOpen] = useState(false);
+  const [statusFilterOpen, setStatusFilterOpen] = useState(false);
   const [datePreset, setDatePreset] = useState<string>("last30");
+
+  const toggleAnalyticsFilter = (value: string, current: string[], setter: (v: string[]) => void) => {
+    setter(current.includes(value) ? current.filter((v) => v !== value) : [...current, value]);
+  };
   const [customDateStart, setCustomDateStart] = useState<Date | undefined>();
   const [customDateEnd, setCustomDateEnd] = useState<Date | undefined>();
   const [showCustomPicker, setShowCustomPicker] = useState(false);
@@ -315,8 +329,8 @@ export default function AnalyticsPage() {
   // Filter tickets
   const filtered = useMemo(() => {
     let result = tickets;
-    if (issueTypeFilter !== "All") result = result.filter((t) => t.issueType === issueTypeFilter);
-    if (statusFilter !== "All") result = result.filter((t) => t.status === statusFilter);
+    if (issueTypeFilters.length > 0) result = result.filter((t) => issueTypeFilters.includes(t.issueType ?? ""));
+    if (statusFilters.length > 0) result = result.filter((t) => statusFilters.includes(t.status ?? ""));
     if (dateRange.start && dateRange.end) {
       result = result.filter((t) => {
         const d = new Date(t.createdAt);
@@ -324,7 +338,7 @@ export default function AnalyticsPage() {
       });
     }
     return result;
-  }, [tickets, issueTypeFilter, statusFilter, dateRange]);
+  }, [tickets, issueTypeFilters, statusFilters, dateRange]);
 
   // ── Metrics ──────────────────────────────────────────────────────────────
   const totalTickets = filtered.length;
@@ -570,30 +584,116 @@ export default function AnalyticsPage() {
             </div>
 
             <div className="ml-auto flex items-end gap-3">
-              {/* Issue Type */}
+              {/* Issue Type multi-select */}
               <div className="space-y-1.5">
                 <Label className="text-xs text-muted-foreground">Issue Type</Label>
-                <Select value={issueTypeFilter} onValueChange={setIssueTypeFilter}>
-                  <SelectTrigger className="h-8 w-[140px] text-xs">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {ISSUE_TYPES.map((t) => <SelectItem key={t} value={t}>{t}</SelectItem>)}
-                  </SelectContent>
-                </Select>
+                <Popover open={issueTypeFilterOpen} onOpenChange={setIssueTypeFilterOpen}>
+                  <PopoverTrigger asChild>
+                    <Button variant="outline" size="sm" className="h-8 min-w-[140px] justify-between text-xs font-normal">
+                      <span className="truncate">
+                        {issueTypeFilters.length === 0
+                          ? "All Types"
+                          : issueTypeFilters.length === 1
+                          ? issueTypeFilters[0]
+                          : `${issueTypeFilters.length} Types`}
+                      </span>
+                      {issueTypeFilters.length > 0 && (
+                        <Badge className="ml-1 h-4 w-4 rounded-full p-0 flex items-center justify-center text-[10px]">
+                          {issueTypeFilters.length}
+                        </Badge>
+                      )}
+                      <ChevronDown className="ml-1 h-3 w-3 shrink-0 opacity-50" />
+                    </Button>
+                  </PopoverTrigger>
+                  <PopoverContent className="w-[160px] p-0" align="start">
+                    <Command>
+                      <CommandList>
+                        <CommandGroup>
+                          {ISSUE_TYPES.filter((t) => t !== "All").map((t) => (
+                            <CommandItem
+                              key={t}
+                              onSelect={() => toggleAnalyticsFilter(t, issueTypeFilters, setIssueTypeFilters)}
+                              className="flex items-center gap-2 cursor-pointer text-xs"
+                            >
+                              <Checkbox checked={issueTypeFilters.includes(t)} className="pointer-events-none" />
+                              <span>{t}</span>
+                            </CommandItem>
+                          ))}
+                        </CommandGroup>
+                        {issueTypeFilters.length > 0 && (
+                          <>
+                            <div className="border-t mx-1" />
+                            <CommandGroup>
+                              <CommandItem
+                                onSelect={() => setIssueTypeFilters([])}
+                                className="justify-center text-xs text-muted-foreground cursor-pointer"
+                              >
+                                Clear
+                              </CommandItem>
+                            </CommandGroup>
+                          </>
+                        )}
+                      </CommandList>
+                    </Command>
+                  </PopoverContent>
+                </Popover>
               </div>
-              {/* Status */}
+
+              {/* Status multi-select */}
               <div className="space-y-1.5">
                 <Label className="text-xs text-muted-foreground">Status</Label>
-                <Select value={statusFilter} onValueChange={setStatusFilter}>
-                  <SelectTrigger className="h-8 w-[120px] text-xs">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {TICKET_STATUSES.map((s) => <SelectItem key={s} value={s}>{s}</SelectItem>)}
-                  </SelectContent>
-                </Select>
+                <Popover open={statusFilterOpen} onOpenChange={setStatusFilterOpen}>
+                  <PopoverTrigger asChild>
+                    <Button variant="outline" size="sm" className="h-8 min-w-[120px] justify-between text-xs font-normal">
+                      <span className="truncate">
+                        {statusFilters.length === 0
+                          ? "All Statuses"
+                          : statusFilters.length === 1
+                          ? statusFilters[0]
+                          : `${statusFilters.length} Statuses`}
+                      </span>
+                      {statusFilters.length > 0 && (
+                        <Badge className="ml-1 h-4 w-4 rounded-full p-0 flex items-center justify-center text-[10px]">
+                          {statusFilters.length}
+                        </Badge>
+                      )}
+                      <ChevronDown className="ml-1 h-3 w-3 shrink-0 opacity-50" />
+                    </Button>
+                  </PopoverTrigger>
+                  <PopoverContent className="w-[150px] p-0" align="start">
+                    <Command>
+                      <CommandList>
+                        <CommandGroup>
+                          {TICKET_STATUSES.filter((s) => s !== "All").map((s) => (
+                            <CommandItem
+                              key={s}
+                              onSelect={() => toggleAnalyticsFilter(s, statusFilters, setStatusFilters)}
+                              className="flex items-center gap-2 cursor-pointer text-xs"
+                            >
+                              <Checkbox checked={statusFilters.includes(s)} className="pointer-events-none" />
+                              <span>{s}</span>
+                            </CommandItem>
+                          ))}
+                        </CommandGroup>
+                        {statusFilters.length > 0 && (
+                          <>
+                            <div className="border-t mx-1" />
+                            <CommandGroup>
+                              <CommandItem
+                                onSelect={() => setStatusFilters([])}
+                                className="justify-center text-xs text-muted-foreground cursor-pointer"
+                              >
+                                Clear
+                              </CommandItem>
+                            </CommandGroup>
+                          </>
+                        )}
+                      </CommandList>
+                    </Command>
+                  </PopoverContent>
+                </Popover>
               </div>
+
               {/* Time Grouping */}
               <div className="space-y-1.5">
                 <Label className="text-xs text-muted-foreground">Grouping</Label>
@@ -606,9 +706,9 @@ export default function AnalyticsPage() {
                   </SelectContent>
                 </Select>
               </div>
-              {/* Clear custom */}
-              {(issueTypeFilter !== "All" || statusFilter !== "All" || datePreset !== "last30") && (
-                <Button variant="ghost" size="sm" className="h-8 text-xs" onClick={() => { setIssueTypeFilter("All"); setStatusFilter("All"); setDatePreset("last30"); }}>
+              {/* Reset */}
+              {(issueTypeFilters.length > 0 || statusFilters.length > 0 || datePreset !== "last30") && (
+                <Button variant="ghost" size="sm" className="h-8 text-xs" onClick={() => { setIssueTypeFilters([]); setStatusFilters([]); setDatePreset("last30"); }}>
                   <X className="mr-1 h-3 w-3" /> Reset
                 </Button>
               )}
