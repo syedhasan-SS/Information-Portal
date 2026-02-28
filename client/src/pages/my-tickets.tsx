@@ -1218,9 +1218,12 @@ export default function MyTicketsPage() {
                       {isColumnVisible("slaDue") && (
                         <TableCell className="text-sm">
                           {ticket.slaResolveTarget ? (
-                            <span className={new Date(ticket.slaResolveTarget) < new Date() ? 'text-red-600 font-medium' : 'text-muted-foreground'}>
-                              {new Date(ticket.slaResolveTarget).toLocaleDateString()}
-                            </span>
+                            <div className="flex flex-col gap-1">
+                              {getSlaStatusBadge(ticket.slaStatus)}
+                              <span className={new Date(ticket.slaResolveTarget) < new Date() ? 'text-red-600 font-medium' : 'text-muted-foreground'}>
+                                {new Date(ticket.slaResolveTarget).toLocaleDateString()}
+                              </span>
+                            </div>
                           ) : (
                             <span className="text-muted-foreground italic">No SLA</span>
                           )}
