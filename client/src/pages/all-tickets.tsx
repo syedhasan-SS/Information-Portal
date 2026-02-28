@@ -1,4 +1,4 @@
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useLocation } from "wouter";
 import { Card } from "@/components/ui/card";
@@ -52,6 +52,8 @@ import {
   MessageSquare,
   UserPlus,
   Trash2,
+  Layers,
+  CalendarDays,
 } from "lucide-react";
 import type { Ticket, Category, Department, SubDepartment } from "@shared/schema";
 
@@ -123,6 +125,10 @@ export default function AllTicketsPage() {
   const [departmentFilter, setDepartmentFilter] = useState("");
   const [issueTypeFilter, setIssueTypeFilter] = useState("");
   const [slaStatusFilter, setSlaStatusFilter] = useState("");
+  // Drill-down filters (populated from URL params when arriving from analytics)
+  const [categoryFilter, setCategoryFilter] = useState("");
+  const [dateStartFilter, setDateStartFilter] = useState("");
+  const [dateEndFilter, setDateEndFilter] = useState("");
   const [sortField, setSortField] = useState<SortField>("createdAt");
   const [sortDirection, setSortDirection] = useState<SortDirection>("desc");
   const [currentPage, setCurrentPage] = useState(1);
@@ -136,6 +142,30 @@ export default function AllTicketsPage() {
   const [showBulkDeleteDialog, setShowBulkDeleteDialog] = useState(false);
   const queryClient = useQueryClient();
   const { toast } = useToast();
+
+  // Parse URL query params on mount (drill-down from analytics category page)
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const cat = params.get("category");
+    const start = params.get("start");
+    const end = params.get("end");
+    const dept = params.get("department");
+    const status = params.get("status");
+    const issueType = params.get("issueType");
+    const priority = params.get("priority");
+    if (cat) setCategoryFilter(decodeURIComponent(cat));
+    if (start) setDateStartFilter(start);
+    if (end) setDateEndFilter(end);
+    if (dept) setDepartmentFilter(decodeURIComponent(dept));
+    if (status) setStatusFilter(decodeURIComponent(status).split(","));
+    if (issueType) setIssueTypeFilter(decodeURIComponent(issueType));
+    if (priority) setPriorityFilter(decodeURIComponent(priority).split(","));
+    // If any drill-down param was set, open the solved tab if all statuses are resolved
+    if (status && !status.includes("New") && !status.includes("Open") && !status.includes("Pending")) {
+      setActiveTab("solved");
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   // Check if user can view all tickets or only department tickets
   const canViewAllTickets = hasPermission("view:all_tickets");
@@ -458,6 +488,19 @@ export default function AllTicketsPage() {
       return false;
     }
 
+    if (categoryFilter) {
+      const snap = (ticket as any).categorySnapshot;
+      const path: string = snap?.path || "";
+      if (path !== categoryFilter) return false;
+    }
+
+    if (dateStartFilter) {
+      if (new Date(ticket.createdAt) < new Date(dateStartFilter)) return false;
+    }
+    if (dateEndFilter) {
+      if (new Date(ticket.createdAt) > new Date(dateEndFilter)) return false;
+    }
+
     return true;
   }) || [];
 
@@ -542,10 +585,15 @@ export default function AllTicketsPage() {
     setIssueTypeFilter("");
     setSlaStatusFilter("");
     setSearchQuery("");
+    setCategoryFilter("");
+    setDateStartFilter("");
+    setDateEndFilter("");
     setCurrentPage(1);
+    // Strip query params from URL without full reload
+    window.history.replaceState({}, "", window.location.pathname);
   };
 
-  const hasActiveFilters = statusFilter.length > 0 || priorityFilter.length > 0 || departmentFilter || issueTypeFilter || slaStatusFilter || searchQuery;
+  const hasActiveFilters = statusFilter.length > 0 || priorityFilter.length > 0 || departmentFilter || issueTypeFilter || slaStatusFilter || searchQuery || categoryFilter || dateStartFilter;
 
   const getSlaStatusBadge = (status?: string | null) => {
     switch (status) {
@@ -680,7 +728,7 @@ export default function AllTicketsPage() {
                 Filters
                 {hasActiveFilters && (
                   <span className="ml-1 rounded-full bg-accent px-1.5 py-0.5 text-xs text-accent-foreground">
-                    {statusFilter.length + priorityFilter.length + (departmentFilter ? 1 : 0) + (issueTypeFilter ? 1 : 0) + (slaStatusFilter ? 1 : 0)}
+                    {statusFilter.length + priorityFilter.length + (departmentFilter ? 1 : 0) + (issueTypeFilter ? 1 : 0) + (slaStatusFilter ? 1 : 0) + (categoryFilter ? 1 : 0) + (dateStartFilter ? 1 : 0)}
                   </span>
                 )}
               </Button>
@@ -814,6 +862,49 @@ export default function AllTicketsPage() {
               )}
             </div>
           </Card>
+        )}
+
+        {/* Drill-down context banner — shown when arriving from analytics */}
+        {(categoryFilter || dateStartFilter) && (
+          <div className="flex flex-wrap items-center gap-3 rounded-lg border border-accent/40 bg-accent/10 px-4 py-3 text-sm">
+            <div className="flex items-center gap-2 font-medium text-foreground">
+              <Layers className="h-4 w-4 text-accent-foreground" />
+              Category drill-down
+            </div>
+            <div className="flex flex-wrap items-center gap-2">
+              {categoryFilter && (
+                <Badge variant="secondary" className="flex items-center gap-1.5 text-xs">
+                  <Layers className="h-3 w-3" />
+                  {categoryFilter.split(" > ").at(-1)}
+                  {categoryFilter.includes(" > ") && (
+                    <span className="opacity-60">· {categoryFilter.split(" > ").slice(0, -1).join(" › ")}</span>
+                  )}
+                </Badge>
+              )}
+              {(dateStartFilter || dateEndFilter) && (
+                <Badge variant="secondary" className="flex items-center gap-1.5 text-xs">
+                  <CalendarDays className="h-3 w-3" />
+                  {dateStartFilter ? new Date(dateStartFilter).toLocaleDateString("en-GB", { day: "numeric", month: "short" }) : "…"}
+                  {" – "}
+                  {dateEndFilter ? new Date(dateEndFilter).toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" }) : "now"}
+                </Badge>
+              )}
+              {departmentFilter && (
+                <Badge variant="secondary" className="text-xs">{departmentFilter}</Badge>
+              )}
+            </div>
+            <span className="text-muted-foreground">
+              Showing <span className="font-semibold text-foreground">{filteredTickets.length}</span> ticket{filteredTickets.length !== 1 ? "s" : ""}
+            </span>
+            <Button
+              variant="ghost"
+              size="sm"
+              className="ml-auto h-7 text-xs"
+              onClick={clearFilters}
+            >
+              <X className="mr-1 h-3 w-3" /> Clear drill-down
+            </Button>
+          </div>
         )}
 
         <Card>

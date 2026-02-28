@@ -220,6 +220,24 @@ function SortableHeader({
   );
 }
 
+// ── Drill-Down URL builder ────────────────────────────────────────────────────
+
+function buildDrillDownUrl(
+  path: string,
+  dateStart: Date | undefined,
+  dateEnd: Date | undefined,
+  issueTypeFilters: string[],
+  statusFilters: string[],
+): string {
+  const params = new URLSearchParams();
+  params.set("category", encodeURIComponent(path));
+  if (dateStart) params.set("start", dateStart.toISOString());
+  if (dateEnd) params.set("end", dateEnd.toISOString());
+  if (issueTypeFilters.length > 0) params.set("issueType", encodeURIComponent(issueTypeFilters[0]));
+  if (statusFilters.length > 0) params.set("status", encodeURIComponent(statusFilters.join(",")));
+  return `/tickets?${params.toString()}`;
+}
+
 // ── Main Page ─────────────────────────────────────────────────────────────────
 
 export default function AnalyticsCategoriesPage() {
@@ -727,7 +745,23 @@ export default function AnalyticsCategoriesPage() {
                           )}
                         </div>
                       </TableCell>
-                      <TableCell className="font-semibold">{row.total}</TableCell>
+                      <TableCell>
+                        <button
+                          className="font-semibold text-primary underline-offset-2 hover:underline cursor-pointer transition-colors"
+                          title={`View ${row.total} tickets for "${row.path}"`}
+                          onClick={() =>
+                            setLocation(buildDrillDownUrl(
+                              row.path,
+                              dateRange.start,
+                              dateRange.end,
+                              issueTypeFilters,
+                              statusFilters,
+                            ))
+                          }
+                        >
+                          {row.total}
+                        </button>
+                      </TableCell>
                       <TableCell>
                         <div className="flex items-center gap-2">
                           <div className="h-1.5 rounded-full bg-muted overflow-hidden w-16">
@@ -867,6 +901,18 @@ export default function AnalyticsCategoriesPage() {
                   <Bar
                     dataKey={chartView === "volume" ? "count" : "resolutionHours"}
                     radius={[0, 4, 4, 0]}
+                    cursor="pointer"
+                    onClick={(data: any) => {
+                      if (data?.fullPath) {
+                        setLocation(buildDrillDownUrl(
+                          data.fullPath,
+                          dateRange.start,
+                          dateRange.end,
+                          issueTypeFilters,
+                          statusFilters,
+                        ));
+                      }
+                    }}
                     label={
                       chartView === "volume"
                         ? { position: "right", fontSize: 11, formatter: (v: number) => v }
