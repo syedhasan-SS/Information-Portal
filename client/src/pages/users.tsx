@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -41,6 +41,8 @@ import {
   Upload,
   FileUp,
   UserCheck,
+  Search,
+  X,
 } from "lucide-react";
 import {
   DropdownMenu,
@@ -273,6 +275,31 @@ export default function UsersPage() {
     queryKey: ["users"],
     queryFn: getUsers,
   });
+
+  // Search & filter state
+  const [searchQuery, setSearchQuery] = useState<string>("");
+  const [departmentFilter, setDepartmentFilter] = useState<string>("All");
+  const [roleFilter, setRoleFilter] = useState<string>("All");
+
+  const filteredUsers = useMemo(() => {
+    if (!users) return [];
+    let result = users;
+    if (searchQuery.trim()) {
+      const q = searchQuery.toLowerCase();
+      result = result.filter(
+        (u) => u.name.toLowerCase().includes(q) || u.email.toLowerCase().includes(q)
+      );
+    }
+    if (departmentFilter !== "All") {
+      result = result.filter((u) => u.department === departmentFilter);
+    }
+    if (roleFilter !== "All") {
+      result = result.filter(
+        (u) => u.role === roleFilter || (u.roles || []).includes(roleFilter)
+      );
+    }
+    return result;
+  }, [users, searchQuery, departmentFilter, roleFilter]);
 
   // Handle edit query parameter from org hierarchy
   useEffect(() => {
@@ -1347,15 +1374,76 @@ export default function UsersPage() {
 
         {/* Users List */}
         <div className="space-y-4">
-          <h2 className="text-lg font-semibold">All Users</h2>
+          <div className="flex flex-col gap-3">
+            <h2 className="text-lg font-semibold">All Users</h2>
+            {/* Search & filter bar */}
+            <div className="flex flex-wrap items-center gap-3">
+              <div className="relative flex-1 min-w-[200px]">
+                <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
+                <Input
+                  placeholder="Search by name or email..."
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                  className="pl-8 h-9"
+                />
+              </div>
+              <Select value={departmentFilter} onValueChange={setDepartmentFilter}>
+                <SelectTrigger className="h-9 w-[160px] text-sm">
+                  <SelectValue placeholder="Department" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="All">All Departments</SelectItem>
+                  {DEPARTMENTS.map((d) => (
+                    <SelectItem key={d} value={d}>{d}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              <Select value={roleFilter} onValueChange={setRoleFilter}>
+                <SelectTrigger className="h-9 w-[140px] text-sm">
+                  <SelectValue placeholder="Role" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="All">All Roles</SelectItem>
+                  {ROLES.map((r) => (
+                    <SelectItem key={r} value={r}>{r}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              {(searchQuery || departmentFilter !== "All" || roleFilter !== "All") && (
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  className="h-9 text-sm"
+                  onClick={() => { setSearchQuery(""); setDepartmentFilter("All"); setRoleFilter("All"); }}
+                >
+                  <X className="mr-1.5 h-3.5 w-3.5" /> Clear
+                </Button>
+              )}
+              <span className="text-xs text-muted-foreground ml-auto">
+                {filteredUsers.length} of {users?.length ?? 0} users
+              </span>
+            </div>
+          </div>
 
           {isLoading ? (
             <div className="flex items-center justify-center py-12">
               <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
             </div>
-          ) : users && users.length > 0 ? (
+          ) : !users || users.length === 0 ? (
+            <Card className="p-12 text-center">
+              <Users className="mx-auto mb-4 h-12 w-12 text-muted-foreground/50" />
+              <h3 className="text-lg font-medium text-foreground">No users yet</h3>
+              <p className="mt-1 text-sm text-muted-foreground">Create your first user to get started</p>
+            </Card>
+          ) : filteredUsers.length === 0 ? (
+            <Card className="p-12 text-center">
+              <Search className="mx-auto mb-4 h-12 w-12 text-muted-foreground/50" />
+              <h3 className="text-lg font-medium text-foreground">No users match your search</h3>
+              <p className="mt-1 text-sm text-muted-foreground">Try adjusting the filters or search term</p>
+            </Card>
+          ) : (
             <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-              {users.map((user) => {
+              {filteredUsers.map((user) => {
                 const initials = user.name.split(' ').map(n => n[0]).join('').toUpperCase();
                 const isPasswordVisible = visiblePasswords.has(user.id);
 
@@ -1465,21 +1553,6 @@ export default function UsersPage() {
                 );
               })}
             </div>
-          ) : (
-            <Card className="p-12 text-center">
-              <Users className="mx-auto mb-4 h-12 w-12 text-muted-foreground/50" />
-              <h3 className="text-lg font-medium text-foreground">No users yet</h3>
-              <p className="mt-1 text-sm text-muted-foreground">
-                Create your first user to get started
-              </p>
-              <Button
-                onClick={() => setShowForm(true)}
-                className="mt-4 bg-accent text-accent-foreground hover:bg-accent/90"
-              >
-                <Plus className="h-4 w-4" />
-                Create User
-              </Button>
-            </Card>
           )}
         </div>
       </TabsContent>

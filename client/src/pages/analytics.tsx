@@ -66,6 +66,7 @@ import type { Ticket as TicketType } from "@shared/schema";
 
 const TIME_GROUPINGS = ["Daily", "Weekly", "Monthly"] as const;
 const ISSUE_TYPES = ["All", "Complaint", "Request"] as const;
+const TICKET_STATUSES = ["All", "New", "Open", "Pending", "Solved", "Closed"] as const;
 
 const CHART_COLORS = ["#8b5cf6", "#3b82f6", "#10b981", "#f59e0b", "#ec4899", "#ef4444", "#06b6d4", "#84cc16"];
 
@@ -249,6 +250,7 @@ export default function AnalyticsPage() {
   const [, setLocation] = useLocation();
   const [timeGrouping, setTimeGrouping] = useState<string>("Daily");
   const [issueTypeFilter, setIssueTypeFilter] = useState<string>("All");
+  const [statusFilter, setStatusFilter] = useState<string>("All");
   const [datePreset, setDatePreset] = useState<string>("last30");
   const [customDateStart, setCustomDateStart] = useState<Date | undefined>();
   const [customDateEnd, setCustomDateEnd] = useState<Date | undefined>();
@@ -314,6 +316,7 @@ export default function AnalyticsPage() {
   const filtered = useMemo(() => {
     let result = tickets;
     if (issueTypeFilter !== "All") result = result.filter((t) => t.issueType === issueTypeFilter);
+    if (statusFilter !== "All") result = result.filter((t) => t.status === statusFilter);
     if (dateRange.start && dateRange.end) {
       result = result.filter((t) => {
         const d = new Date(t.createdAt);
@@ -321,7 +324,7 @@ export default function AnalyticsPage() {
       });
     }
     return result;
-  }, [tickets, issueTypeFilter, dateRange]);
+  }, [tickets, issueTypeFilter, statusFilter, dateRange]);
 
   // ── Metrics ──────────────────────────────────────────────────────────────
   const totalTickets = filtered.length;
@@ -579,6 +582,18 @@ export default function AnalyticsPage() {
                   </SelectContent>
                 </Select>
               </div>
+              {/* Status */}
+              <div className="space-y-1.5">
+                <Label className="text-xs text-muted-foreground">Status</Label>
+                <Select value={statusFilter} onValueChange={setStatusFilter}>
+                  <SelectTrigger className="h-8 w-[120px] text-xs">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {TICKET_STATUSES.map((s) => <SelectItem key={s} value={s}>{s}</SelectItem>)}
+                  </SelectContent>
+                </Select>
+              </div>
               {/* Time Grouping */}
               <div className="space-y-1.5">
                 <Label className="text-xs text-muted-foreground">Grouping</Label>
@@ -592,8 +607,8 @@ export default function AnalyticsPage() {
                 </Select>
               </div>
               {/* Clear custom */}
-              {(issueTypeFilter !== "All" || datePreset !== "last30") && (
-                <Button variant="ghost" size="sm" className="h-8 text-xs" onClick={() => { setIssueTypeFilter("All"); setDatePreset("last30"); }}>
+              {(issueTypeFilter !== "All" || statusFilter !== "All" || datePreset !== "last30") && (
+                <Button variant="ghost" size="sm" className="h-8 text-xs" onClick={() => { setIssueTypeFilter("All"); setStatusFilter("All"); setDatePreset("last30"); }}>
                   <X className="mr-1 h-3 w-3" /> Reset
                 </Button>
               )}
