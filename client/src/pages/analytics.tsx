@@ -46,6 +46,7 @@ import {
   Zap,
   Send,
   ChevronDown,
+  Layers,
 } from "lucide-react";
 import { Checkbox } from "@/components/ui/checkbox";
 import {
@@ -499,6 +500,10 @@ export default function AnalyticsPage() {
               </div>
             </div>
             <div className="flex items-center gap-2">
+              <Button variant="outline" size="sm" onClick={() => setLocation("/analytics/categories")}>
+                <Layers className="mr-2 h-4 w-4" />
+                Category Distribution
+              </Button>
               <Button variant="outline" size="sm" onClick={() => exportToCSV(filtered)}>
                 <Download className="mr-2 h-4 w-4" />
                 Export CSV

@@ -18,6 +18,7 @@ import VendorsPage from "@/pages/vendors";
 import VendorProfilePage from "@/pages/vendor-profile";
 import ProfilePage from "@/pages/profile";
 import AnalyticsPage from "@/pages/analytics";
+import AnalyticsCategoriesPage from "@/pages/analytics-categories";
 import TicketConfigPage from "@/pages/ticket-config";
 import RoutingConfigPage from "@/pages/routing-config";
 import DepartmentTicketsPage from "@/pages/department-tickets";
@@ -98,6 +99,11 @@ function Router() {
       <Route path="/analytics">
         <ProtectedRoute requiredPermission="view:analytics">
           <AnalyticsPage />
+        </ProtectedRoute>
+      </Route>
+      <Route path="/analytics/categories">
+        <ProtectedRoute requiredPermission="view:analytics">
+          <AnalyticsCategoriesPage />
         </ProtectedRoute>
       </Route>
       <Route path="/ticket-config">
