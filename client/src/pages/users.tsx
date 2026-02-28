@@ -278,8 +278,14 @@ export default function UsersPage() {
 
   // Search & filter state
   const [searchQuery, setSearchQuery] = useState<string>("");
-  const [departmentFilter, setDepartmentFilter] = useState<string>("All");
-  const [roleFilter, setRoleFilter] = useState<string>("All");
+  const [departmentFilters, setDepartmentFilters] = useState<string[]>([]);
+  const [roleFilters, setRoleFilters] = useState<string[]>([]);
+  const [deptFilterOpen, setDeptFilterOpen] = useState(false);
+  const [roleFilterOpen, setRoleFilterOpen] = useState(false);
+
+  const toggleFilter = (value: string, current: string[], setter: (v: string[]) => void) => {
+    setter(current.includes(value) ? current.filter((v) => v !== value) : [...current, value]);
+  };
 
   const filteredUsers = useMemo(() => {
     if (!users) return [];
@@ -290,16 +296,16 @@ export default function UsersPage() {
         (u) => u.name.toLowerCase().includes(q) || u.email.toLowerCase().includes(q)
       );
     }
-    if (departmentFilter !== "All") {
-      result = result.filter((u) => u.department === departmentFilter);
+    if (departmentFilters.length > 0) {
+      result = result.filter((u) => departmentFilters.includes(u.department ?? ""));
     }
-    if (roleFilter !== "All") {
+    if (roleFilters.length > 0) {
       result = result.filter(
-        (u) => u.role === roleFilter || (u.roles || []).includes(roleFilter)
+        (u) => roleFilters.includes(u.role) || (u.roles || []).some((r) => roleFilters.includes(r))
       );
     }
     return result;
-  }, [users, searchQuery, departmentFilter, roleFilter]);
+  }, [users, searchQuery, departmentFilters, roleFilters]);
 
   // Handle edit query parameter from org hierarchy
   useEffect(() => {
@@ -1387,34 +1393,116 @@ export default function UsersPage() {
                   className="pl-8 h-9"
                 />
               </div>
-              <Select value={departmentFilter} onValueChange={setDepartmentFilter}>
-                <SelectTrigger className="h-9 w-[160px] text-sm">
-                  <SelectValue placeholder="Department" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="All">All Departments</SelectItem>
-                  {DEPARTMENTS.map((d) => (
-                    <SelectItem key={d} value={d}>{d}</SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-              <Select value={roleFilter} onValueChange={setRoleFilter}>
-                <SelectTrigger className="h-9 w-[140px] text-sm">
-                  <SelectValue placeholder="Role" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="All">All Roles</SelectItem>
-                  {ROLES.map((r) => (
-                    <SelectItem key={r} value={r}>{r}</SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-              {(searchQuery || departmentFilter !== "All" || roleFilter !== "All") && (
+              {/* Department multi-select */}
+              <Popover open={deptFilterOpen} onOpenChange={setDeptFilterOpen}>
+                <PopoverTrigger asChild>
+                  <Button variant="outline" size="sm" className="h-9 min-w-[160px] justify-between text-sm font-normal">
+                    <span className="truncate">
+                      {departmentFilters.length === 0
+                        ? "Department"
+                        : departmentFilters.length === 1
+                        ? departmentFilters[0]
+                        : `${departmentFilters.length} Departments`}
+                    </span>
+                    {departmentFilters.length > 0 && (
+                      <Badge className="ml-1.5 h-4 w-4 rounded-full p-0 flex items-center justify-center text-[10px]">
+                        {departmentFilters.length}
+                      </Badge>
+                    )}
+                    <ChevronDown className="ml-1.5 h-3.5 w-3.5 shrink-0 opacity-50" />
+                  </Button>
+                </PopoverTrigger>
+                <PopoverContent className="w-[200px] p-0" align="start">
+                  <Command>
+                    <CommandList>
+                      <CommandGroup>
+                        {DEPARTMENTS.map((d) => (
+                          <CommandItem
+                            key={d}
+                            onSelect={() => toggleFilter(d, departmentFilters, setDepartmentFilters)}
+                            className="flex items-center gap-2 cursor-pointer"
+                          >
+                            <Checkbox checked={departmentFilters.includes(d)} className="pointer-events-none" />
+                            <span>{d}</span>
+                          </CommandItem>
+                        ))}
+                      </CommandGroup>
+                      {departmentFilters.length > 0 && (
+                        <>
+                          <div className="border-t mx-1" />
+                          <CommandGroup>
+                            <CommandItem
+                              onSelect={() => setDepartmentFilters([])}
+                              className="justify-center text-xs text-muted-foreground cursor-pointer"
+                            >
+                              Clear selection
+                            </CommandItem>
+                          </CommandGroup>
+                        </>
+                      )}
+                    </CommandList>
+                  </Command>
+                </PopoverContent>
+              </Popover>
+
+              {/* Role multi-select */}
+              <Popover open={roleFilterOpen} onOpenChange={setRoleFilterOpen}>
+                <PopoverTrigger asChild>
+                  <Button variant="outline" size="sm" className="h-9 min-w-[140px] justify-between text-sm font-normal">
+                    <span className="truncate">
+                      {roleFilters.length === 0
+                        ? "Role"
+                        : roleFilters.length === 1
+                        ? roleFilters[0]
+                        : `${roleFilters.length} Roles`}
+                    </span>
+                    {roleFilters.length > 0 && (
+                      <Badge className="ml-1.5 h-4 w-4 rounded-full p-0 flex items-center justify-center text-[10px]">
+                        {roleFilters.length}
+                      </Badge>
+                    )}
+                    <ChevronDown className="ml-1.5 h-3.5 w-3.5 shrink-0 opacity-50" />
+                  </Button>
+                </PopoverTrigger>
+                <PopoverContent className="w-[180px] p-0" align="start">
+                  <Command>
+                    <CommandList>
+                      <CommandGroup>
+                        {ROLES.map((r) => (
+                          <CommandItem
+                            key={r}
+                            onSelect={() => toggleFilter(r, roleFilters, setRoleFilters)}
+                            className="flex items-center gap-2 cursor-pointer"
+                          >
+                            <Checkbox checked={roleFilters.includes(r)} className="pointer-events-none" />
+                            <span>{r}</span>
+                          </CommandItem>
+                        ))}
+                      </CommandGroup>
+                      {roleFilters.length > 0 && (
+                        <>
+                          <div className="border-t mx-1" />
+                          <CommandGroup>
+                            <CommandItem
+                              onSelect={() => setRoleFilters([])}
+                              className="justify-center text-xs text-muted-foreground cursor-pointer"
+                            >
+                              Clear selection
+                            </CommandItem>
+                          </CommandGroup>
+                        </>
+                      )}
+                    </CommandList>
+                  </Command>
+                </PopoverContent>
+              </Popover>
+
+              {(searchQuery || departmentFilters.length > 0 || roleFilters.length > 0) && (
                 <Button
                   variant="ghost"
                   size="sm"
                   className="h-9 text-sm"
-                  onClick={() => { setSearchQuery(""); setDepartmentFilter("All"); setRoleFilter("All"); }}
+                  onClick={() => { setSearchQuery(""); setDepartmentFilters([]); setRoleFilters([]); }}
                 >
                   <X className="mr-1.5 h-3.5 w-3.5" /> Clear
                 </Button>
