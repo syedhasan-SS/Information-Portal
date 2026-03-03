@@ -5646,8 +5646,9 @@ roles: ${JSON.stringify(updated.roles, null, 2)}</pre>
 
       // Optional: scope to a single department
       const department: string | undefined = req.body?.department || undefined;
+      const theme = req.body?.theme === 'light' ? 'light' : 'dark';
 
-      const result = await sendPendingComplaintsReport(channelId, department);
+      const result = await sendPendingComplaintsReport(channelId, department, undefined, theme as 'dark' | 'light');
 
       if (result.success) {
         res.json({ success: true, ts: result.ts, department: department ?? null });
@@ -5684,18 +5685,32 @@ roles: ${JSON.stringify(updated.roles, null, 2)}</pre>
   });
 
   /**
-   * GET /api/reports/preview-pending?department=Finance
-   * Returns the pending complaints report as a live HTML page (for dev preview / QA).
-   * Pass ?department=Finance to preview a dept-scoped report.
+   * GET /api/reports/preview-pending?department=Finance&theme=light
+   * Returns the pending complaints report as:
+   *  - HTML page (default, for browser preview)
+   *  - PNG image when ?format=png is passed
+   * Pass ?theme=light for white background.
    */
   app.get("/api/reports/preview-pending", async (req, res) => {
     try {
       const department = (req.query.department as string) || undefined;
+      const format     = (req.query.format  as string) || 'html';
+      const theme      = ((req.query.theme  as string) === 'light') ? 'light' : 'dark';
+
       const [allTickets, allUsers] = await Promise.all([
         storage.getTickets(),
         storage.getUsers(),
       ]);
       const data = buildPendingReportData(allTickets, allUsers, department);
+
+      if (format === 'png') {
+        const { buildReportPng } = await import('./report-image-satori');
+        const png = await buildReportPng(data, theme as 'dark' | 'light');
+        res.set('Content-Type', 'image/png');
+        res.set('Content-Disposition', `inline; filename="pending-report-${theme}.png"`);
+        return res.send(png);
+      }
+
       const html = buildPendingReportHtml(data);
       res.set("Content-Type", "text/html; charset=utf-8");
       res.send(html);

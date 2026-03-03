@@ -8,7 +8,7 @@ import { WebClient } from '@slack/web-api';
 import { storage } from './storage';
 import { buildPendingReportData, buildPendingReportHtml } from './report-html-builder';
 import { renderHtmlToPng, cacheReportImage } from './report-image';
-import { buildReportPng } from './report-image-satori';
+import { buildReportPng, type ReportTheme } from './report-image-satori';
 
 // ── Slack client ──────────────────────────────────────────────────────────────
 
@@ -637,8 +637,9 @@ const DEPT_CHANNEL_MAP: Record<string, string> = {
  */
 export async function sendPendingComplaintsReport(
   channelId: string,
-  department?: string,           // if set, report is scoped to this department
-  prefetchedData?: { tickets: any[]; users: any[] }   // optional: reuse already-fetched data
+  department?: string,                                // if set, report is scoped to this department
+  prefetchedData?: { tickets: any[]; users: any[] },  // optional: reuse already-fetched data
+  theme: ReportTheme = 'dark'                         // 'dark' (default) or 'light'
 ): Promise<{ success: boolean; ts?: string; error?: string }> {
   const client = getSlackClient();
   if (!client) {
@@ -681,7 +682,7 @@ export async function sendPendingComplaintsReport(
     // ── Attempt 1: Satori serverless image renderer (works everywhere) ────────
     let pngBuf: Buffer | null = null;
     try {
-      pngBuf = await buildReportPng(data);
+      pngBuf = await buildReportPng(data, theme);
       console.log(`[SlackReporter] ${scope} Satori PNG generated: ${pngBuf.length} bytes`);
     } catch (satoriErr: any) {
       console.warn(`[SlackReporter] ${scope} Satori render failed (${satoriErr.message}) — trying Chrome`);

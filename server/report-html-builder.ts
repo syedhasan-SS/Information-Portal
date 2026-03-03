@@ -516,14 +516,16 @@ export function buildPendingReportData(
   // ── SLA ───────────────────────────────────────────────────────────────────
   const sla = { onTrack, atRisk, breached: totalBreached };
 
-  // ── By contact reason (L2 category path for dept reports, L1 for full) ────
+  // ── By contact reason — L4 when available, else L3 (both full & dept) ────
   const reasonMap = new Map<string, { count: number; breached: number }>();
   pending.forEach(t => {
-    // Dept report: use the full category path for richer detail
-    // Full report: L1 only for readability
-    const reason = department
-      ? (t.categorySnapshot?.path || t.categorySnapshot?.l1 || t.issueType || 'Uncategorised')
-      : (t.categorySnapshot?.l1 || t.issueType || 'Uncategorised');
+    // Use the most granular level available: L4 → L3 → L1 → issueType
+    const reason =
+      t.categorySnapshot?.l4 ||
+      t.categorySnapshot?.l3 ||
+      t.categorySnapshot?.l1 ||
+      t.issueType ||
+      'Uncategorised';
     const cur = reasonMap.get(reason) || { count: 0, breached: 0 };
     cur.count++;
     if (t.slaStatus === 'breached') cur.breached++;
