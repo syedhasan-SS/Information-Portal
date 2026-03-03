@@ -10,7 +10,11 @@ export interface PendingReportData {
   totalBreached: number;
   totalOnTrack: number;
 
-  /** Department → count of pending tickets */
+  /**
+   * For full report: department → ticket counts.
+   * For dept-scoped report: category (L1) → ticket counts.
+   * The `dept` field holds the label (department name or category name).
+   */
   byDepartment: Array<{ dept: string; count: number; breached: number }>;
 
   /** Assignee → count of assigned pending tickets */
@@ -21,6 +25,12 @@ export interface PendingReportData {
 
   /** L1 contact reason → count */
   byContactReason: Array<{ reason: string; count: number; breached: number }>;
+
+  /**
+   * Set when this report is scoped to a single department.
+   * Controls section headings and hero copy.
+   */
+  department?: string;
 }
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
@@ -259,16 +269,19 @@ footer{
 <header>
   <div class="logo-text">⚡ FLEEK</div>
   <div class="header-right">
-    <div class="header-title">Pending Complaints Report</div>
+    <div class="header-title">${data.department ? `${data.department} — Pending Report` : 'Pending Complaints Report'}</div>
     <div class="header-sub">${data.generatedAt}</div>
   </div>
 </header>
 
 <!-- ── HERO ── -->
 <div class="hero">
-  <div class="hero-kicker">Daily Operations · Internal Report</div>
-  <div class="hero-heading">Pending <span>Complaints</span></div>
-  <div class="hero-sub">Overview of all open, new and pending cases requiring attention. Managers have been notified.</div>
+  <div class="hero-kicker">${data.department ? `${data.department} · Daily Dept Report` : 'Daily Operations · Internal Report'}</div>
+  <div class="hero-heading">${data.department ? `<span>${data.department}</span> Pending` : 'Pending <span>Complaints</span>'}</div>
+  <div class="hero-sub">${data.department
+    ? `Overview of all open and pending cases in the ${data.department} department. Department managers have been notified.`
+    : 'Overview of all open, new and pending cases requiring attention. Managers have been notified.'
+  }</div>
   <div class="hero-stats">
     <div class="hs">
       <div class="hs-val yellow">${data.totalPending}</div>
@@ -296,18 +309,21 @@ footer{
 <div class="greeting">
   <div class="greet-icon">👋</div>
   <div class="greet-text">
-    Hi everyone,<br/>
-    Please find below the report of pending complaints as of <strong>${data.generatedAt}</strong>.<br/>
-    Relevant department managers have been tagged in this message. Please action any breached or at-risk cases immediately.
+    ${data.department ? `Hi ${data.department} team,` : 'Hi everyone,'}<br/>
+    Please find below the ${data.department ? `<strong>${data.department}</strong> department` : ''} report of pending complaints as of <strong>${data.generatedAt}</strong>.<br/>
+    ${data.department
+      ? 'Please review and action any breached or at-risk cases within your team immediately.'
+      : 'Relevant department managers have been tagged in this message. Please action any breached or at-risk cases immediately.'
+    }
   </div>
 </div>
 
 <div class="page">
 
-  <!-- ── SECTION 1: DEPARTMENT WISE ── -->
-  <div class="sec-tag">01 — Department</div>
-  <div class="sec-title">Department Wise Pending Complaints</div>
-  ${deptRows || '<div style="color:var(--muted);font-size:13px;padding:12px 0">No department data available</div>'}
+  <!-- ── SECTION 1: DEPARTMENT / CATEGORY WISE ── -->
+  <div class="sec-tag">01 — ${data.department ? 'Category' : 'Department'}</div>
+  <div class="sec-title">${data.department ? `${data.department} — Category Breakdown` : 'Department Wise Pending Complaints'}</div>
+  ${deptRows || `<div style="color:var(--muted);font-size:13px;padding:12px 0">No ${data.department ? 'category' : 'department'} data available</div>`}
 
   <hr class="sec-divider"/>
 
@@ -424,12 +440,15 @@ footer{
 
 export function buildPendingReportData(
   tickets: any[],
-  users: any[]
+  users: any[],
+  department?: string          // if set, scopes the report to a single department
 ): PendingReportData {
-  // Only pending/active tickets
-  const pending = tickets.filter(
-    t => t.status === 'New' || t.status === 'Open' || t.status === 'Pending'
-  );
+  // Only pending/active tickets, optionally filtered to one department
+  const pending = tickets.filter(t => {
+    if (!['New', 'Open', 'Pending'].includes(t.status)) return false;
+    if (department && t.department !== department) return false;
+    return true;
+  });
 
   const totalPending  = pending.length;
   const totalBreached = pending.filter(t => t.slaStatus === 'breached').length;
@@ -441,18 +460,39 @@ export function buildPendingReportData(
     users.map((u: any) => [u.id, { name: u.name || u.email, dept: u.department || '' }])
   );
 
-  // ── By department ─────────────────────────────────────────────────────────
-  const deptMap = new Map<string, { count: number; breached: number }>();
-  pending.forEach(t => {
-    const d = t.department || 'Unassigned';
-    const cur = deptMap.get(d) || { count: 0, breached: 0 };
-    cur.count++;
-    if (t.slaStatus === 'breached') cur.breached++;
-    deptMap.set(d, cur);
-  });
-  const byDepartment = Array.from(deptMap.entries())
-    .map(([dept, v]) => ({ dept, ...v }))
-    .sort((a, b) => b.count - a.count);
+  // ── Section 01: dept breakdown (full) OR category breakdown (dept-scoped) ──
+  let byDepartment: Array<{ dept: string; count: number; breached: number }>;
+
+  if (department) {
+    // Category (L1) breakdown for a single department
+    const catMap = new Map<string, { count: number; breached: number }>();
+    pending.forEach(t => {
+      const cat =
+        (t.categorySnapshot?.l1) ||
+        t.issueType ||
+        'Uncategorised';
+      const cur = catMap.get(cat) || { count: 0, breached: 0 };
+      cur.count++;
+      if (t.slaStatus === 'breached') cur.breached++;
+      catMap.set(cat, cur);
+    });
+    byDepartment = Array.from(catMap.entries())
+      .map(([dept, v]) => ({ dept, ...v }))
+      .sort((a, b) => b.count - a.count);
+  } else {
+    // Department breakdown for the full report
+    const deptMap = new Map<string, { count: number; breached: number }>();
+    pending.forEach(t => {
+      const d = t.department || 'Unassigned';
+      const cur = deptMap.get(d) || { count: 0, breached: 0 };
+      cur.count++;
+      if (t.slaStatus === 'breached') cur.breached++;
+      deptMap.set(d, cur);
+    });
+    byDepartment = Array.from(deptMap.entries())
+      .map(([dept, v]) => ({ dept, ...v }))
+      .sort((a, b) => b.count - a.count);
+  }
 
   // ── By assignee ───────────────────────────────────────────────────────────
   const agentMap = new Map<string, { count: number; breached: number; dept: string }>();
@@ -476,15 +516,14 @@ export function buildPendingReportData(
   // ── SLA ───────────────────────────────────────────────────────────────────
   const sla = { onTrack, atRisk, breached: totalBreached };
 
-  // ── By contact reason (L1 category) ──────────────────────────────────────
+  // ── By contact reason (L2 category path for dept reports, L1 for full) ────
   const reasonMap = new Map<string, { count: number; breached: number }>();
   pending.forEach(t => {
-    // Use categorySnapshot.l1 if available, fallback to ticket.l1, then issueType
-    const reason =
-      (t.categorySnapshot?.l1) ||
-      t.l1 ||
-      t.issueType ||
-      'Uncategorised';
+    // Dept report: use the full category path for richer detail
+    // Full report: L1 only for readability
+    const reason = department
+      ? (t.categorySnapshot?.path || t.categorySnapshot?.l1 || t.issueType || 'Uncategorised')
+      : (t.categorySnapshot?.l1 || t.issueType || 'Uncategorised');
     const cur = reasonMap.get(reason) || { count: 0, breached: 0 };
     cur.count++;
     if (t.slaStatus === 'breached') cur.breached++;
@@ -509,5 +548,6 @@ export function buildPendingReportData(
     byAssignee,
     sla,
     byContactReason,
+    department,
   };
 }

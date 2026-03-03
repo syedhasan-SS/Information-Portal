@@ -580,10 +580,13 @@ async function sendDailyReport(): Promise<void> {
  */
 function buildManagerMentions(
   pendingTickets: any[],
-  allUsers: any[]
+  allUsers: any[],
+  department?: string   // if set, only tag managers for this specific department
 ): string {
   // Collect departments with pending tickets
-  const activeDepts = new Set(pendingTickets.map(t => t.department).filter(Boolean));
+  const activeDepts = department
+    ? new Set([department])
+    : new Set(pendingTickets.map(t => t.department).filter(Boolean));
 
   // Find all Managers and Heads in those departments who have a slackUserId
   const managers = allUsers.filter(
@@ -610,76 +613,103 @@ function buildManagerMentions(
   return mentions;
 }
 
+// ── Department → Slack channel env-var mapping ────────────────────────────────
+
+/**
+ * Maps department names (as stored on tickets/users) to their env var key.
+ * Add or rename entries here to match your actual department names.
+ */
+const DEPT_CHANNEL_MAP: Record<string, string> = {
+  'Finance':           'SLACK_CHANNEL_FINANCE',
+  'Operations':        'SLACK_CHANNEL_OPERATIONS',
+  'Growth':            'SLACK_CHANNEL_GROWTH',
+  'Marketplace':       'SLACK_CHANNEL_MARKETPLACE',
+  'CX':                'SLACK_CHANNEL_CX',
+};
+
+// ── Core send function ────────────────────────────────────────────────────────
+
 /**
  * Send the styled pending complaints report as an image to a Slack channel.
+ * Pass `department` to scope the report to a single department.
  * Also posts a companion text message that tags relevant department managers.
  */
 export async function sendPendingComplaintsReport(
-  channelId: string
+  channelId: string,
+  department?: string,           // if set, report is scoped to this department
+  prefetchedData?: { tickets: any[]; users: any[] }   // optional: reuse already-fetched data
 ): Promise<{ success: boolean; ts?: string; error?: string }> {
   const client = getSlackClient();
   if (!client) {
     return { success: false, error: 'SLACK_BOT_TOKEN not configured' };
   }
 
-  console.log('[SlackReporter] Generating pending complaints image report...');
+  const scope = department ? `[${department}]` : '[All]';
+  console.log(`[SlackReporter] ${scope} Generating pending complaints report...`);
 
   try {
-    const [allTickets, allUsers] = await Promise.all([
-      storage.getTickets(),
-      storage.getUsers(),
-    ]);
+    const allTickets = prefetchedData?.tickets ?? await storage.getTickets();
+    const allUsers   = prefetchedData?.users   ?? await storage.getUsers();
 
-    // Only active (pending) tickets
+    // Only active (pending) tickets — filtered further inside buildPendingReportData
     const pendingTickets = allTickets.filter(
       t => t.status === 'New' || t.status === 'Open' || t.status === 'Pending'
     );
 
-    const data    = buildPendingReportData(allTickets, allUsers);
-    const mentions = buildManagerMentions(pendingTickets, allUsers);
+    const data      = buildPendingReportData(allTickets, allUsers, department);
+    const mentions  = buildManagerMentions(
+      department ? pendingTickets.filter(t => t.department === department) : pendingTickets,
+      allUsers,
+      department
+    );
+
     const totalBreached = data.sla.breached;
     const totalAtRisk   = data.sla.atRisk;
 
+    const greeting = department
+      ? (mentions ? `👋 Hey ${mentions} — *${department} team*` : `👋 Hi *${department} team*,`)
+      : (mentions ? `👋 Hey ${mentions}` : '👋 Hi everyone,');
+
     const introText = [
-      mentions ? `👋 Hey ${mentions}` : '👋 Hi everyone,',
-      `\n*Please find below the pending complaints report as of ${data.generatedAt}.*`,
+      greeting,
+      `\n*Please find below the ${department ? `*${department}* department ` : ''}pending complaints report as of ${data.generatedAt}.*`,
       `\n📋 *${data.totalPending} total pending* · 🔴 *${totalBreached} breached* · 🟠 *${totalAtRisk} at risk* · ✅ *${data.totalOnTrack} within SLA*`,
       totalBreached > 0 ? '\n⚠️ *Please action SLA-breached cases immediately.*' : '',
     ].filter(Boolean).join('');
 
     // ── Attempt 1: Chrome screenshot → file upload ───────────────────────────
-    // Only attempted when Chrome is available (local dev / dedicated server).
     const html   = buildPendingReportHtml(data);
     const pngBuf = await renderHtmlToPng(html, 900);
 
     if (pngBuf) {
       try {
+        const filename = department
+          ? `${department.toLowerCase()}-pending-report-${new Date().toISOString().slice(0, 10)}.png`
+          : `pending-report-${new Date().toISOString().slice(0, 10)}.png`;
         const uploadResult = await client.filesUploadV2({
           channel_id: channelId,
           initial_comment: introText,
-          filename: `pending-report-${new Date().toISOString().slice(0, 10)}.png`,
+          filename,
           file: pngBuf,
         });
         const ts = (uploadResult as any)?.files?.[0]?.shares?.public?.[channelId]?.[0]?.ts ||
                    (uploadResult as any)?.file?.shares?.public?.[channelId]?.[0]?.ts || '';
-        console.log(`[SlackReporter] Pending complaints image report sent (file upload) to ${channelId}`);
+        console.log(`[SlackReporter] ${scope} Image report sent (file upload) to ${channelId}`);
         return { success: true, ts };
       } catch (uploadErr: any) {
-        // Non-scope errors bubble up; scope errors fall through to Block Kit
         const errCode = uploadErr?.data?.error || uploadErr?.message || '';
         const isScopeError = errCode.includes('missing_scope') || errCode.includes('not_allowed_token_type');
         if (!isScopeError) throw uploadErr;
-        console.warn('[SlackReporter] files:write scope missing — falling back to Block Kit report');
+        console.warn(`[SlackReporter] ${scope} files:write scope missing — falling back to Block Kit`);
       }
     } else {
-      console.warn('[SlackReporter] Chrome not available — using Block Kit report');
+      console.warn(`[SlackReporter] ${scope} Chrome not available — using Block Kit`);
     }
 
-    // ── Attempt 2: Rich Block Kit report with QuickChart.io images ───────────
-    // Serverless-compatible: no Chrome needed, charts fetched from QuickChart.io.
+    // ── Attempt 2: Block Kit fallback with QuickChart.io ─────────────────────
+    const slaTotal    = data.sla.onTrack + data.sla.atRisk + data.sla.breached;
+    const section1Label = department ? `Category Breakdown — ${department}` : 'Pending by Department';
 
-    // SLA doughnut chart
-    const slaTotal = data.sla.onTrack + data.sla.atRisk + data.sla.breached;
     const slaChartUrl = chartUrl({
       type: 'doughnut',
       data: {
@@ -699,35 +729,25 @@ export async function sendPendingComplaintsReport(
       },
     }, 500, 260);
 
-    // Department bar chart
-    const deptChartUrl = chartUrl({
+    const section1ChartUrl = chartUrl({
       type: 'bar',
       data: {
-        labels: data.byDepartment.map(d => d.dept),
+        labels: data.byDepartment.map(d => short(d.dept)),
         datasets: [
-          {
-            label: 'On Track',
-            data: data.byDepartment.map(d => d.count - d.breached),
-            backgroundColor: '#22c55e',
-          },
-          {
-            label: 'Breached',
-            data: data.byDepartment.map(d => d.breached),
-            backgroundColor: '#ef4444',
-          },
+          { label: 'On Track', data: data.byDepartment.map(d => d.count - d.breached), backgroundColor: '#22c55e' },
+          { label: 'Breached', data: data.byDepartment.map(d => d.breached), backgroundColor: '#ef4444' },
         ],
       },
       options: {
         indexAxis: 'y',
         plugins: {
-          title: { display: true, text: 'Pending by Department' },
+          title: { display: true, text: section1Label },
           legend: { position: 'bottom' },
         },
         scales: { x: { stacked: true }, y: { stacked: true } },
       },
     }, 600, Math.max(200, data.byDepartment.length * 36 + 60));
 
-    // Assignee table (top 10)
     const assigneeLines = data.byAssignee.slice(0, 10).map((a, i) =>
       `${i + 1}. *${a.name}* (${a.dept}) — ${a.count} ticket${a.count !== 1 ? 's' : ''}${a.breached > 0 ? ` · 🔴 ${a.breached} breached` : ''}`
     ).join('\n');
@@ -735,23 +755,15 @@ export async function sendPendingComplaintsReport(
     const blocks: any[] = [
       { type: 'section', text: { type: 'mrkdwn', text: introText } },
       { type: 'divider' },
-      {
-        type: 'image',
-        image_url: slaChartUrl,
-        alt_text: 'SLA Status Doughnut Chart',
-      },
-      {
-        type: 'image',
-        image_url: deptChartUrl,
-        alt_text: 'Pending by Department Bar Chart',
-      },
+      { type: 'image', image_url: slaChartUrl,     alt_text: 'SLA Status Doughnut Chart' },
+      { type: 'image', image_url: section1ChartUrl, alt_text: section1Label },
     ];
 
     if (assigneeLines) {
       blocks.push({ type: 'divider' });
       blocks.push({
         type: 'section',
-        text: { type: 'mrkdwn', text: `*👤 Top Assignees by Pending Tickets:*\n${assigneeLines}` },
+        text: { type: 'mrkdwn', text: `*👤 Assignees by Pending Tickets:*\n${assigneeLines}` },
       });
     }
 
@@ -768,12 +780,63 @@ export async function sendPendingComplaintsReport(
       unfurl_media: false,
     });
 
-    console.log(`[SlackReporter] Pending complaints Block Kit report sent to ${channelId} ts: ${result.ts}`);
+    console.log(`[SlackReporter] ${scope} Block Kit report sent to ${channelId} ts: ${result.ts}`);
     return { success: true, ts: result.ts as string };
 
   } catch (error: any) {
-    console.error('[SlackReporter] Failed to send pending complaints report:', error.message);
+    console.error(`[SlackReporter] ${scope} Failed to send report:`, error.message);
     return { success: false, error: error.message };
+  }
+}
+
+// ── Department-level reports ──────────────────────────────────────────────────
+
+/**
+ * Sends a scoped pending complaints report to every department that has:
+ *  a) An active Slack channel configured in DEPT_CHANNEL_MAP
+ *  b) At least one pending ticket
+ *
+ * Fetches tickets and users once and reuses the data for all dept sends.
+ */
+export async function sendDepartmentPendingReports(): Promise<void> {
+  const client = getSlackClient();
+  if (!client) {
+    console.log('[SlackReporter] Slack not configured — skipping department reports');
+    return;
+  }
+
+  const [allTickets, allUsers] = await Promise.all([
+    storage.getTickets(),
+    storage.getUsers(),
+  ]);
+
+  const prefetchedData = { tickets: allTickets, users: allUsers };
+
+  for (const [dept, envKey] of Object.entries(DEPT_CHANNEL_MAP)) {
+    const channelId = process.env[envKey];
+    if (!channelId) {
+      console.log(`[SlackReporter] [${dept}] ${envKey} not set — skipping`);
+      continue;
+    }
+
+    // Skip departments with no pending tickets
+    const hasPending = allTickets.some(
+      t => t.department === dept && ['New', 'Open', 'Pending'].includes(t.status)
+    );
+    if (!hasPending) {
+      console.log(`[SlackReporter] [${dept}] No pending tickets — skipping`);
+      continue;
+    }
+
+    const result = await sendPendingComplaintsReport(channelId, dept, prefetchedData);
+    if (result.success) {
+      console.log(`[SlackReporter] [${dept}] Report sent successfully`);
+    } else {
+      console.error(`[SlackReporter] [${dept}] Failed: ${result.error}`);
+    }
+
+    // Small delay between sends to avoid Slack rate limits
+    await new Promise(resolve => setTimeout(resolve, 1500));
   }
 }
 
@@ -783,16 +846,18 @@ export async function sendPendingComplaintsReport(
  * Starts the daily report scheduler.
  * Fires at TARGET_HOUR_UTC:TARGET_MINUTE_UTC every day → 08:00 AM PKT (03:00 UTC).
  * Uses a recursive setTimeout so it re-syncs wall-clock time after each fire.
- * Sends BOTH:
- *   1. The analytics chart-based summary (existing)
- *   2. The pending complaints image report (new)
+ *
+ * Sends:
+ *   1. Analytics chart-based summary → SLACK_CHANNEL_MANAGERS
+ *   2. Full pending complaints report → SLACK_CHANNEL_ID (main channel: flow-seller-experience-pulse)
+ *   3. Dept-scoped pending reports   → each dept's own channel (Finance, CX, Ops, Growth, Marketplace)
  */
 export function startDailyReportScheduler(): void {
-  const TARGET_HOUR_UTC = 3;   // 08:00 PKT
+  const TARGET_HOUR_UTC   = 3;   // 08:00 PKT = 03:00 UTC
   const TARGET_MINUTE_UTC = 0;
 
   function scheduleNext() {
-    const now = new Date();
+    const now  = new Date();
     const next = new Date();
     next.setUTCHours(TARGET_HOUR_UTC, TARGET_MINUTE_UTC, 0, 0);
 
@@ -801,20 +866,27 @@ export function startDailyReportScheduler(): void {
     }
 
     const msUntilNext = next.getTime() - now.getTime();
-    const hoursUntil = Math.round(msUntilNext / 3600000);
+    const hoursUntil  = Math.round(msUntilNext / 3600000);
     console.log(
       `[SlackReporter] Daily reports scheduled in ~${hoursUntil}h (${next.toISOString()} UTC)`
     );
 
     setTimeout(async () => {
-      // 1. Analytics chart summary
+      // 1. Analytics summary → managers channel
       await sendDailyReport();
 
-      // 2. Pending complaints image report (to the managers channel)
-      const managersChannel = process.env.SLACK_CHANNEL_MANAGERS;
-      if (managersChannel) {
-        await sendPendingComplaintsReport(managersChannel);
+      // 2. Full pending complaints report → main channel (flow-seller-experience-pulse)
+      const mainChannel = process.env.SLACK_CHANNEL_ID || process.env.SLACK_CHANNEL_MANAGERS;
+      if (mainChannel) {
+        console.log('[SlackReporter] Sending full pending report to main channel...');
+        await sendPendingComplaintsReport(mainChannel);
+      } else {
+        console.warn('[SlackReporter] No main channel configured (SLACK_CHANNEL_ID / SLACK_CHANNEL_MANAGERS)');
       }
+
+      // 3. Department-scoped reports → each dept's own channel
+      console.log('[SlackReporter] Sending department-level reports...');
+      await sendDepartmentPendingReports();
 
       scheduleNext();
     }, msUntilNext);

@@ -64,8 +64,10 @@ import {
   buildSummaryFromTickets,
   isSlackReporterConfigured,
   sendPendingComplaintsReport,
+  sendDepartmentPendingReports,
 } from "./slack-reporter";
 import { getCachedImage } from "./report-image";
+import { buildPendingReportData, buildPendingReportHtml } from "./report-html-builder";
 
 // Permission check helper
 async function checkPermission(req: any, requiredPermission: string): Promise<{ hasPermission: boolean; user?: any; error?: string }> {
@@ -5642,16 +5644,63 @@ roles: ${JSON.stringify(updated.roles, null, 2)}</pre>
         return res.status(400).json({ error: "channelId is required (or set SLACK_CHANNEL_MANAGERS)" });
       }
 
-      const result = await sendPendingComplaintsReport(channelId);
+      // Optional: scope to a single department
+      const department: string | undefined = req.body?.department || undefined;
+
+      const result = await sendPendingComplaintsReport(channelId, department);
 
       if (result.success) {
-        res.json({ success: true, ts: result.ts });
+        res.json({ success: true, ts: result.ts, department: department ?? null });
       } else {
         res.status(500).json({ success: false, error: result.error });
       }
     } catch (error: any) {
       console.error("[Reports] send-pending-report error:", error);
       res.status(500).json({ error: error.message });
+    }
+  });
+
+  /**
+   * POST /api/reports/send-all-dept-reports
+   * Triggers dept-scoped pending reports to all configured department channels.
+   */
+  app.post("/api/reports/send-all-dept-reports", async (req, res) => {
+    try {
+      const permCheck = await checkPermission(req, "view:analytics");
+      if (!permCheck.hasPermission) {
+        return res.status(403).json({ error: permCheck.error });
+      }
+      if (!isSlackReporterConfigured()) {
+        return res.status(503).json({ error: "Slack is not configured." });
+      }
+      // Fire-and-forget; responds immediately so UI doesn't time out
+      sendDepartmentPendingReports().catch(err =>
+        console.error("[Reports] send-all-dept-reports error:", err)
+      );
+      res.json({ success: true, message: "Department reports are being sent in the background." });
+    } catch (error: any) {
+      res.status(500).json({ error: error.message });
+    }
+  });
+
+  /**
+   * GET /api/reports/preview-pending?department=Finance
+   * Returns the pending complaints report as a live HTML page (for dev preview / QA).
+   * Pass ?department=Finance to preview a dept-scoped report.
+   */
+  app.get("/api/reports/preview-pending", async (req, res) => {
+    try {
+      const department = (req.query.department as string) || undefined;
+      const [allTickets, allUsers] = await Promise.all([
+        storage.getTickets(),
+        storage.getUsers(),
+      ]);
+      const data = buildPendingReportData(allTickets, allUsers, department);
+      const html = buildPendingReportHtml(data);
+      res.set("Content-Type", "text/html; charset=utf-8");
+      res.send(html);
+    } catch (error: any) {
+      res.status(500).send(`<pre>Error: ${error.message}</pre>`);
     }
   });
 

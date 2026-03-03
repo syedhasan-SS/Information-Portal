@@ -143,6 +143,39 @@ async function sendReportToSlack(payload: {
   return res.json();
 }
 
+async function sendPendingReportToSlack(channelId: string) {
+  const userEmail = localStorage.getItem("userEmail");
+  const res = await fetch("/api/reports/send-pending-report", {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      ...(userEmail ? { "x-user-email": userEmail } : {}),
+    },
+    body: JSON.stringify({ channelId }),
+  });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({ error: "Unknown error" }));
+    throw new Error(err.error || "Failed to send pending report");
+  }
+  return res.json();
+}
+
+async function sendAllDeptReports() {
+  const userEmail = localStorage.getItem("userEmail");
+  const res = await fetch("/api/reports/send-all-dept-reports", {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      ...(userEmail ? { "x-user-email": userEmail } : {}),
+    },
+  });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({ error: "Unknown error" }));
+    throw new Error(err.error || "Failed to send department reports");
+  }
+  return res.json();
+}
+
 // Custom Tooltip for charts
 const CustomTooltip = ({ active, payload, label }: any) => {
   if (active && payload && payload.length) {
@@ -274,6 +307,8 @@ export default function AnalyticsPage() {
   // Slack report dialog state
   const [showSlackDialog, setShowSlackDialog] = useState(false);
   const [slackChannelId, setSlackChannelId] = useState<string>("");
+  const [showPendingDialog, setShowPendingDialog] = useState(false);
+  const [pendingChannelId, setPendingChannelId] = useState<string>("");
 
   const { data: tickets = [], isLoading } = useQuery({
     queryKey: ["tickets"],
@@ -300,6 +335,27 @@ export default function AnalyticsPage() {
     },
     onError: (err: Error) => {
       toast.error(err.message || "Failed to send report to Slack");
+    },
+  });
+
+  const sendPendingMutation = useMutation({
+    mutationFn: sendPendingReportToSlack,
+    onSuccess: () => {
+      setShowPendingDialog(false);
+      toast.success("Pending complaints report sent to Slack!");
+    },
+    onError: (err: Error) => {
+      toast.error(err.message || "Failed to send pending report");
+    },
+  });
+
+  const sendAllDeptMutation = useMutation({
+    mutationFn: sendAllDeptReports,
+    onSuccess: () => {
+      toast.success("Department reports are being sent to their channels!");
+    },
+    onError: (err: Error) => {
+      toast.error(err.message || "Failed to send department reports");
     },
   });
 
@@ -511,12 +567,22 @@ export default function AnalyticsPage() {
               <Button
                 variant="outline"
                 size="sm"
-                onClick={() => setShowSlackDialog(true)}
+                onClick={() => setShowPendingDialog(true)}
                 disabled={!slackConfigured}
-                title={!slackConfigured ? "Slack is not configured" : "Send current report to Slack"}
+                title={!slackConfigured ? "Slack is not configured" : "Send pending complaints report to Slack"}
               >
                 <Send className="mr-2 h-4 w-4" />
-                Send to Slack
+                Pending Report
+              </Button>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => setShowSlackDialog(true)}
+                disabled={!slackConfigured}
+                title={!slackConfigured ? "Slack is not configured" : "Send current analytics report to Slack"}
+              >
+                <Send className="mr-2 h-4 w-4" />
+                Analytics Report
               </Button>
             </div>
           </div>
@@ -1044,6 +1110,110 @@ export default function AnalyticsPage() {
                   Send Report
                 </>
               )}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* ── Send Pending Complaints Report Dialog ── */}
+      <Dialog open={showPendingDialog} onOpenChange={setShowPendingDialog}>
+        <DialogContent className="sm:max-w-[480px]">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Send className="h-4 w-4" />
+              Send Pending Complaints Report
+            </DialogTitle>
+            <DialogDescription>
+              Send the live pending snapshot to Slack. Choose to send the full report to a single channel, or push dept-scoped reports to each department's own channel.
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="space-y-4 py-2">
+            {/* Live pending summary */}
+            {(() => {
+              const pending = tickets.filter((t) => ["New", "Open", "Pending"].includes(t.status));
+              return (
+                <div className="rounded-lg bg-muted/50 p-3 text-xs space-y-1 text-muted-foreground">
+                  <p className="font-medium text-foreground text-sm">Live snapshot</p>
+                  <p>📋 {pending.length} total pending · 🔴 {pending.filter(t => t.slaStatus === "breached").length} breached · 🟠 {pending.filter(t => t.slaStatus === "at_risk").length} at risk · ✅ {pending.filter(t => t.slaStatus === "on_track").length} within SLA</p>
+                </div>
+              );
+            })()}
+
+            {/* Option 1: Full report to a channel */}
+            <div className="rounded-lg border border-border p-3 space-y-3">
+              <div>
+                <p className="text-sm font-medium">Full report → single channel</p>
+                <p className="text-xs text-muted-foreground mt-0.5">All-departments combined. Sends to the channel you pick below.</p>
+              </div>
+              {slackChannels.length > 0 ? (
+                <div className="flex gap-2">
+                  <Select value={pendingChannelId} onValueChange={setPendingChannelId}>
+                    <SelectTrigger className="flex-1">
+                      <SelectValue placeholder="Select a channel…" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {slackChannels.map((ch) => (
+                        <SelectItem key={ch.id} value={ch.id}>
+                          {ch.name}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                  <Button
+                    size="sm"
+                    disabled={!pendingChannelId || sendPendingMutation.isPending}
+                    onClick={() => sendPendingMutation.mutate(pendingChannelId)}
+                  >
+                    {sendPendingMutation.isPending ? (
+                      <Loader2 className="h-4 w-4 animate-spin" />
+                    ) : (
+                      <Send className="h-4 w-4" />
+                    )}
+                  </Button>
+                </div>
+              ) : (
+                <p className="text-xs text-muted-foreground rounded border border-dashed p-2">
+                  No channels configured. Set <code>SLACK_CHANNEL_MANAGERS</code> etc.
+                </p>
+              )}
+            </div>
+
+            {/* Option 2: Dept reports */}
+            <div className="rounded-lg border border-border p-3 space-y-3">
+              <div>
+                <p className="text-sm font-medium">Dept-scoped reports → each dept channel</p>
+                <p className="text-xs text-muted-foreground mt-0.5">
+                  Sends a filtered report to Finance, CX, Operations, Growth &amp; Marketplace channels. Each report shows only that department's tickets.
+                </p>
+              </div>
+              <Button
+                className="w-full"
+                variant="outline"
+                disabled={sendAllDeptMutation.isPending}
+                onClick={() => {
+                  sendAllDeptMutation.mutate(undefined as any);
+                  setShowPendingDialog(false);
+                }}
+              >
+                {sendAllDeptMutation.isPending ? (
+                  <>
+                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                    Sending…
+                  </>
+                ) : (
+                  <>
+                    <Send className="mr-2 h-4 w-4" />
+                    Send to All Dept Channels
+                  </>
+                )}
+              </Button>
+            </div>
+          </div>
+
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setShowPendingDialog(false)}>
+              Close
             </Button>
           </DialogFooter>
         </DialogContent>
