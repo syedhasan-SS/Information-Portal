@@ -1,6 +1,6 @@
 import { build as esbuild } from "esbuild";
 import { build as viteBuild } from "vite";
-import { rm, readFile } from "fs/promises";
+import { rm, readFile, cp, mkdir } from "fs/promises";
 
 const allowlist = [
   "@google/generative-ai",
@@ -57,6 +57,12 @@ async function buildAll() {
     external: externals,
     logLevel: "info",
   });
+
+  // Copy report fonts so report-image-satori can find them at __dirname/fonts/
+  console.log("copying report fonts to dist/server/fonts...");
+  await mkdir("dist/server/fonts", { recursive: true });
+  await cp("server/fonts", "dist/server/fonts", { recursive: true });
+  console.log("fonts copied");
 }
 
 buildAll().catch((err) => {

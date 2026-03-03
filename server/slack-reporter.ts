@@ -8,6 +8,7 @@ import { WebClient } from '@slack/web-api';
 import { storage } from './storage';
 import { buildPendingReportData, buildPendingReportHtml } from './report-html-builder';
 import { renderHtmlToPng, cacheReportImage } from './report-image';
+import { buildReportPng } from './report-image-satori';
 
 // ── Slack client ──────────────────────────────────────────────────────────────
 
@@ -677,9 +678,17 @@ export async function sendPendingComplaintsReport(
       totalBreached > 0 ? '\n⚠️ *Please action SLA-breached cases immediately.*' : '',
     ].filter(Boolean).join('');
 
-    // ── Attempt 1: Chrome screenshot → file upload ───────────────────────────
-    const html   = buildPendingReportHtml(data);
-    const pngBuf = await renderHtmlToPng(html, 900);
+    // ── Attempt 1: Satori serverless image renderer (works everywhere) ────────
+    let pngBuf: Buffer | null = null;
+    try {
+      pngBuf = await buildReportPng(data);
+      console.log(`[SlackReporter] ${scope} Satori PNG generated: ${pngBuf.length} bytes`);
+    } catch (satoriErr: any) {
+      console.warn(`[SlackReporter] ${scope} Satori render failed (${satoriErr.message}) — trying Chrome`);
+      // Fallback to Chrome if satori fails
+      const html = buildPendingReportHtml(data);
+      pngBuf = await renderHtmlToPng(html, 900);
+    }
 
     if (pngBuf) {
       try {
@@ -703,7 +712,7 @@ export async function sendPendingComplaintsReport(
         console.warn(`[SlackReporter] ${scope} files:write scope missing — falling back to Block Kit`);
       }
     } else {
-      console.warn(`[SlackReporter] ${scope} Chrome not available — using Block Kit`);
+      console.warn(`[SlackReporter] ${scope} All image renderers failed — using Block Kit`);
     }
 
     // ── Attempt 2: Block Kit fallback with QuickChart.io ─────────────────────
