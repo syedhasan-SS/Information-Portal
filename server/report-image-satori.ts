@@ -474,12 +474,11 @@ export async function buildReportPng(
       L.barSection('02', sec01Label, sec01Title, topDepts, deptMax, CONTENT_W),
       L.divider(),
       // Two-column row: Category (left) + Assignee (right)
+      // COL_W + COL_GAP + COL_W = 530 + 44 + 530 = 1104 = CONTENT_W  (exact fit, no overflow)
       row({ gap: COL_GAP, alignItems: 'flex-start' }, [
         col({ width: COL_W }, [
           L.barSection('03', 'CATEGORY VIEW (L3/L4)', catTitle, topCats, catMax, COL_W),
         ]),
-        // Vertical separator
-        solidDiv({ width: 1, background: C.border, alignSelf: 'stretch' }),
         col({ width: COL_W }, [
           L.assigneeSection(data, '04', COL_W),
         ]),
