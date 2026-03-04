@@ -10,6 +10,7 @@ import satori from 'satori';
 import { Resvg } from '@resvg/resvg-js';
 import type { PendingReportData } from './report-html-builder';
 import { interRegularFont, interBoldFont, jetbrainsMonoFont } from './fonts/font-data';
+import { FLEEK_LOGO_DATA_URI } from './fonts/logo-data';
 
 // ── Layout constants ──────────────────────────────────────────────────────────
 
@@ -112,18 +113,17 @@ function pct(val: number, total: number) {
 
 function makeLayout(C: Palette) {
 
-  // ── Logo mark: "F" badge ───────────────────────────────────────────────────
+  // ── Logo mark: actual Fleek PNG logo ──────────────────────────────────────
   function logoMark() {
-    return row({
-      width: 40, height: 40,
-      background: C.accent,
-      borderRadius: 10,
-      alignItems: 'center',
-      justifyContent: 'center',
-      flexShrink: 0,
-    }, [
-      txt({ fontFamily: 'Inter', fontWeight: 700, fontSize: 22, color: '#111111', lineHeight: 1 }, 'F'),
-    ]);
+    return {
+      type: 'img',
+      props: {
+        src: FLEEK_LOGO_DATA_URI,
+        width: 44,
+        height: 44,
+        style: { display: 'flex', borderRadius: 8, flexShrink: 0 },
+      },
+    };
   }
 
   // ── Header ─────────────────────────────────────────────────────────────────
