@@ -5693,8 +5693,8 @@ roles: ${JSON.stringify(updated.roles, null, 2)}</pre>
    */
   app.post("/api/reports/send-now", async (req, res) => {
     try {
-      const secret = (req.headers['x-internal-secret'] as string) || req.body?.secret;
-      const configuredSecret = process.env.REPORT_SECRET;
+      const secret = ((req.headers['x-internal-secret'] as string) || req.body?.secret || '').trim();
+      const configuredSecret = (process.env.REPORT_SECRET || '').trim();
       if (!configuredSecret || secret !== configuredSecret) {
         return res.status(403).json({ error: 'Forbidden: invalid or missing secret' });
       }
