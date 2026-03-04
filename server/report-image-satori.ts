@@ -135,22 +135,19 @@ function makeLayout(C: Palette) {
     return row({
       background: C.surface,
       borderBottom: `2px solid ${C.accent}`,
-      padding: `20px ${H_PAD}px`,
+      padding: `18px ${H_PAD}px`,
       alignItems: 'center',
       justifyContent: 'space-between',
     }, [
-      // Left: logo icon + brand text
+      // Left: logo icon + FLOW name only
       row({ alignItems: 'center', gap: 14 }, [
         logoMark(),
-        col({ gap: 2 }, [
-          txt({ fontFamily: 'Inter', fontWeight: 700, fontSize: 22, letterSpacing: 3, color: C.accent, lineHeight: 1 }, 'FLEEK'),
-          txt({ fontFamily: 'Mono', fontSize: 10, letterSpacing: 2, color: C.muted }, 'FLOW PORTAL'),
-        ]),
+        txt({ fontFamily: 'Inter', fontWeight: 700, fontSize: 28, letterSpacing: 2, color: C.text, lineHeight: 1 }, 'FLOW'),
       ]),
       // Right: report title + timestamp
-      col({ alignItems: 'flex-end', gap: 4 }, [
-        txt({ fontFamily: 'Inter', fontWeight: 700, fontSize: 14, letterSpacing: 2, color: C.text }, title),
-        txt({ fontFamily: 'Mono', fontSize: 11, color: C.muted, letterSpacing: 1 }, data.generatedAt),
+      col({ alignItems: 'flex-end', gap: 5 }, [
+        txt({ fontFamily: 'Inter', fontWeight: 700, fontSize: 15, letterSpacing: 2, color: C.text }, title),
+        txt({ fontFamily: 'Mono', fontSize: 13, color: C.muted, letterSpacing: 1 }, data.generatedAt),
       ]),
     ]);
   }
@@ -166,7 +163,7 @@ function makeLayout(C: Palette) {
     function stat(val: number, label: string, color: string) {
       return col({ gap: 6, flexShrink: 0 }, [
         txt({ fontFamily: 'Inter', fontWeight: 700, fontSize: 54, lineHeight: 1, color }, String(val)),
-        txt({ fontFamily: 'Mono', fontSize: 12, letterSpacing: 2, color: C.muted, textTransform: 'uppercase' }, label),
+        txt({ fontFamily: 'Mono', fontSize: 14, letterSpacing: 2, color: C.muted, textTransform: 'uppercase' }, label),
       ]);
     }
 
@@ -174,11 +171,11 @@ function makeLayout(C: Palette) {
       background: C.surface,
       borderBottom: `1px solid ${C.border}`,
       padding: `34px ${H_PAD}px 30px`,
-      gap: 8,
+      gap: 10,
     }, [
-      txt({ fontFamily: 'Mono', fontSize: 11, letterSpacing: 3, color: C.accent, textTransform: 'uppercase' }, kicker),
+      txt({ fontFamily: 'Mono', fontSize: 14, letterSpacing: 3, color: C.accent, textTransform: 'uppercase' }, kicker),
       txt({ fontFamily: 'Inter', fontWeight: 700, fontSize: 42, lineHeight: 1, color: C.text }, heading),
-      txt({ fontFamily: 'Inter', fontSize: 14, color: C.muted, marginBottom: 18 }, sub),
+      txt({ fontFamily: 'Inter', fontSize: 16, color: C.muted, marginBottom: 18 }, sub),
       row({ gap: 52, alignItems: 'flex-end' }, [
         stat(data.totalPending,  'Total Pending', C.accent),
         solidDiv({ width: 1, height: 54, background: C.border2, flexShrink: 0 }),
@@ -205,12 +202,12 @@ function makeLayout(C: Palette) {
         border: `1px solid ${bdr}`,
         borderRadius: 14,
         padding: '24px 26px',
-        gap: 6,
+        gap: 7,
       }, [
-        txt({ fontFamily: 'Mono', fontSize: 10, letterSpacing: 2, color: C.muted, textTransform: 'uppercase' }, label),
+        txt({ fontFamily: 'Mono', fontSize: 13, letterSpacing: 2, color: C.muted, textTransform: 'uppercase' }, label),
         txt({ fontFamily: 'Inter', fontWeight: 700, fontSize: 54, lineHeight: 1, color }, String(value)),
-        txt({ fontFamily: 'Inter', fontSize: 13, color: C.muted }, sub),
-        txt({ fontFamily: 'Mono', fontSize: 12, color }, `${pctVal}% of total`),
+        txt({ fontFamily: 'Inter', fontSize: 15, color: C.muted }, sub),
+        txt({ fontFamily: 'Mono', fontSize: 14, color }, `${pctVal}% of total`),
         // Mini fill bar
         row({ marginTop: 10, height: 5, borderRadius: 999, background: C.subtle, overflow: 'hidden', width: SLA_BAR_W }, [
           barFillPx > 0 ? solidDiv({ width: barFillPx, height: 5, background: color, borderRadius: 999 }) : null,
@@ -220,15 +217,15 @@ function makeLayout(C: Palette) {
 
     return col({ gap: 18 }, [
       // Section title + 48h SLA note
-      row({ alignItems: 'center', gap: 18 }, [
-        col({ gap: 4 }, [
-          txt({ fontFamily: 'Mono', fontSize: 10, letterSpacing: 3, color: C.accent, textTransform: 'uppercase' }, '01 — SLA VIEW'),
-          txt({ fontFamily: 'Inter', fontWeight: 700, fontSize: 24, color: C.text }, 'SLA Status Breakdown'),
+      row({ alignItems: 'center', gap: 20 }, [
+        col({ gap: 5 }, [
+          txt({ fontFamily: 'Mono', fontSize: 13, letterSpacing: 3, color: C.accent, textTransform: 'uppercase' }, '01 — SLA VIEW'),
+          txt({ fontFamily: 'Inter', fontWeight: 700, fontSize: 26, color: C.text }, 'SLA Status Breakdown'),
         ]),
-        solidDiv({ width: 1, height: 36, background: C.border2 }),
-        col({ gap: 2 }, [
-          txt({ fontFamily: 'Mono', fontSize: 11, color: C.muted }, 'Standard SLA'),
-          txt({ fontFamily: 'Inter', fontWeight: 700, fontSize: 20, color: C.accent }, '48 hours'),
+        solidDiv({ width: 1, height: 40, background: C.border2 }),
+        col({ gap: 3 }, [
+          txt({ fontFamily: 'Mono', fontSize: 13, color: C.muted }, 'Standard SLA'),
+          txt({ fontFamily: 'Inter', fontWeight: 700, fontSize: 22, color: C.accent }, '48 hours'),
         ]),
       ]),
       row({ gap: SLA_CARD_GAP }, [
@@ -249,13 +246,13 @@ function makeLayout(C: Palette) {
     colWidth: number = CONTENT_W
   ) {
     const isFullWidth  = colWidth >= CONTENT_W;
-    const labelColW    = isFullWidth ? 240 : 162;
-    const countColW    = isFullWidth ? 54  : 42;
+    const labelColW    = isFullWidth ? 240 : 165;
+    const countColW    = isFullWidth ? 56  : 44;
     const maxChars     = isFullWidth ? 32  : 22;
-    const labelSize    = isFullWidth ? 15  : 14;
-    const countSize    = isFullWidth ? 17  : 15;
-    const monoSize     = isFullWidth ? 13  : 12;
-    const barH         = isFullWidth ? 9   : 8;
+    const labelSize    = isFullWidth ? 16  : 15;
+    const countSize    = isFullWidth ? 18  : 16;
+    const monoSize     = isFullWidth ? 14  : 13;
+    const barH         = isFullWidth ? 10  : 9;
 
     function barRow(
       item: { label: string; sublabel?: string; total: number; breached: number; onTrack: number },
@@ -275,7 +272,7 @@ function makeLayout(C: Palette) {
           col({ width: labelColW, flexShrink: 0, gap: 4 }, [
             txt({ fontFamily: 'Inter', fontWeight: 600, fontSize: labelSize, color: C.text, lineHeight: 1.2 }, shortLabel),
             shortSub ? txt({
-              fontFamily: 'Mono', fontSize: 10, color: C.muted,
+              fontFamily: 'Mono', fontSize: 11, color: C.muted,
               background: C.subtle, borderRadius: 4,
               paddingLeft: 6, paddingRight: 6, paddingTop: 2, paddingBottom: 2,
               alignSelf: 'flex-start',
@@ -304,11 +301,11 @@ function makeLayout(C: Palette) {
     }
 
     return col({ gap: 0 }, [
-      txt({ fontFamily: 'Mono', fontSize: 10, letterSpacing: 3, color: C.accent, textTransform: 'uppercase' }, `${sectionNum} — ${sectionLabel}`),
-      txt({ fontFamily: 'Inter', fontWeight: 700, fontSize: isFullWidth ? 24 : 20, color: C.text, marginTop: 5, marginBottom: 18 }, title),
+      txt({ fontFamily: 'Mono', fontSize: 13, letterSpacing: 3, color: C.accent, textTransform: 'uppercase' }, `${sectionNum} — ${sectionLabel}`),
+      txt({ fontFamily: 'Inter', fontWeight: 700, fontSize: isFullWidth ? 26 : 22, color: C.text, marginTop: 6, marginBottom: 20 }, title),
       items.length > 0
         ? col({ gap: 0 }, items.map((item, i) => barRow(item, i === items.length - 1)))
-        : txt({ fontFamily: 'Inter', fontSize: 13, color: C.muted }, 'No data available'),
+        : txt({ fontFamily: 'Inter', fontSize: 15, color: C.muted }, 'No data available'),
     ]);
   }
 
@@ -321,11 +318,11 @@ function makeLayout(C: Palette) {
     const topAssignees  = data.byAssignee.slice(0, 12);
     const maxCount      = Math.max(...topAssignees.map(a => a.count), 1);
     const isFullWidth   = colWidth >= CONTENT_W;
-    const nameColW      = isFullWidth ? 210 : 158;
-    const countColW     = isFullWidth ? 54  : 42;
-    const monoSize      = isFullWidth ? 13  : 12;
+    const nameColW      = isFullWidth ? 215 : 162;
+    const countColW     = isFullWidth ? 56  : 44;
+    const monoSize      = isFullWidth ? 14  : 13;
     const maxNameChars  = isFullWidth ? 22  : 18;
-    const barH          = isFullWidth ? 9   : 8;
+    const barH          = isFullWidth ? 10  : 9;
 
     function assigneeRow(
       a: { name: string; dept: string; count: number; breached: number },
@@ -345,12 +342,12 @@ function makeLayout(C: Palette) {
           // Name + dept tag
           col({ width: nameColW, flexShrink: 0, gap: 4 }, [
             txt({
-              fontFamily: 'Inter', fontWeight: 600, fontSize: 14, lineHeight: 1.2,
+              fontFamily: 'Inter', fontWeight: 600, fontSize: 15, lineHeight: 1.2,
               color: isUnassigned ? C.muted : C.text,
               fontStyle: isUnassigned ? 'italic' : 'normal',
             }, shortName),
             txt({
-              fontFamily: 'Mono', fontSize: 10, color: C.muted,
+              fontFamily: 'Mono', fontSize: 11, color: C.muted,
               background: C.subtle, borderRadius: 4,
               paddingLeft: 6, paddingRight: 6, paddingTop: 2, paddingBottom: 2,
               alignSelf: 'flex-start',
@@ -379,8 +376,8 @@ function makeLayout(C: Palette) {
     }
 
     return col({ gap: 0 }, [
-      txt({ fontFamily: 'Mono', fontSize: 10, letterSpacing: 3, color: C.accent, textTransform: 'uppercase' }, `${sectionNum} — ASSIGNEE VIEW`),
-      txt({ fontFamily: 'Inter', fontWeight: 700, fontSize: isFullWidth ? 24 : 20, color: C.text, marginTop: 5, marginBottom: 18 }, 'Assignee Wise Pending Tickets'),
+      txt({ fontFamily: 'Mono', fontSize: 13, letterSpacing: 3, color: C.accent, textTransform: 'uppercase' }, `${sectionNum} — ASSIGNEE VIEW`),
+      txt({ fontFamily: 'Inter', fontWeight: 700, fontSize: isFullWidth ? 26 : 22, color: C.text, marginTop: 6, marginBottom: 20 }, 'Assignee Wise Pending Tickets'),
       topAssignees.length > 0
         ? col({ gap: 0 }, topAssignees.map((a, i) => assigneeRow(a, i === topAssignees.length - 1)))
         : txt({ fontFamily: 'Inter', fontSize: 13, color: C.muted }, 'No assigned tickets'),
@@ -399,8 +396,8 @@ function makeLayout(C: Palette) {
       alignItems: 'center',
       justifyContent: 'space-between',
     }, [
-      txt({ fontFamily: 'Mono', fontSize: 10, color: C.muted, letterSpacing: 1 }, 'FLOW INTERNAL PORTAL · AUTOMATED DAILY REPORT · STANDARD SLA: 48H'),
-      txt({ fontFamily: 'Mono', fontSize: 10, color: C.muted }, data.generatedAt),
+      txt({ fontFamily: 'Mono', fontSize: 12, color: C.muted, letterSpacing: 1 }, 'FLOW INTERNAL PORTAL · AUTOMATED DAILY REPORT · STANDARD SLA: 48H'),
+      txt({ fontFamily: 'Mono', fontSize: 12, color: C.muted }, data.generatedAt),
     ]);
   }
 
