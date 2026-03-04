@@ -8,35 +8,17 @@
 
 import satori from 'satori';
 import { Resvg } from '@resvg/resvg-js';
-import { readFileSync } from 'fs';
-import { join } from 'path';
 import type { PendingReportData } from './report-html-builder';
+import { interRegularFont, interBoldFont, jetbrainsMonoFont } from './fonts/font-data';
 
-// ── Font loading ──────────────────────────────────────────────────────────────
-
-let _fonts: any[] | null = null;
+// ── Font loading (pre-bundled as base64 — works on any platform) ──────────────
 
 function getFonts(): any[] {
-  if (_fonts) return _fonts;
-
-  function loadFont(name: string): Buffer {
-    const candidates = [
-      join(__dirname, 'fonts', name),
-      join(process.cwd(), 'server', 'fonts', name),
-      join(process.cwd(), 'dist', 'server', 'fonts', name),
-    ];
-    for (const p of candidates) {
-      try { return readFileSync(p); } catch {}
-    }
-    throw new Error(`Font not found: ${name}`);
-  }
-
-  _fonts = [
-    { name: 'Inter', data: loadFont('inter-regular.ttf'), weight: 400, style: 'normal' },
-    { name: 'Inter', data: loadFont('inter-bold.ttf'),    weight: 700, style: 'normal' },
-    { name: 'Mono',  data: loadFont('jetbrains-mono.ttf'),weight: 400, style: 'normal' },
+  return [
+    { name: 'Inter', data: interRegularFont, weight: 400, style: 'normal' },
+    { name: 'Inter', data: interBoldFont,    weight: 700, style: 'normal' },
+    { name: 'Mono',  data: jetbrainsMonoFont, weight: 400, style: 'normal' },
   ];
-  return _fonts;
 }
 
 // ── Colour palettes ────────────────────────────────────────────────────────────

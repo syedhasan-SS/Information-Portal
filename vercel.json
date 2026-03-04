@@ -1,6 +1,11 @@
 {
   "buildCommand": "npx tsx script/build-vercel.ts",
   "framework": null,
+  "functions": {
+    "api/index.js": {
+      "includeFiles": "dist/server/fonts/**"
+    }
+  },
   "rewrites": [
     {
       "source": "/(.*)",
