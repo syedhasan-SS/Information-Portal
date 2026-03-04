@@ -219,6 +219,63 @@ function makeLayout(C: Palette) {
     ]);
   }
 
+  function assigneeSection(
+    data: PendingReportData,
+    sectionNum: string
+  ) {
+    const topAssignees = data.byAssignee.slice(0, 12);
+    const maxCount = Math.max(...topAssignees.map(a => a.count), 1);
+
+    function assigneeRow(
+      a: { name: string; dept: string; count: number; breached: number },
+      isLast: boolean
+    ) {
+      const onTrack = a.count - a.breached;
+      const barWidthPct = Math.round((a.count / maxCount) * 100);
+      const breachWPct  = a.count > 0 ? Math.round((a.breached / a.count) * barWidthPct) : 0;
+      const trackWPct   = barWidthPct - breachWPct;
+      const shortName   = a.name.length > 20 ? a.name.slice(0, 18) + '…' : a.name;
+      const shortDept   = a.dept.length > 12 ? a.dept.slice(0, 10) + '…' : a.dept;
+
+      return col({ gap: 5, marginBottom: isLast ? 0 : 12 }, [
+        // Label row: name + dept tag + total + counts
+        row({ alignItems: 'center', gap: 0, width: 820 }, [
+          // Name column
+          col({ width: 160, flexShrink: 0, gap: 2 }, [
+            txt({ fontFamily: 'Inter', fontWeight: 600, fontSize: 13, color: C.text }, shortName),
+            txt({
+              fontFamily: 'Mono', fontSize: 9, color: C.muted,
+              background: C.surface, borderRadius: 3,
+              paddingLeft: 5, paddingRight: 5, paddingTop: 2, paddingBottom: 2,
+              alignSelf: 'flex-start',
+            }, shortDept),
+          ]),
+          // Total count
+          txt({ fontFamily: 'Inter', fontWeight: 700, fontSize: 14, color: C.accent, width: 40, flexShrink: 0, justifyContent: 'flex-end' }, String(a.count)),
+          // SLA counts right-aligned
+          row({ flex: 1, gap: 16, justifyContent: 'flex-end' }, [
+            txt({ fontFamily: 'Mono', fontSize: 11, color: C.green }, `+ ${onTrack} ok`),
+            txt({ fontFamily: 'Mono', fontSize: 11, color: a.breached > 0 ? C.red : C.muted },
+              a.breached > 0 ? `! ${a.breached} sla` : `- 0`),
+          ]),
+        ]),
+        // Stacked bar
+        row({ height: 7, borderRadius: 999, overflow: 'hidden', background: C.subtle, width: 820 }, [
+          trackWPct > 0  ? solidDiv({ width: `${trackWPct}%`,  height: '100%', background: C.green }) : null,
+          breachWPct > 0 ? solidDiv({ width: `${breachWPct}%`, height: '100%', background: C.red })   : null,
+        ].filter(Boolean) as any[]),
+      ]);
+    }
+
+    return col({ gap: 0 }, [
+      txt({ fontFamily: 'Mono', fontSize: 9, letterSpacing: 3, color: C.accent, textTransform: 'uppercase' }, `${sectionNum} — ASSIGNEE VIEW`),
+      txt({ fontFamily: 'Inter', fontWeight: 700, fontSize: 20, color: C.text, marginTop: 4, marginBottom: 16 }, 'Assignee Wise Pending Tickets'),
+      topAssignees.length > 0
+        ? col({ gap: 0 }, topAssignees.map((a, i) => assigneeRow(a, i === topAssignees.length - 1)))
+        : txt({ fontFamily: 'Inter', fontSize: 12, color: C.muted }, 'No assigned tickets'),
+    ]);
+  }
+
   function divider() {
     return solidDiv({ width: '100%', height: 1, background: C.border, marginTop: 26, marginBottom: 26 });
   }
@@ -236,15 +293,16 @@ function makeLayout(C: Palette) {
     ]);
   }
 
-  return { header, hero, slaSection, barSection, divider, footer };
+  return { header, hero, slaSection, barSection, assigneeSection, divider, footer };
 }
 
 // ── Height estimator ──────────────────────────────────────────────────────────
 
 function estimateHeight(data: PendingReportData): number {
-  const deptRows = Math.min(data.byDepartment.length, 8);
-  const catRows  = Math.min(data.byContactReason.length, 10);
-  const ROW_H    = 45;
+  const deptRows     = Math.min(data.byDepartment.length,    8);
+  const catRows      = Math.min(data.byContactReason.length, 10);
+  const assigneeRows = Math.min(data.byAssignee.length,      12);
+  const ROW_H    = 50;   // slightly taller for assignee rows (name + dept tag)
   const SEC_OH   = 76;
   const DIV_H    = 53;
 
@@ -253,8 +311,9 @@ function estimateHeight(data: PendingReportData): number {
     180 +  // hero
     28  +  // body padding top
     176 +  // SLA section
-    DIV_H + SEC_OH + deptRows * ROW_H +
-    DIV_H + SEC_OH + catRows  * ROW_H +
+    DIV_H + SEC_OH + deptRows     * ROW_H +
+    DIV_H + SEC_OH + catRows      * ROW_H +
+    DIV_H + SEC_OH + assigneeRows * ROW_H +
     36  +  // body padding bottom
     48  +  // footer
     80     // safety buffer
@@ -294,6 +353,8 @@ export async function buildReportPng(
       L.barSection('03', 'CATEGORY VIEW (L3/L4)',
         data.department ? 'Sub-Category Breakdown (L3/L4)' : 'Category Wise Pending Tickets (L3/L4)',
         topCats, catMax),
+      L.divider(),
+      L.assigneeSection(data, '04'),
     ]),
     L.footer(data),
   ]);
