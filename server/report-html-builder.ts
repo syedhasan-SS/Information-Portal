@@ -23,8 +23,8 @@ export interface PendingReportData {
   /** SLA breakdown */
   sla: { onTrack: number; atRisk: number; breached: number };
 
-  /** L1 contact reason → count */
-  byContactReason: Array<{ reason: string; count: number; breached: number }>;
+  /** Contact reason (L3/L4) → count, with dominant department */
+  byContactReason: Array<{ reason: string; count: number; breached: number; dept?: string }>;
 
   /**
    * Set when this report is scoped to a single department.
@@ -496,14 +496,23 @@ export function buildPendingReportData(
 
   // ── By assignee ───────────────────────────────────────────────────────────
   const agentMap = new Map<string, { count: number; breached: number; dept: string }>();
+  let unassignedCount   = 0;
+  let unassignedBreached = 0;
+
   pending.forEach(t => {
-    if (!t.assigneeId) return;
+    if (!t.assigneeId) {
+      // Count unassigned tickets separately
+      unassignedCount++;
+      if (t.slaStatus === 'breached') unassignedBreached++;
+      return;
+    }
     const u = userMap.get(t.assigneeId);
     const cur = agentMap.get(t.assigneeId) || { count: 0, breached: 0, dept: u?.dept || '' };
     cur.count++;
     if (t.slaStatus === 'breached') cur.breached++;
     agentMap.set(t.assigneeId, cur);
   });
+
   const byAssignee = Array.from(agentMap.entries())
     .map(([id, v]) => ({
       name: userMap.get(id)?.name || 'Unknown',
@@ -513,11 +522,23 @@ export function buildPendingReportData(
     }))
     .sort((a, b) => b.count - a.count);
 
+  // Append unassigned bucket if any
+  if (unassignedCount > 0) {
+    byAssignee.push({
+      name:     'Unassigned',
+      dept:     '—',
+      count:    unassignedCount,
+      breached: unassignedBreached,
+    });
+    byAssignee.sort((a, b) => b.count - a.count);
+  }
+
   // ── SLA ───────────────────────────────────────────────────────────────────
   const sla = { onTrack, atRisk, breached: totalBreached };
 
   // ── By contact reason — L4 when available, else L3 (both full & dept) ────
-  const reasonMap = new Map<string, { count: number; breached: number }>();
+  // Also tracks dominant department per category so it can be shown in the report.
+  const reasonMap = new Map<string, { count: number; breached: number; deptCounts: Map<string, number> }>();
   pending.forEach(t => {
     // Use the most granular level available: L4 → L3 → L1 → issueType
     const reason =
@@ -526,13 +547,24 @@ export function buildPendingReportData(
       t.categorySnapshot?.l1 ||
       t.issueType ||
       'Uncategorised';
-    const cur = reasonMap.get(reason) || { count: 0, breached: 0 };
+    const cur = reasonMap.get(reason) || { count: 0, breached: 0, deptCounts: new Map<string, number>() };
     cur.count++;
     if (t.slaStatus === 'breached') cur.breached++;
+    // Track which department this ticket belongs to
+    const d = t.department || 'Unassigned';
+    cur.deptCounts.set(d, (cur.deptCounts.get(d) || 0) + 1);
     reasonMap.set(reason, cur);
   });
   const byContactReason = Array.from(reasonMap.entries())
-    .map(([reason, v]) => ({ reason, ...v }))
+    .map(([reason, v]) => {
+      // Dominant department (most tickets)
+      let topDept  = '';
+      let topCount = 0;
+      v.deptCounts.forEach((cnt, dept) => {
+        if (cnt > topCount) { topCount = cnt; topDept = dept; }
+      });
+      return { reason, count: v.count, breached: v.breached, dept: topDept || undefined };
+    })
     .sort((a, b) => b.count - a.count);
 
   const generatedAt = new Date().toLocaleString('en-PK', {
