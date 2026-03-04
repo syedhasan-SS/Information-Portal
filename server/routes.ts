@@ -5685,6 +5685,44 @@ roles: ${JSON.stringify(updated.roles, null, 2)}</pre>
   });
 
   /**
+   * POST /api/reports/send-now
+   * Internal trigger — no user auth required; secured by REPORT_SECRET env var.
+   * Body: { secret?, channelId?, theme? }
+   * Also accepts X-Internal-Secret header.
+   * Used for cron jobs and manual admin triggers.
+   */
+  app.post("/api/reports/send-now", async (req, res) => {
+    try {
+      const secret = (req.headers['x-internal-secret'] as string) || req.body?.secret;
+      const configuredSecret = process.env.REPORT_SECRET;
+      if (!configuredSecret || secret !== configuredSecret) {
+        return res.status(403).json({ error: 'Forbidden: invalid or missing secret' });
+      }
+      if (!isSlackReporterConfigured()) {
+        return res.status(503).json({ error: 'Slack not configured. Set SLACK_BOT_TOKEN.' });
+      }
+      const channelId: string =
+        req.body?.channelId ||
+        process.env.SLACK_CHANNEL_ID ||
+        process.env.SLACK_CHANNEL_MANAGERS ||
+        '';
+      if (!channelId) {
+        return res.status(400).json({ error: 'No channel configured. Set SLACK_CHANNEL_ID.' });
+      }
+      const theme = req.body?.theme === 'light' ? 'light' : 'dark';
+      const result = await sendPendingComplaintsReport(channelId, undefined, undefined, theme as 'dark' | 'light');
+      if (result.success) {
+        res.json({ success: true, ts: result.ts, channel: channelId });
+      } else {
+        res.status(500).json({ success: false, error: result.error });
+      }
+    } catch (error: any) {
+      console.error('[Reports] send-now error:', error);
+      res.status(500).json({ error: error.message });
+    }
+  });
+
+  /**
    * GET /api/reports/preview-pending?department=Finance&theme=light
    * Returns the pending complaints report as:
    *  - HTML page (default, for browser preview)
