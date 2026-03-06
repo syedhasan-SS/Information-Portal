@@ -31,22 +31,22 @@ export interface SlackChannel {
 
 export function getAvailableChannels(): SlackChannel[] {
   const channelEnvMap: Record<string, string> = {
-    SLACK_CHANNEL_MANAGERS: 'Managers & Heads',
-    SLACK_CHANNEL_FINANCE: 'Finance',
-    SLACK_CHANNEL_OPERATIONS: 'Operations',
-    SLACK_CHANNEL_GROWTH: 'Growth',
-    SLACK_CHANNEL_MARKETPLACE: 'Marketplace',
-    SLACK_CHANNEL_CX: 'Customer Experience',
-    SLACK_CHANNEL_URGENT: 'Urgent Alerts',
+    SLACK_CHANNEL_MANAGERS: '#flow-seller-experience-pulse',
+    SLACK_CHANNEL_FINANCE: '#Finance',
+    SLACK_CHANNEL_OPERATIONS: '#Operations',
+    SLACK_CHANNEL_GROWTH: '#Growth',
+    SLACK_CHANNEL_MARKETPLACE: '#Marketplace',
+    SLACK_CHANNEL_CX: '#Customer Experience',
+    SLACK_CHANNEL_URGENT: '#Urgent Alerts',
   };
 
   const channels: SlackChannel[] = [];
   for (const [envKey, name] of Object.entries(channelEnvMap)) {
-    const channelId = process.env[envKey];
+    const channelId = process.env[envKey]?.trim();
     if (channelId) channels.push({ id: channelId, name });
   }
 
-  const defaultChannel = process.env.SLACK_CHANNEL_ID;
+  const defaultChannel = process.env.SLACK_CHANNEL_ID?.trim();
   if (defaultChannel && defaultChannel.startsWith('C') && !channels.find(c => c.id === defaultChannel)) {
     channels.push({ id: defaultChannel, name: 'General Notifications' });
   }
@@ -521,7 +521,7 @@ export function buildSummaryFromTickets(
 // ── Daily scheduled report ────────────────────────────────────────────────────
 
 async function sendDailyReport(): Promise<void> {
-  const managersChannel = process.env.SLACK_CHANNEL_MANAGERS;
+  const managersChannel = process.env.SLACK_CHANNEL_MANAGERS?.trim();
   if (!managersChannel) {
     console.log('[SlackReporter] SLACK_CHANNEL_MANAGERS not set — skipping daily report');
     return;
@@ -576,33 +576,98 @@ async function sendDailyReport(): Promise<void> {
 // ── Pending Complaints Image Report ──────────────────────────────────────────
 
 /**
- * Builds the list of manager Slack mentions for departments that have pending/breached tickets.
- * Returns a mrkdwn string like "<@U123> <@U456>" for use in the companion Slack text message.
+ * Slack user IDs that are NEVER tagged in report messages, regardless of their
+ * team's ticket load. Co-founders and executives who should not receive these pings.
+ */
+const NEVER_TAG_SLACK_IDS = new Set([
+  'U02NXV6A7JT', // Abhi Arora    — Co-founder
+  'U02PCJABBA6', // Sanket Agarwal — Co-founder
+]);
+
+/**
+ * Builds manager/lead Slack mentions based on direct-report relationships.
+ *
+ * A manager or lead is tagged ONLY if at least one of their direct reports
+ * (users whose managerId === this person's id) has a pending ticket assigned to them.
+ *
+ * This prevents tagging managers whose teams have no open work, even if other
+ * managers in the same department do.
  */
 function buildManagerMentions(
   pendingTickets: any[],
   allUsers: any[],
-  department?: string   // if set, only tag managers for this specific department
+  department?: string   // if set, only consider tickets in this department
 ): string {
-  // Collect departments with pending tickets
+  // Quick lookup map: userId → user
+  const userMap = new Map<string, any>(allUsers.map((u: any) => [u.id, u]));
+
+  // Scope to the relevant tickets
+  const scopedTickets = department
+    ? pendingTickets.filter((t: any) => t.department === department)
+    : pendingTickets;
+
+  // Collect the manager IDs of every assignee who has a pending ticket
+  const managerIdsToTag = new Set<string>();
+  for (const ticket of scopedTickets) {
+    if (!ticket.assigneeId) continue;
+    const assignee = userMap.get(ticket.assigneeId);
+    if (assignee?.managerId) {
+      managerIdsToTag.add(assignee.managerId);
+    }
+  }
+
+  if (managerIdsToTag.size === 0) return '';
+
+  // Resolve manager IDs → Slack mentions (skip anyone without a slackUserId or on the exclusion list)
+  const seen = new Set<string>();
+  const mentions: string[] = [];
+  for (const managerId of managerIdsToTag) {
+    const manager = userMap.get(managerId);
+    if (!manager?.slackUserId) continue;
+    if (NEVER_TAG_SLACK_IDS.has(manager.slackUserId)) continue;
+    if (seen.has(manager.slackUserId)) continue;
+    seen.add(manager.slackUserId);
+    mentions.push(`<@${manager.slackUserId}>`);
+  }
+
+  return mentions.join(' ');
+}
+
+/**
+ * Slack user IDs that are ALWAYS included in the CC line,
+ * regardless of whether their department has pending tickets.
+ * Ahmar Zohaib is always CC'd as the primary stakeholder.
+ */
+const ALWAYS_CC_SLACK_IDS = new Set(['U074L3YEB7U']); // Ahmar Zohaib
+
+/**
+ * Builds department-head Slack mentions for the CC line.
+ * Rules:
+ *   - Users in ALWAYS_CC_SLACK_IDS → always included
+ *   - All other Heads → only included if their department has pending tickets
+ */
+function buildHeadMentions(
+  allUsers: any[],
+  pendingTickets: any[],
+  department?: string
+): string {
+  // Departments that currently have pending tickets
   const activeDepts = department
     ? new Set([department])
-    : new Set(pendingTickets.map(t => t.department).filter(Boolean));
+    : new Set(pendingTickets.map((t: any) => t.department).filter(Boolean));
 
-  // Find all Managers and Heads in those departments who have a slackUserId
-  const managers = allUsers.filter(
-    (u: any) =>
-      (u.role === 'Manager' || u.role === 'Head') &&
-      u.department &&
-      activeDepts.has(u.department) &&
-      u.slackUserId
-  );
+  const heads = allUsers.filter((u: any) => {
+    if (u.role !== 'Head' || !u.slackUserId) return false;
+    // Always CC Ahmar Zohaib (and any other always-CC'd users)
+    if (ALWAYS_CC_SLACK_IDS.has(u.slackUserId)) return true;
+    // Other heads only if their dept has pending tickets
+    return u.department && activeDepts.has(u.department);
+  });
 
-  if (managers.length === 0) return '';
+  if (heads.length === 0) return '';
 
-  // Deduplicate by slackUserId
   const seen = new Set<string>();
-  const mentions = managers
+  return heads
     .filter((u: any) => {
       if (seen.has(u.slackUserId)) return false;
       seen.add(u.slackUserId);
@@ -610,8 +675,6 @@ function buildManagerMentions(
     })
     .map((u: any) => `<@${u.slackUserId}>`)
     .join(' ');
-
-  return mentions;
 }
 
 // ── Department → Slack channel env-var mapping ────────────────────────────────
@@ -639,7 +702,7 @@ export async function sendPendingComplaintsReport(
   channelId: string,
   department?: string,                                // if set, report is scoped to this department
   prefetchedData?: { tickets: any[]; users: any[] },  // optional: reuse already-fetched data
-  theme: ReportTheme = 'dark'                         // 'dark' (default) or 'light'
+  theme: ReportTheme = 'light'                        // always white/light by default
 ): Promise<{ success: boolean; ts?: string; error?: string }> {
   const client = getSlackClient();
   if (!client) {
@@ -658,26 +721,44 @@ export async function sendPendingComplaintsReport(
       t => t.status === 'New' || t.status === 'Open' || t.status === 'Pending'
     );
 
-    const data      = buildPendingReportData(allTickets, allUsers, department);
-    const mentions  = buildManagerMentions(
-      department ? pendingTickets.filter(t => t.department === department) : pendingTickets,
+    const data         = buildPendingReportData(allTickets, allUsers, department);
+    const managerTags  = buildManagerMentions(
+      department ? pendingTickets.filter((t: any) => t.department === department) : pendingTickets,
       allUsers,
+      department
+    );
+    const headTags     = buildHeadMentions(
+      allUsers,
+      department ? pendingTickets.filter((t: any) => t.department === department) : pendingTickets,
       department
     );
 
     const totalBreached = data.sla.breached;
     const totalAtRisk   = data.sla.atRisk;
 
-    const greeting = department
-      ? (mentions ? `👋 Hey ${mentions} — *${department} team*` : `👋 Hi *${department} team*,`)
-      : (mentions ? `👋 Hey ${mentions}` : '👋 Hi everyone,');
+    // ── Compose the companion text message ───────────────────────────────────
+    // Line 1 — greeting with manager tags (only managers whose dept has pending tickets)
+    const greetingLine = managerTags
+      ? `Hi ${managerTags},`
+      : department
+        ? `Hi *${department} team*,`
+        : 'Hi team,';
+
+    // Line 2 — report summary line
+    const reportLine = `Please find below the${department ? ` *${department}*` : ''} pending complaints report as of *${data.generatedAt}*.`;
+
+    // Line 3 — call to action
+    const ctaLine = 'We need your support to review the pending complaints and push your teams to solve complaints.';
+
+    // Line 4 — CC heads (always shown)
+    const ccLine = headTags ? `CC: ${headTags}` : '';
 
     const introText = [
-      greeting,
-      `\n*Please find below the ${department ? `*${department}* department ` : ''}pending complaints report as of ${data.generatedAt}.*`,
-      `\n📋 *${data.totalPending} total pending* · 🔴 *${totalBreached} breached* · 🟠 *${totalAtRisk} at risk* · ✅ *${data.totalOnTrack} within SLA*`,
-      totalBreached > 0 ? '\n⚠️ *Please action SLA-breached cases immediately.*' : '',
-    ].filter(Boolean).join('');
+      greetingLine,
+      reportLine,
+      ctaLine,
+      ccLine,
+    ].filter(Boolean).join('\n');
 
     // ── Attempt 1: Satori serverless image renderer (works everywhere) ────────
     let pngBuf: Buffer | null = null;
@@ -823,7 +904,7 @@ export async function sendDepartmentPendingReports(): Promise<void> {
   const prefetchedData = { tickets: allTickets, users: allUsers };
 
   for (const [dept, envKey] of Object.entries(DEPT_CHANNEL_MAP)) {
-    const channelId = process.env[envKey];
+    const channelId = process.env[envKey]?.trim();
     if (!channelId) {
       console.log(`[SlackReporter] [${dept}] ${envKey} not set — skipping`);
       continue;
@@ -854,7 +935,7 @@ export async function sendDepartmentPendingReports(): Promise<void> {
 
 /**
  * Starts the daily report scheduler.
- * Fires at TARGET_HOUR_UTC:TARGET_MINUTE_UTC every day → 08:00 AM PKT (03:00 UTC).
+ * Fires at TARGET_HOUR_UTC:TARGET_MINUTE_UTC every day → 10:30 AM PKT (05:30 UTC).
  * Uses a recursive setTimeout so it re-syncs wall-clock time after each fire.
  *
  * Sends:
@@ -863,8 +944,8 @@ export async function sendDepartmentPendingReports(): Promise<void> {
  *   3. Dept-scoped pending reports   → each dept's own channel (Finance, CX, Ops, Growth, Marketplace)
  */
 export function startDailyReportScheduler(): void {
-  const TARGET_HOUR_UTC   = 3;   // 08:00 PKT = 03:00 UTC
-  const TARGET_MINUTE_UTC = 0;
+  const TARGET_HOUR_UTC   = 5;   // 10:30 AM PKT = 05:30 UTC
+  const TARGET_MINUTE_UTC = 30;
 
   function scheduleNext() {
     const now  = new Date();
@@ -882,11 +963,8 @@ export function startDailyReportScheduler(): void {
     );
 
     setTimeout(async () => {
-      // 1. Analytics summary → managers channel
-      await sendDailyReport();
-
-      // 2. Full pending complaints report → main channel (flow-seller-experience-pulse)
-      const mainChannel = process.env.SLACK_CHANNEL_ID || process.env.SLACK_CHANNEL_MANAGERS;
+      // 1. Full pending complaints report → main channel (flow-seller-experience-pulse)
+      const mainChannel = (process.env.SLACK_CHANNEL_ID || process.env.SLACK_CHANNEL_MANAGERS)?.trim();
       if (mainChannel) {
         console.log('[SlackReporter] Sending full pending report to main channel...');
         await sendPendingComplaintsReport(mainChannel);
@@ -894,7 +972,7 @@ export function startDailyReportScheduler(): void {
         console.warn('[SlackReporter] No main channel configured (SLACK_CHANNEL_ID / SLACK_CHANNEL_MANAGERS)');
       }
 
-      // 3. Department-scoped reports → each dept's own channel
+      // 2. Department-scoped reports → each dept's own channel
       console.log('[SlackReporter] Sending department-level reports...');
       await sendDepartmentPendingReports();
 
@@ -903,4 +981,42 @@ export function startDailyReportScheduler(): void {
   }
 
   scheduleNext();
+}
+
+/**
+ * Runs the full daily report routine on demand.
+ * Called by the Vercel Cron Job at /api/cron/daily-report.
+ *
+ * Steps:
+ *   1. Analytics chart summary → SLACK_CHANNEL_MANAGERS
+ *   2. Full pending complaints report → SLACK_CHANNEL_ID (flow-seller-experience-pulse)
+ *   3. Dept-scoped pending reports → each dept's own channel
+ */
+export async function runFullDailyReports(): Promise<void> {
+  console.log('[SlackReporter] runFullDailyReports: starting full daily routine...');
+
+  // 0. Auto-close tickets solved 24h+ ago
+  try {
+    const closedCount = await storage.autoCloseResolvedTickets();
+    if (closedCount > 0) {
+      console.log(`[SlackReporter] Auto-closed ${closedCount} ticket(s) solved 24h+ ago`);
+    }
+  } catch (err: any) {
+    console.error('[SlackReporter] Auto-close error:', err.message);
+  }
+
+  // 1. Full pending complaints report → main channel (#flow-seller-experience-pulse)
+  const mainChannel = (process.env.SLACK_CHANNEL_ID || process.env.SLACK_CHANNEL_MANAGERS)?.trim();
+  if (mainChannel) {
+    console.log('[SlackReporter] Sending full pending report to main channel...');
+    await sendPendingComplaintsReport(mainChannel);
+  } else {
+    console.warn('[SlackReporter] No main channel configured (SLACK_CHANNEL_ID / SLACK_CHANNEL_MANAGERS)');
+  }
+
+  // 2. Department-scoped pending reports → each dept's own channel
+  console.log('[SlackReporter] Sending department-level reports...');
+  await sendDepartmentPendingReports();
+
+  console.log('[SlackReporter] runFullDailyReports: done.');
 }

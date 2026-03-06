@@ -157,113 +157,39 @@ export function validateTicketUpdate(
   updates: Record<string, any>
 ): string | null {
   // Admin/Owner can update anything
-  if (user.role === "Admin" || user.role === "Owner") {
-    return null;
-  }
+  if (user.role === "Admin" || user.role === "Owner") return null;
 
-  // CX users can update tickets within their subDepartment scope
-  if (user.department === "CX") {
+  // ─── Core fields ────────────────────────────────────────────────────────────
+  // These describe WHAT the ticket is about and are owned by CX.
+  // Only CX users (and Admin/Owner above) may edit them.
+  const coreFields = [
+    "subject", "description", "categoryId", "issueType", "department",
+    "ownerTeam", "priorityScore", "priorityTier", "vendorHandle",
+    "customer", "fleekOrderIds", "attachments",
+  ];
+
+  const updatingCoreFields = Object.keys(updates).filter(f => coreFields.includes(f));
+
+  if (updatingCoreFields.length > 0) {
+    // Elevated roles (Lead / Manager / Head) cannot edit CX-owned core fields
+    if (isElevatedRole(user)) {
+      return `Access denied. Only CX users can edit: ${updatingCoreFields.join(", ")}.`;
+    }
+    // Non-CX departments cannot edit core fields
+    if (user.department !== "CX") {
+      return `Access denied. Only CX users can edit: ${updatingCoreFields.join(", ")}.`;
+    }
+    // CX user must have subDepartment visibility over this ticket to edit core fields
     if (!isCXTicketVisible(user, ticket)) {
       return `Access denied. You can only update ${user.subDepartment || "CX"} tickets.`;
     }
-    return null;
   }
 
-  // Head / Manager / Lead can update any ticket's operational fields
-  if (isElevatedRole(user)) {
-    // They still cannot edit core CX-owned detail fields
-    const restrictedForElevated = [
-      "subject", "description", "categoryId", "issueType", "department",
-      "ownerTeam", "priorityScore", "priorityTier", "vendorHandle",
-      "customer", "fleekOrderIds", "attachments"
-    ];
-    const bad = Object.keys(updates).filter(f => restrictedForElevated.includes(f));
-    if (bad.length > 0) {
-      return `Access denied. Only CX users can edit: ${bad.join(", ")}.`;
-    }
-    return null;
-  }
-
-  // Fields that any authenticated non-CX user can update on ANY ticket
-  // (cross-department safe operations: assigning to someone, labelling with tags)
-  const crossDeptAllowedFields = ["assigneeId", "tags"];
-
-  // If the user is ONLY updating cross-department-safe fields, allow it regardless of department
-  const updatingFields = Object.keys(updates);
-  const onlyCrossDeptFields = updatingFields.length > 0 &&
-    updatingFields.every(f => crossDeptAllowedFields.includes(f));
-
-  if (onlyCrossDeptFields) {
-    return null; // Always allowed: reassigning or tagging any ticket
-  }
-
-  // If the ticket is assigned to this user, they can perform all limited operational
-  // updates (status, assignee, tags, slaStatus) even if it's from another department.
-  // (A cross-department assignment means they're explicitly responsible for it.)
-  if (ticket.assigneeId === user.id) {
-    // Still cannot edit core detail fields
-    const restrictedFields = [
-      "subject", "description", "categoryId", "issueType", "department",
-      "ownerTeam", "priorityScore", "priorityTier", "vendorHandle",
-      "customer", "fleekOrderIds", "attachments"
-    ];
-    const bad = Object.keys(updates).filter(f => restrictedFields.includes(f));
-    if (bad.length > 0) {
-      return `Access denied. Cannot edit core ticket details: ${bad.join(", ")}.`;
-    }
-    return null; // status / tags / assigneeId / slaStatus all allowed
-  }
-
-  // For all other operations (status changes, etc.) user must be in the same department
-  if (ticket.department !== user.department) {
-    return `Access denied. You can only update tickets in ${user.department} department.`;
-  }
-
-  // Non-CX users can only update limited fields
-  const allowedFields = [
-    "assigneeId",
-    "status",
-    "tags",
-    "slaStatus"
-  ];
-
-  // Core ticket detail fields that non-CX users CANNOT edit
-  const restrictedFields = [
-    "subject",
-    "description",
-    "categoryId",
-    "issueType",
-    "department",
-    "ownerTeam",
-    "priorityScore",
-    "priorityTier",
-    "vendorHandle",
-    "customer",
-    "fleekOrderIds",
-    "attachments"
-  ];
-
-  // Check if trying to update restricted fields
-  const updatingRestrictedFields = Object.keys(updates).filter(field =>
-    restrictedFields.includes(field)
-  );
-
-  if (updatingRestrictedFields.length > 0) {
-    return `Access denied. Non-CX users cannot edit: ${updatingRestrictedFields.join(", ")}. You can only update: ${allowedFields.join(", ")}.`;
-  }
-
-  // Check if trying to update fields outside allowed list
-  const updatingUnknownFields = Object.keys(updates).filter(field =>
-    !allowedFields.includes(field) &&
-    !restrictedFields.includes(field) &&
-    field !== "updatedAt" // This is auto-set by system
-  );
-
-  if (updatingUnknownFields.length > 0) {
-    return `Unknown fields: ${updatingUnknownFields.join(", ")}. Allowed fields for your role: ${allowedFields.join(", ")}.`;
-  }
-
-  return null; // Update allowed
+  // ─── Operational fields ─────────────────────────────────────────────────────
+  // status, assigneeId, tags, slaStatus, resolutionNotes, etc.
+  // Any user who can VIEW this ticket (already verified in routes.ts via canViewTicket)
+  // is allowed to perform operational updates — no further restriction needed.
+  return null;
 }
 
 /**

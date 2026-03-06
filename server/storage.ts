@@ -716,6 +716,26 @@ export class DatabaseStorage implements IStorage {
     return results[0];
   }
 
+  /**
+   * Finds all tickets with status = 'Solved' whose resolvedAt is older than 24 hours,
+   * and sets their status to 'Closed' with closedAt = now().
+   * Called by the /api/cron/auto-close-tickets hourly cron job.
+   * Returns the number of tickets that were closed.
+   */
+  async autoCloseResolvedTickets(): Promise<number> {
+    const cutoff = new Date(Date.now() - 24 * 60 * 60 * 1000); // 24 hours ago
+    const results = await db
+      .update(tickets)
+      .set({ status: 'Closed', closedAt: new Date(), updatedAt: new Date() })
+      .where(
+        sql`${tickets.status} = 'Solved'
+          AND ${tickets.resolvedAt} IS NOT NULL
+          AND ${tickets.resolvedAt} <= ${cutoff}`
+      )
+      .returning();
+    return results.length;
+  }
+
   async deleteTicket(id: string): Promise<Ticket | undefined> {
     // Support both UUID and ticket number (e.g., "SS00020")
     const results = await db

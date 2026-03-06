@@ -3,9 +3,16 @@
   "framework": null,
   "functions": {
     "api/index.js": {
-      "includeFiles": "dist/server/fonts/**"
+      "includeFiles": "dist/server/fonts/**",
+      "maxDuration": 300
     }
   },
+  "crons": [
+    {
+      "path": "/api/cron/daily-report",
+      "schedule": "30 5 * * *"
+    }
+  ],
   "rewrites": [
     {
       "source": "/(.*)",

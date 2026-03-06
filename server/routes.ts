@@ -65,6 +65,7 @@ import {
   isSlackReporterConfigured,
   sendPendingComplaintsReport,
   sendDepartmentPendingReports,
+  runFullDailyReports,
 } from "./slack-reporter";
 import { getCachedImage } from "./report-image";
 import { buildPendingReportData, buildPendingReportHtml } from "./report-html-builder";
@@ -99,6 +100,14 @@ async function checkPermission(req: any, requiredPermission: string): Promise<{ 
 
   // For edit:config permission, allow Head and Manager roles
   if (requiredPermission === "edit:config" && (user.role === "Head" || user.role === "Manager")) {
+    return { hasPermission: true, user };
+  }
+
+  // For view:analytics and related report actions, allow Head and Manager roles
+  if (
+    (requiredPermission === "view:analytics" || requiredPermission === "send:reports") &&
+    (user.role === "Head" || user.role === "Manager")
+  ) {
     return { hasPermission: true, user };
   }
 
@@ -402,6 +411,11 @@ export async function registerRoutes(
       if (!currentUser) {
         return res.status(401).json({ error: "Authentication required" });
       }
+
+      // Auto-close any solved tickets whose 24h window has elapsed (real-time check)
+      storage.autoCloseResolvedTickets().catch(err =>
+        console.error('[AutoClose] Error during auto-close check:', err.message)
+      );
 
       // Get all tickets
       const allTickets = await storage.getTickets();
@@ -742,14 +756,28 @@ export async function registerRoutes(
         return res.status(403).json({ error: validationError });
       }
 
+      // Closed is a permanent terminal state — no changes allowed at all
+      if (oldTicket.status === 'Closed') {
+        return res.status(403).json({
+          error: 'This ticket is closed and cannot be modified. Closed tickets are final.'
+        });
+      }
+
       // Validate status transitions if status is being changed
       if (parsed.data.status && parsed.data.status !== oldTicket.status) {
+        // "Closed" is system-only — set automatically 24h after Solved.
+        // Users can never manually set a ticket to Closed.
+        if (parsed.data.status === 'Closed') {
+          return res.status(403).json({
+            error: 'Tickets are closed automatically 24 hours after being solved. You cannot close a ticket manually.'
+          });
+        }
         const validTransitions: Record<string, string[]> = {
-          "New": ["Open", "Closed"], // New tickets can be opened or closed (cancelled)
-          "Open": ["Pending", "Solved", "Closed"],
-          "Pending": ["Open", "Solved", "Closed"],
-          "Solved": ["Closed", "Open"], // Can reopen or close
-          "Closed": ["Open"], // Can only reopen closed tickets
+          "New":    ["Open", "Pending", "Solved"],
+          "Open":   ["New",  "Pending", "Solved"],
+          "Pending":["New",  "Open",    "Solved"],
+          "Solved": ["Open", "New",     "Pending"], // re-open only; Closed is automatic
+          "Closed": [],                              // terminal — no manual transitions
         };
 
         const allowedNextStates = validTransitions[oldTicket.status] || [];
@@ -785,6 +813,15 @@ export async function registerRoutes(
         } else {
           console.log('ℹ️ No active routing rule found for new category');
         }
+      }
+
+      // Auto-stamp resolvedAt when status transitions to Solved
+      if (parsed.data.status === 'Solved' && oldTicket.status !== 'Solved') {
+        (parsed.data as any).resolvedAt = new Date();
+      }
+      // Clear resolvedAt if re-opened from Solved (so the 24h clock resets if solved again)
+      if (oldTicket.status === 'Solved' && parsed.data.status && parsed.data.status !== 'Solved' && parsed.data.status !== 'Closed') {
+        (parsed.data as any).resolvedAt = null;
       }
 
       const ticket = await storage.updateTicket(req.params.id, parsed.data);
@@ -891,7 +928,23 @@ export async function registerRoutes(
 
   app.post("/api/comments", async (req, res) => {
     try {
-      const parsed = insertCommentSchema.safeParse(req.body);
+      // Normalize field names — the bulk-action UI sends {userId, comment, isInternal}
+      // but the schema expects {author, body, visibility}. Support both.
+      const body = req.body || {};
+      let authorName = body.author;
+      if (!authorName && body.userId) {
+        const u = await storage.getUserById(body.userId);
+        authorName = u?.name || u?.email || body.userId;
+      }
+      const normalized = {
+        ticketId:   body.ticketId,
+        author:     authorName,
+        body:       body.body ?? body.comment,           // accept either field name
+        visibility: body.visibility ??
+                    (body.isInternal === false ? 'Zendesk' : 'Internal'),
+      };
+
+      const parsed = insertCommentSchema.safeParse(normalized);
       if (!parsed.success) {
         return res.status(400).json({ error: parsed.error.message });
       }
@@ -5646,7 +5699,7 @@ roles: ${JSON.stringify(updated.roles, null, 2)}</pre>
 
       // Optional: scope to a single department
       const department: string | undefined = req.body?.department || undefined;
-      const theme = req.body?.theme === 'light' ? 'light' : 'dark';
+      const theme = req.body?.theme === 'dark' ? 'dark' : 'light';
 
       const result = await sendPendingComplaintsReport(channelId, department, undefined, theme as 'dark' | 'light');
 
@@ -5674,11 +5727,9 @@ roles: ${JSON.stringify(updated.roles, null, 2)}</pre>
       if (!isSlackReporterConfigured()) {
         return res.status(503).json({ error: "Slack is not configured." });
       }
-      // Fire-and-forget; responds immediately so UI doesn't time out
-      sendDepartmentPendingReports().catch(err =>
-        console.error("[Reports] send-all-dept-reports error:", err)
-      );
-      res.json({ success: true, message: "Department reports are being sent in the background." });
+      // Await the full run so Vercel lambda doesn't get killed before reports are sent
+      await sendDepartmentPendingReports();
+      res.json({ success: true, message: "Department reports sent to all channels." });
     } catch (error: any) {
       res.status(500).json({ error: error.message });
     }
@@ -5709,7 +5760,7 @@ roles: ${JSON.stringify(updated.roles, null, 2)}</pre>
       if (!channelId) {
         return res.status(400).json({ error: 'No channel configured. Set SLACK_CHANNEL_ID.' });
       }
-      const theme = req.body?.theme === 'light' ? 'light' : 'dark';
+      const theme = req.body?.theme === 'dark' ? 'dark' : 'light';
       const result = await sendPendingComplaintsReport(channelId, undefined, undefined, theme as 'dark' | 'light');
       if (result.success) {
         res.json({ success: true, ts: result.ts, channel: channelId });
@@ -5718,6 +5769,76 @@ roles: ${JSON.stringify(updated.roles, null, 2)}</pre>
       }
     } catch (error: any) {
       console.error('[Reports] send-now error:', error);
+      res.status(500).json({ error: error.message });
+    }
+  });
+
+  /**
+   * GET /api/cron/daily-report
+   * Called by Vercel Cron Jobs at 03:00 UTC (08:00 AM PKT) every day.
+   * Vercel automatically passes Authorization: Bearer <CRON_SECRET>.
+   * Runs the full daily routine: analytics + pending complaints + dept reports.
+   */
+  app.get("/api/cron/daily-report", async (req, res) => {
+    try {
+      // Verify Vercel's auto-generated CRON_SECRET
+      const cronSecret = (process.env.CRON_SECRET || '').trim();
+      const authHeader = (req.headers['authorization'] as string) || '';
+      const bearerToken = authHeader.startsWith('Bearer ') ? authHeader.slice(7).trim() : '';
+
+      // Also allow REPORT_SECRET as fallback (for manual testing)
+      const reportSecret = (process.env.REPORT_SECRET || '').trim();
+      const isAuthorized =
+        (cronSecret && bearerToken === cronSecret) ||
+        (reportSecret && bearerToken === reportSecret);
+
+      if (!isAuthorized) {
+        return res.status(403).json({ error: 'Forbidden: invalid or missing cron secret' });
+      }
+
+      if (!isSlackReporterConfigured()) {
+        return res.status(503).json({ error: 'Slack not configured. Set SLACK_BOT_TOKEN.' });
+      }
+
+      console.log('[Cron] /api/cron/daily-report triggered at', new Date().toISOString());
+
+      // Run reports fully before responding — ensures Vercel lambda stays alive
+      await runFullDailyReports();
+
+      res.json({ ok: true, message: 'Daily report complete', timestamp: new Date().toISOString() });
+    } catch (error: any) {
+      console.error('[Cron] daily-report error:', error);
+      res.status(500).json({ error: error.message });
+    }
+  });
+
+  /**
+   * GET /api/cron/auto-close-tickets
+   * Runs every hour via Vercel Cron.
+   * Closes any ticket that has been in "Solved" status for 24+ hours.
+   */
+  app.get("/api/cron/auto-close-tickets", async (req, res) => {
+    try {
+      const cronSecret   = (process.env.CRON_SECRET   || '').trim();
+      const reportSecret = (process.env.REPORT_SECRET || '').trim();
+      const authHeader   = (req.headers['authorization'] as string) || '';
+      const bearerToken  = authHeader.startsWith('Bearer ') ? authHeader.slice(7).trim() : '';
+
+      const isAuthorized =
+        (cronSecret   && bearerToken === cronSecret)   ||
+        (reportSecret && bearerToken === reportSecret);
+
+      if (!isAuthorized) {
+        return res.status(403).json({ error: 'Forbidden: invalid or missing cron secret' });
+      }
+
+      console.log('[Cron] auto-close-tickets triggered at', new Date().toISOString());
+      const closedCount = await storage.autoCloseResolvedTickets();
+      console.log(`[Cron] auto-close-tickets: closed ${closedCount} ticket(s)`);
+
+      res.json({ ok: true, closedCount, timestamp: new Date().toISOString() });
+    } catch (error: any) {
+      console.error('[Cron] auto-close-tickets error:', error);
       res.status(500).json({ error: error.message });
     }
   });
@@ -5733,7 +5854,7 @@ roles: ${JSON.stringify(updated.roles, null, 2)}</pre>
     try {
       const department = (req.query.department as string) || undefined;
       const format     = (req.query.format  as string) || 'html';
-      const theme      = ((req.query.theme  as string) === 'light') ? 'light' : 'dark';
+      const theme      = ((req.query.theme as string) === 'dark') ? 'dark' : 'light';
 
       const [allTickets, allUsers] = await Promise.all([
         storage.getTickets(),

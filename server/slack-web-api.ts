@@ -30,10 +30,10 @@ export function isSlackConfigured(): boolean {
 
 function getChannel(department?: string): string {
   if (department) {
-    const deptChannel = process.env[`SLACK_CHANNEL_${department.toUpperCase()}`];
+    const deptChannel = process.env[`SLACK_CHANNEL_${department.toUpperCase()}`]?.trim();
     if (deptChannel) return deptChannel;
   }
-  return process.env.SLACK_CHANNEL_ID || '#flow-complaint-notifications';
+  return process.env.SLACK_CHANNEL_ID?.trim() || '#flow-complaint-notifications';
 }
 
 function getTicketUrl(ticketId: string): string {
@@ -71,42 +71,47 @@ export async function sendSlackTicketCreated(
     const assigneeMention = assignee
       ? (assignee.slackUserId ? `<@${assignee.slackUserId}>` : assignee.name)
       : 'Unassigned';
+    const managerMention = manager?.slackUserId
+      ? `<@${manager.slackUserId}>`
+      : manager?.name || '—';
+    const creatorLabel = creator?.name || creator?.email || 'Unknown';
+
+    // Truncate description to keep the message concise
+    const description = (ticket.description || '').trim();
+    const descSnippet = description.length > 300
+      ? description.slice(0, 297) + '…'
+      : description || '—';
 
     const blocks: any[] = [
       {
-        type: 'header',
-        text: { type: 'plain_text', text: `${priorityEmoji} New Ticket — ${ticket.ticketNumber}`, emoji: true },
-      },
-      {
         type: 'section',
         fields: [
-          { type: 'mrkdwn', text: `*Ticket:*\n<${ticketUrl}|${ticket.ticketNumber}>` },
+          { type: 'mrkdwn', text: `*Ticket Number:*\n<${ticketUrl}|${ticket.ticketNumber}>` },
           { type: 'mrkdwn', text: `*Priority:*\n${priorityEmoji} ${ticket.priorityTier || 'Normal'}` },
-          { type: 'mrkdwn', text: `*Department:*\n${ticket.department || 'General'}` },
-          { type: 'mrkdwn', text: `*Created By:*\n${creator?.name || creator?.email || 'Unknown'}` },
+          { type: 'mrkdwn', text: `*Assigned:*\n${assigneeMention}` },
+          { type: 'mrkdwn', text: `*Manager:*\n${managerMention}` },
         ],
       },
       {
         type: 'section',
-        text: { type: 'mrkdwn', text: `*Subject:* ${ticket.subject}\n*Vendor:* ${ticket.vendorHandle || 'N/A'}` },
+        fields: [
+          { type: 'mrkdwn', text: `*Department:*\n${ticket.department || 'General'}` },
+          { type: 'mrkdwn', text: `*Created By:*\n${creatorLabel}` },
+        ],
       },
       {
         type: 'section',
-        text: { type: 'mrkdwn', text: `*Assigned To:* ${assigneeMention}` },
+        text: { type: 'mrkdwn', text: `*Subject:*\n${ticket.subject || '—'}` },
+      },
+      {
+        type: 'section',
+        text: { type: 'mrkdwn', text: `*Description:*\n${descSnippet}` },
+      },
+      {
+        type: 'context',
+        elements: [{ type: 'mrkdwn', text: `🔗 <${ticketUrl}|View Ticket in Portal>` }],
       },
     ];
-
-    if (manager?.slackUserId) {
-      blocks.push({
-        type: 'context',
-        elements: [{ type: 'mrkdwn', text: `👔 *Manager notified:* <@${manager.slackUserId}>` }],
-      });
-    }
-
-    blocks.push({
-      type: 'section',
-      text: { type: 'mrkdwn', text: `🔗 <${ticketUrl}|View Ticket in Portal>` },
-    });
 
     const result = await client.chat.postMessage({
       channel: getChannel(ticket.department),
@@ -142,28 +147,37 @@ export async function sendSlackTicketAssigned(
     const ticketUrl = getTicketUrl(ticket.id);
     const priorityEmoji = getPriorityEmoji(ticket.priorityTier);
     const assigneeMention = assignee.slackUserId ? `<@${assignee.slackUserId}>` : assignee.name;
-    const assignerText = assigner?.name || assigner?.email || 'System';
+    const managerMention  = manager?.slackUserId  ? `<@${manager.slackUserId}>`  : manager?.name || '—';
+
+    // Truncate description to keep the message concise
+    const description = (ticket.description || '').trim();
+    const descSnippet = description.length > 300
+      ? description.slice(0, 297) + '…'
+      : description || '—';
 
     const blocks: any[] = [
       {
         type: 'section',
         fields: [
-          { type: 'mrkdwn', text: `*Ticket:*\n<${ticketUrl}|${ticket.ticketNumber}>` },
+          { type: 'mrkdwn', text: `*Ticket Number:*\n<${ticketUrl}|${ticket.ticketNumber}>` },
           { type: 'mrkdwn', text: `*Priority:*\n${priorityEmoji} ${ticket.priorityTier || 'Normal'}` },
+          { type: 'mrkdwn', text: `*Assigned:*\n${assigneeMention}` },
+          { type: 'mrkdwn', text: `*Manager:*\n${managerMention}` },
         ],
       },
       {
         type: 'section',
-        text: { type: 'mrkdwn', text: `✅ *Assigned:* ${assigneeMention} (by ${assignerText})` },
+        text: { type: 'mrkdwn', text: `*Subject:*\n${ticket.subject || '—'}` },
+      },
+      {
+        type: 'section',
+        text: { type: 'mrkdwn', text: `*Description:*\n${descSnippet}` },
+      },
+      {
+        type: 'context',
+        elements: [{ type: 'mrkdwn', text: `🔗 <${ticketUrl}|View Ticket in Portal>` }],
       },
     ];
-
-    if (manager?.slackUserId) {
-      blocks.push({
-        type: 'context',
-        elements: [{ type: 'mrkdwn', text: `👔 *Manager notified:* <@${manager.slackUserId}>` }],
-      });
-    }
 
     const payload: any = {
       channel: getChannel(ticket.department),

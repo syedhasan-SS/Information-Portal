@@ -136,7 +136,8 @@ async function addComment(ticketId: string, content: string, userId: string, use
   return res.json();
 }
 
-const STATUSES = ["New", "Open", "Pending", "Solved", "Closed"] as const;
+// "Closed" is intentionally excluded — tickets are closed automatically 24h after Solved.
+const STATUSES = ["New", "Open", "Pending", "Solved"] as const;
 
 /**
  * Gets category display path with snapshot fallback
@@ -618,6 +619,16 @@ export default function TicketDetailPage() {
           </div>
 
           <div className="space-y-6">
+            {ticket.status === "Closed" && (
+              <Card className="p-4 border-slate-300 bg-slate-50 dark:bg-slate-900/40">
+                <div className="flex items-center gap-2 text-slate-600 dark:text-slate-400">
+                  <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
+                  </svg>
+                  <p className="text-sm font-medium">This ticket is closed and cannot be modified.</p>
+                </div>
+              </Card>
+            )}
             <Card className="p-6">
               <h3 className="mb-4 font-semibold">Ticket Details</h3>
               <div className="space-y-4">
@@ -626,6 +637,7 @@ export default function TicketDetailPage() {
                   <Select
                     value={pendingChanges.status ?? ticket.status}
                     onValueChange={(val) => setPendingChanges({ ...pendingChanges, status: val as Ticket["status"] })}
+                    disabled={ticket.status === "Closed"}
                   >
                     <SelectTrigger className="mt-1" data-testid="select-status">
                       <SelectValue />
@@ -810,7 +822,7 @@ export default function TicketDetailPage() {
                 </div>
               </div>
 
-              {hasPendingChanges && (
+              {hasPendingChanges && ticket.status !== "Closed" && (
                 <div className="mt-4 pt-4 border-t">
                   <Button
                     onClick={handleSaveChanges}
