@@ -72,7 +72,11 @@ export function canViewTicket(user: User, ticket: Ticket): boolean {
   if (ticket.assigneeId === user.id) return true;
 
   if (user.department === "CX") {
-    return isCXTicketVisible(user, ticket);
+    // All CX users can access any ticket in the CX department.
+    // subDepartment (Seller Support / Customer Support) is used only for the
+    // default list view (filterTicketsByDepartmentAccess), NOT as an access
+    // barrier — any CX agent may need to act on any CX ticket.
+    return ticket.department === "CX";
   }
 
   // Match ticket department against user's department OR sub-department
