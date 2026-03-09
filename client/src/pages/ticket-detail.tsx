@@ -386,7 +386,7 @@ export default function TicketDetailPage() {
       <div className="flex min-h-screen flex-col items-center justify-center">
         <AlertCircle className="mb-4 h-12 w-12 text-muted-foreground" />
         <h2 className="text-lg font-medium">Ticket not found</h2>
-        <Button onClick={() => setLocation("/tickets")} className="mt-4">
+        <Button onClick={() => setLocation(getBackPath())} className="mt-4">
           Back to Tickets
         </Button>
       </div>

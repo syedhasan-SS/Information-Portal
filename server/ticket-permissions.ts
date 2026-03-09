@@ -95,8 +95,11 @@ export function filterTicketsByDepartmentAccess(tickets: Ticket[], user: User): 
   if (isElevatedRole(user)) return tickets;
 
   if (user.department === "CX") {
+    // Consistent with canViewTicket: CX users see all CX-department tickets
+    // plus any ticket directly assigned to them. subDepartment is NOT a filter
+    // here — it only helps agents understand their focus area, not restrict access.
     return tickets.filter(ticket =>
-      ticket.assigneeId === user.id || isCXTicketVisible(user, ticket)
+      ticket.assigneeId === user.id || ticket.department === "CX"
     );
   }
 
