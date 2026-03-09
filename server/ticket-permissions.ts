@@ -68,8 +68,9 @@ export function canViewTicket(user: User, ticket: Ticket): boolean {
   // Head / Manager / Lead can see all tickets across all departments
   if (isElevatedRole(user)) return true;
 
-  // Users can always see tickets assigned to them, regardless of department
+  // Users can always see tickets assigned to them or created by them, regardless of department
   if (ticket.assigneeId === user.id) return true;
+  if (ticket.createdById === user.id) return true;
 
   if (user.department === "CX") {
     // All CX users can access any ticket in the CX department.
@@ -96,17 +97,18 @@ export function filterTicketsByDepartmentAccess(tickets: Ticket[], user: User): 
 
   if (user.department === "CX") {
     // Consistent with canViewTicket: CX users see all CX-department tickets
-    // plus any ticket directly assigned to them. subDepartment is NOT a filter
-    // here — it only helps agents understand their focus area, not restrict access.
+    // plus any ticket directly assigned to them or created by them.
     return tickets.filter(ticket =>
-      ticket.assigneeId === user.id || ticket.department === "CX"
+      ticket.assigneeId === user.id ||
+      ticket.createdById === user.id ||
+      ticket.department === "CX"
     );
   }
 
-  // Match by assignee, department, or sub-department
-  // e.g. Supply/Marketplace user sees all Supply tickets, all Marketplace tickets, and their assigned tickets
+  // Match by assignee, creator, department, or sub-department
   return tickets.filter(ticket =>
     ticket.assigneeId === user.id ||
+    ticket.createdById === user.id ||
     ticket.department === user.department ||
     (!!user.subDepartment && ticket.department === user.subDepartment)
   );
