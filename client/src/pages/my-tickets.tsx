@@ -193,6 +193,7 @@ export default function MyTicketsPage() {
   const [selectedTickets, setSelectedTickets] = useState<Set<string>>(new Set());
   const [showBulkTransferDialog, setShowBulkTransferDialog] = useState(false);
   const [bulkTransferAssignee, setBulkTransferAssignee] = useState("");
+  const [bulkAssigneeOpen, setBulkAssigneeOpen] = useState(false);
   const [showBulkCommentDialog, setShowBulkCommentDialog] = useState(false);
   const [bulkComment, setBulkComment] = useState("");
   const [showBulkSolveDialog, setShowBulkSolveDialog] = useState(false);
@@ -1873,19 +1874,50 @@ export default function MyTicketsPage() {
               Transfer {selectedTickets.size} selected ticket(s) to:
             </p>
             <div className="space-y-2">
-              <Label htmlFor="bulk-assignee">Assign to</Label>
-              <Select value={bulkTransferAssignee} onValueChange={setBulkTransferAssignee}>
-                <SelectTrigger id="bulk-assignee">
-                  <SelectValue placeholder="Select assignee" />
-                </SelectTrigger>
-                <SelectContent>
-                  {users?.map((u) => (
-                    <SelectItem key={u.id} value={u.id}>
-                      {u.name} ({u.email})
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+              <Label>Assign to</Label>
+              <Popover open={bulkAssigneeOpen} onOpenChange={setBulkAssigneeOpen}>
+                <PopoverTrigger asChild>
+                  <Button
+                    variant="outline"
+                    role="combobox"
+                    aria-expanded={bulkAssigneeOpen}
+                    className="w-full justify-between font-normal"
+                  >
+                    {bulkTransferAssignee
+                      ? users?.find((u) => u.id === bulkTransferAssignee)?.name ?? "Select assignee"
+                      : "Select assignee"}
+                    <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+                  </Button>
+                </PopoverTrigger>
+                <PopoverContent className="w-[380px] p-0" align="start">
+                  <Command>
+                    <CommandInput placeholder="Search by name or email..." />
+                    <CommandList className="max-h-[220px]">
+                      <CommandEmpty>No user found.</CommandEmpty>
+                      <CommandGroup>
+                        {users?.map((u) => (
+                          <CommandItem
+                            key={u.id}
+                            value={`${u.name} ${u.email}`}
+                            onSelect={() => {
+                              setBulkTransferAssignee(u.id);
+                              setBulkAssigneeOpen(false);
+                            }}
+                          >
+                            <Check
+                              className={cn(
+                                "mr-2 h-4 w-4",
+                                bulkTransferAssignee === u.id ? "opacity-100" : "opacity-0"
+                              )}
+                            />
+                            {u.name} ({u.email})
+                          </CommandItem>
+                        ))}
+                      </CommandGroup>
+                    </CommandList>
+                  </Command>
+                </PopoverContent>
+              </Popover>
             </div>
             <div className="flex justify-end gap-2 pt-4">
               <Button
@@ -1893,6 +1925,7 @@ export default function MyTicketsPage() {
                 onClick={() => {
                   setShowBulkTransferDialog(false);
                   setBulkTransferAssignee("");
+                  setBulkAssigneeOpen(false);
                 }}
               >
                 Cancel
