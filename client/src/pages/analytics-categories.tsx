@@ -340,9 +340,10 @@ export default function AnalyticsCategoriesPage() {
       const isResolved = ticket.status === "Solved" || ticket.status === "Closed";
       if (isResolved) {
         entry.resolved++;
-        const resolvedAt = (ticket as any).resolvedAt;
-        if (resolvedAt && ticket.createdAt) {
-          const ms = new Date(resolvedAt).getTime() - new Date(ticket.createdAt).getTime();
+        const t = ticket as any;
+        const resolutionTimestamp = t.resolvedAt ?? t.closedAt ?? t.updatedAt;
+        if (resolutionTimestamp && ticket.createdAt) {
+          const ms = new Date(resolutionTimestamp).getTime() - new Date(ticket.createdAt).getTime();
           if (ms >= 0) entry.resolutionTimes.push(ms);
         }
       } else {
@@ -674,8 +675,11 @@ export default function AnalyticsCategoriesPage() {
               label: "Avg Resolution",
               value: (() => {
                 const times = filtered
-                  .filter((t) => (t.status === "Solved" || t.status === "Closed") && (t as any).resolvedAt)
-                  .map((t) => new Date((t as any).resolvedAt).getTime() - new Date(t.createdAt).getTime())
+                  .filter((t) => t.status === "Solved" || t.status === "Closed")
+                  .map((t) => {
+                    const ts = (t as any).resolvedAt ?? (t as any).closedAt ?? (t as any).updatedAt;
+                    return ts ? new Date(ts).getTime() - new Date(t.createdAt).getTime() : -1;
+                  })
                   .filter((ms) => ms >= 0);
                 if (times.length === 0) return "—";
                 const avg = times.reduce((a, b) => a + b, 0) / times.length;
