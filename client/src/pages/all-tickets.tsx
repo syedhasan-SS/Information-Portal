@@ -136,6 +136,9 @@ export default function AllTicketsPage() {
   const [departmentFilter, setDepartmentFilter] = useState("");
   const [issueTypeFilter, setIssueTypeFilter] = useState("");
   const [slaStatusFilter, setSlaStatusFilter] = useState("");
+  const [assigneeFilter, setAssigneeFilter] = useState("");        // userId or "unassigned"
+  const [assigneeFilterOpen, setAssigneeFilterOpen] = useState(false);
+  const [assigneeDeptFilter, setAssigneeDeptFilter] = useState(""); // assignee's department
   // Drill-down filters (populated from URL params when arriving from analytics)
   const [categoryFilter, setCategoryFilter] = useState("");
   const [dateStartFilter, setDateStartFilter] = useState("");
@@ -500,6 +503,20 @@ export default function AllTicketsPage() {
       return false;
     }
 
+    if (assigneeFilter) {
+      if (assigneeFilter === "unassigned") {
+        if (ticket.assigneeId) return false;
+      } else {
+        if (ticket.assigneeId !== assigneeFilter) return false;
+      }
+    }
+
+    if (assigneeDeptFilter) {
+      // Filter by the department of whoever is assigned to the ticket
+      const assignee = users?.find((u) => u.id === ticket.assigneeId);
+      if (!assignee || assignee.department !== assigneeDeptFilter) return false;
+    }
+
     if (categoryFilter) {
       const snap = (ticket as any).categorySnapshot;
       const path: string = snap?.path || "";
@@ -596,6 +613,8 @@ export default function AllTicketsPage() {
     setDepartmentFilter("");
     setIssueTypeFilter("");
     setSlaStatusFilter("");
+    setAssigneeFilter("");
+    setAssigneeDeptFilter("");
     setSearchQuery("");
     setCategoryFilter("");
     setDateStartFilter("");
@@ -605,7 +624,7 @@ export default function AllTicketsPage() {
     window.history.replaceState({}, "", window.location.pathname);
   };
 
-  const hasActiveFilters = statusFilter.length > 0 || priorityFilter.length > 0 || departmentFilter || issueTypeFilter || slaStatusFilter || searchQuery || categoryFilter || dateStartFilter;
+  const hasActiveFilters = statusFilter.length > 0 || priorityFilter.length > 0 || departmentFilter || issueTypeFilter || slaStatusFilter || assigneeFilter || assigneeDeptFilter || searchQuery || categoryFilter || dateStartFilter;
 
   const getSlaStatusBadge = (status?: string | null) => {
     switch (status) {
@@ -740,7 +759,7 @@ export default function AllTicketsPage() {
                 Filters
                 {hasActiveFilters && (
                   <span className="ml-1 rounded-full bg-accent px-1.5 py-0.5 text-xs text-accent-foreground">
-                    {statusFilter.length + priorityFilter.length + (departmentFilter ? 1 : 0) + (issueTypeFilter ? 1 : 0) + (slaStatusFilter ? 1 : 0) + (categoryFilter ? 1 : 0) + (dateStartFilter ? 1 : 0)}
+                    {statusFilter.length + priorityFilter.length + (departmentFilter ? 1 : 0) + (issueTypeFilter ? 1 : 0) + (slaStatusFilter ? 1 : 0) + (assigneeFilter ? 1 : 0) + (assigneeDeptFilter ? 1 : 0) + (categoryFilter ? 1 : 0) + (dateStartFilter ? 1 : 0)}
                   </span>
                 )}
               </Button>
@@ -862,6 +881,65 @@ export default function AllTicketsPage() {
                     <SelectItem value="on_track">On Track</SelectItem>
                     <SelectItem value="at_risk">At Risk</SelectItem>
                     <SelectItem value="breached">Breached</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+
+              {/* Assignee filter */}
+              <div className="space-y-1.5">
+                <label className="text-xs font-medium text-muted-foreground">Assignee</label>
+                <Popover open={assigneeFilterOpen} onOpenChange={setAssigneeFilterOpen}>
+                  <PopoverTrigger asChild>
+                    <Button variant="outline" role="combobox" className="h-8 w-48 justify-between font-normal text-xs">
+                      {assigneeFilter === "unassigned"
+                        ? "Unassigned"
+                        : assigneeFilter
+                          ? (users?.find((u) => u.id === assigneeFilter)?.name ?? "Select assignee")
+                          : "All assignees"}
+                      <ChevronsUpDown className="ml-2 h-3 w-3 shrink-0 opacity-50" />
+                    </Button>
+                  </PopoverTrigger>
+                  <PopoverContent className="w-[260px] p-0" align="start">
+                    <Command>
+                      <CommandInput placeholder="Search by name..." className="h-8 text-xs" />
+                      <CommandList className="max-h-[220px]">
+                        <CommandEmpty>No user found.</CommandEmpty>
+                        <CommandGroup>
+                          <CommandItem value="all-assignees" onSelect={() => { setAssigneeFilter(""); setAssigneeFilterOpen(false); setCurrentPage(1); }}>
+                            <Check className={cn("mr-2 h-3 w-3", !assigneeFilter ? "opacity-100" : "opacity-0")} />
+                            All assignees
+                          </CommandItem>
+                          <CommandItem value="unassigned" onSelect={() => { setAssigneeFilter("unassigned"); setAssigneeFilterOpen(false); setCurrentPage(1); }}>
+                            <Check className={cn("mr-2 h-3 w-3", assigneeFilter === "unassigned" ? "opacity-100" : "opacity-0")} />
+                            Unassigned
+                          </CommandItem>
+                          {users?.map((u) => (
+                            <CommandItem key={u.id} value={`${u.name} ${u.email}`}
+                              onSelect={() => { setAssigneeFilter(u.id); setAssigneeFilterOpen(false); setCurrentPage(1); }}>
+                              <Check className={cn("mr-2 h-3 w-3", assigneeFilter === u.id ? "opacity-100" : "opacity-0")} />
+                              {u.name}
+                              <span className="ml-1 text-xs text-muted-foreground">({u.department})</span>
+                            </CommandItem>
+                          ))}
+                        </CommandGroup>
+                      </CommandList>
+                    </Command>
+                  </PopoverContent>
+                </Popover>
+              </div>
+
+              {/* Assignee's Department filter */}
+              <div className="space-y-1.5">
+                <label className="text-xs font-medium text-muted-foreground">Assignee's Dept</label>
+                <Select value={assigneeDeptFilter} onValueChange={(val) => { setAssigneeDeptFilter(val === "all" ? "" : val); setCurrentPage(1); }}>
+                  <SelectTrigger className="h-8 w-40">
+                    <SelectValue placeholder="All depts" />
+                  </SelectTrigger>
+                  <SelectContent className="max-h-[300px] overflow-y-auto">
+                    <SelectItem value="all">All Depts</SelectItem>
+                    {departmentsData?.filter(d => d.isActive).map((dept) => (
+                      <SelectItem key={dept.id} value={dept.name}>{dept.name}</SelectItem>
+                    ))}
                   </SelectContent>
                 </Select>
               </div>
