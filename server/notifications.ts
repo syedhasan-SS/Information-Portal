@@ -3,6 +3,7 @@ import type { Ticket, Comment, User } from "@shared/schema";
 import {
   sendSlackTicketCreated,
   sendSlackTicketAssigned,
+  sendSlackCommentAdded,
   sendSlackCommentMention,
   sendSlackTicketResolved,
   sendSlackUrgentAlert,
@@ -193,6 +194,14 @@ export async function notifyCommentAdded(
 
     await Promise.all(notificationPromises);
     console.log(`[Notifications] Created ${notificationPromises.length} notifications for new comment on ticket ${ticket.ticketNumber}`);
+
+    // Post the comment in the ticket's Slack thread (non-blocking)
+    if (commenter) {
+      const threadTs = (ticket as any).slackMessageTs || null;
+      sendSlackCommentAdded(ticket, comment, commenter, threadTs).catch(err => {
+        console.error('[Slack] Failed to send comment notification:', err);
+      });
+    }
   } catch (error) {
     console.error("[Notifications] Failed to create comment notifications:", error);
   }

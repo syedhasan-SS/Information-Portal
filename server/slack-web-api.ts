@@ -136,8 +136,7 @@ export async function sendSlackTicketCreated(
 }
 
 /**
- * Post a reply in the ticket thread when the ticket is assigned.
- * threadTs = the ts returned from sendSlackTicketCreated.
+ * Post a compact reply in the ticket thread when the ticket is (re)assigned.
  */
 export async function sendSlackTicketAssigned(
   ticket: Ticket,
@@ -153,45 +152,22 @@ export async function sendSlackTicketAssigned(
   if (!channel) return false;
 
   try {
-    const ticketUrl = getTicketUrl(ticket.id);
-    const priorityEmoji = getPriorityEmoji(ticket.priorityTier);
-    const assigneeMention = assignee.slackUserId ? `<@${assignee.slackUserId}>` : assignee.name;
-    const managerMention  = manager?.slackUserId  ? `<@${manager.slackUserId}>`  : manager?.name || '—';
-
-    // Truncate description to keep the message concise
-    const description = (ticket.description || '').trim();
-    const descSnippet = description.length > 300
-      ? description.slice(0, 297) + '…'
-      : description || '—';
-
-    const blocks: any[] = [
-      {
-        type: 'section',
-        fields: [
-          { type: 'mrkdwn', text: `*Ticket Number:*\n<${ticketUrl}|${ticket.ticketNumber}>` },
-          { type: 'mrkdwn', text: `*Priority:*\n${priorityEmoji} ${ticket.priorityTier || 'Normal'}` },
-          { type: 'mrkdwn', text: `*Assigned:*\n${assigneeMention}` },
-          { type: 'mrkdwn', text: `*Manager:*\n${managerMention}` },
-        ],
-      },
-      {
-        type: 'section',
-        text: { type: 'mrkdwn', text: `*Subject:*\n${ticket.subject || '—'}` },
-      },
-      {
-        type: 'section',
-        text: { type: 'mrkdwn', text: `*Description:*\n${descSnippet}` },
-      },
-      {
-        type: 'context',
-        elements: [{ type: 'mrkdwn', text: `🔗 <${ticketUrl}|View Ticket in Portal>` }],
-      },
-    ];
+    const ticketUrl  = getTicketUrl(ticket.id);
+    const assigneeMention = assignee.slackUserId ? `<@${assignee.slackUserId}>` : `*${assignee.name}*`;
+    const assignerLabel   = assigner ? (assigner.slackUserId ? `<@${assigner.slackUserId}>` : assigner.name) : 'System';
 
     const payload: any = {
       channel,
-      text: `Ticket ${ticket.ticketNumber} assigned to ${assignee.name}`,
-      blocks,
+      text: `🔄 ${ticket.ticketNumber} assigned to ${assignee.name} by ${assigner?.name || 'System'}`,
+      blocks: [
+        {
+          type: 'section',
+          text: {
+            type: 'mrkdwn',
+            text: `🔄 *<${ticketUrl}|${ticket.ticketNumber}>* assigned to ${assigneeMention} by ${assignerLabel}`,
+          },
+        },
+      ],
       link_names: true,
     };
 
@@ -207,7 +183,56 @@ export async function sendSlackTicketAssigned(
 }
 
 /**
- * Post a reply in the ticket thread when a comment mentions someone.
+ * Post a compact reply in the ticket thread when any comment is added.
+ */
+export async function sendSlackCommentAdded(
+  ticket: Ticket,
+  comment: Comment,
+  commenter: User,
+  threadTs?: string | null
+): Promise<boolean> {
+  const client = getSlackClient();
+  if (!client) return false;
+
+  const channel = getChannel(ticket.department);
+  if (!channel) return false;
+
+  try {
+    const ticketUrl    = getTicketUrl(ticket.id);
+    const commenterLabel = commenter.slackUserId ? `<@${commenter.slackUserId}>` : `*${commenter.name || commenter.email}*`;
+    const commentText  = (comment.body || '').length > 300
+      ? comment.body.substring(0, 297) + '…'
+      : (comment.body || '');
+
+    const payload: any = {
+      channel,
+      text: `${commenter.name || commenter.email} added a comment on ${ticket.ticketNumber}: ${commentText}`,
+      blocks: [
+        {
+          type: 'section',
+          text: {
+            type: 'mrkdwn',
+            text: `💬 ${commenterLabel} added a comment on *<${ticketUrl}|${ticket.ticketNumber}>*\n> ${commentText}`,
+          },
+        },
+      ],
+      link_names: true,
+    };
+
+    if (threadTs) payload.thread_ts = threadTs;
+
+    await client.chat.postMessage(payload);
+    console.log(`[Slack] Comment notification sent: ${ticket.ticketNumber}${threadTs ? ' (in thread)' : ''}`);
+    return true;
+  } catch (error: any) {
+    console.error('[Slack] Failed to send comment notification:', error.message);
+    return false;
+  }
+}
+
+/**
+ * Post a compact reply in the ticket thread when a comment @mentions someone.
+ * Only fires for @mentions (on top of the regular comment notification).
  */
 export async function sendSlackCommentMention(
   ticket: Ticket,
@@ -224,45 +249,22 @@ export async function sendSlackCommentMention(
   if (!channel) return false;
 
   try {
-    const ticketUrl = getTicketUrl(ticket.id);
-
     const slackMentions = mentionedUsers.filter(u => u.slackUserId).map(u => `<@${u.slackUserId}>`).join(', ');
     const nameMentions  = mentionedUsers.filter(u => !u.slackUserId).map(u => u.name).join(', ');
     const mentionsList  = [slackMentions, nameMentions].filter(Boolean).join(', ');
     const managerMentions = managers?.filter(m => m.slackUserId).map(m => `<@${m.slackUserId}>`).join(', ') || '';
 
-    const commentText = comment.body?.length > 200 ? comment.body.substring(0, 200) + '...' : (comment.body || '');
-
-    const blocks: any[] = [
-      {
-        type: 'section',
-        fields: [
-          { type: 'mrkdwn', text: `*Ticket:*\n<${ticketUrl}|${ticket.ticketNumber}>` },
-          { type: 'mrkdwn', text: `*Mentioned:*\n${mentionsList}` },
-        ],
-      },
-      {
-        type: 'section',
-        text: { type: 'mrkdwn', text: `💬 *${commenter.name || commenter.email}* commented:\n> ${commentText}` },
-      },
-    ];
-
-    if (managerMentions) {
-      blocks.push({
-        type: 'context',
-        elements: [{ type: 'mrkdwn', text: `👔 *Managers notified:* ${managerMentions}` }],
-      });
-    }
-
-    blocks.push({
-      type: 'section',
-      text: { type: 'mrkdwn', text: `🔗 <${ticketUrl}|View Comment in Portal>` },
-    });
+    const text = `📌 ${mentionsList} — you were mentioned in ${ticket.ticketNumber}${managerMentions ? ` | Managers: ${managerMentions}` : ''}`;
 
     const payload: any = {
       channel,
-      text: `${commenter.name || commenter.email} mentioned ${mentionsList} in ${ticket.ticketNumber}`,
-      blocks,
+      text,
+      blocks: [
+        {
+          type: 'section',
+          text: { type: 'mrkdwn', text },
+        },
+      ],
       link_names: true,
     };
 
@@ -278,7 +280,7 @@ export async function sendSlackCommentMention(
 }
 
 /**
- * Post a reply in the ticket thread when a ticket is resolved.
+ * Post a compact reply in the ticket thread when a ticket is resolved.
  */
 export async function sendSlackTicketResolved(
   ticket: Ticket,
@@ -292,28 +294,22 @@ export async function sendSlackTicketResolved(
   if (!channel) return false;
 
   try {
-    const ticketUrl = getTicketUrl(ticket.id);
+    const ticketUrl     = getTicketUrl(ticket.id);
+    const resolverLabel = resolver.slackUserId ? `<@${resolver.slackUserId}>` : `*${resolver.name || resolver.email}*`;
 
     const payload: any = {
       channel,
-      text: `✅ Ticket ${ticket.ticketNumber} resolved by ${resolver.name || resolver.email}`,
+      text: `✅ ${ticket.ticketNumber} resolved by ${resolver.name || resolver.email}`,
       blocks: [
         {
           type: 'section',
-          fields: [
-            { type: 'mrkdwn', text: `*Ticket:*\n<${ticketUrl}|${ticket.ticketNumber}>` },
-            { type: 'mrkdwn', text: `*Resolved By:*\n${resolver.name || resolver.email}` },
-          ],
-        },
-        {
-          type: 'section',
-          text: { type: 'mrkdwn', text: `✅ *Ticket resolved*\n*Subject:* ${ticket.subject}` },
-        },
-        {
-          type: 'section',
-          text: { type: 'mrkdwn', text: `🔗 <${ticketUrl}|View Ticket in Portal>` },
+          text: {
+            type: 'mrkdwn',
+            text: `✅ *<${ticketUrl}|${ticket.ticketNumber}>* resolved by ${resolverLabel}`,
+          },
         },
       ],
+      link_names: true,
     };
 
     if (threadTs) payload.thread_ts = threadTs;
