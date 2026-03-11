@@ -28,12 +28,15 @@ export function isSlackConfigured(): boolean {
   return !!process.env.SLACK_BOT_TOKEN;
 }
 
-function getChannel(department?: string): string {
+function getChannel(department?: string): string | null {
   if (department) {
     const deptChannel = process.env[`SLACK_CHANNEL_${department.toUpperCase()}`]?.trim();
     if (deptChannel) return deptChannel;
+    console.warn(`[Slack] No channel configured for department "${department}" (SLACK_CHANNEL_${department.toUpperCase()}) — skipping notification`);
+    return null;
   }
-  return process.env.SLACK_CHANNEL_ID?.trim() || '#flow-complaint-notifications';
+  // Only fall back to SLACK_CHANNEL_ID when no department is provided at all
+  return process.env.SLACK_CHANNEL_ID?.trim() || null;
 }
 
 function getTicketUrl(ticketId: string): string {
@@ -63,6 +66,9 @@ export async function sendSlackTicketCreated(
 ): Promise<string | null> {
   const client = getSlackClient();
   if (!client) return null;
+
+  const channel = getChannel(ticket.department);
+  if (!channel) return null;
 
   try {
     const ticketUrl = getTicketUrl(ticket.id);
@@ -114,7 +120,7 @@ export async function sendSlackTicketCreated(
     ];
 
     const result = await client.chat.postMessage({
-      channel: getChannel(ticket.department),
+      channel,
       text: `New ticket ${ticket.ticketNumber}: ${ticket.subject}`,
       blocks,
       link_names: true,
@@ -142,6 +148,9 @@ export async function sendSlackTicketAssigned(
 ): Promise<boolean> {
   const client = getSlackClient();
   if (!client) return false;
+
+  const channel = getChannel(ticket.department);
+  if (!channel) return false;
 
   try {
     const ticketUrl = getTicketUrl(ticket.id);
@@ -180,7 +189,7 @@ export async function sendSlackTicketAssigned(
     ];
 
     const payload: any = {
-      channel: getChannel(ticket.department),
+      channel,
       text: `Ticket ${ticket.ticketNumber} assigned to ${assignee.name}`,
       blocks,
       link_names: true,
@@ -210,6 +219,9 @@ export async function sendSlackCommentMention(
 ): Promise<boolean> {
   const client = getSlackClient();
   if (!client) return false;
+
+  const channel = getChannel(ticket.department);
+  if (!channel) return false;
 
   try {
     const ticketUrl = getTicketUrl(ticket.id);
@@ -248,7 +260,7 @@ export async function sendSlackCommentMention(
     });
 
     const payload: any = {
-      channel: getChannel(ticket.department),
+      channel,
       text: `${commenter.name || commenter.email} mentioned ${mentionsList} in ${ticket.ticketNumber}`,
       blocks,
       link_names: true,
@@ -276,11 +288,14 @@ export async function sendSlackTicketResolved(
   const client = getSlackClient();
   if (!client) return false;
 
+  const channel = getChannel(ticket.department);
+  if (!channel) return false;
+
   try {
     const ticketUrl = getTicketUrl(ticket.id);
 
     const payload: any = {
-      channel: getChannel(ticket.department),
+      channel,
       text: `✅ Ticket ${ticket.ticketNumber} resolved by ${resolver.name || resolver.email}`,
       blocks: [
         {
@@ -323,11 +338,14 @@ export async function sendSlackUrgentAlert(
   const client = getSlackClient();
   if (!client) return false;
 
+  const channel = getChannel(ticket.department);
+  if (!channel) return false;
+
   try {
     const ticketUrl = getTicketUrl(ticket.id);
 
     const payload: any = {
-      channel: getChannel(ticket.department),
+      channel,
       text: `🚨 URGENT: ${ticket.ticketNumber} — ${ticket.subject}`,
       blocks: [
         {
