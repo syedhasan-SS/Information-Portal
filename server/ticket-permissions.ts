@@ -65,23 +65,17 @@ function isCXTicketVisible(user: User, ticket: Ticket): boolean {
 export function canViewTicket(user: User, ticket: Ticket): boolean {
   if (user.role === "Admin" || user.role === "Owner") return true;
 
-  // Head / Manager / Lead can see all tickets across all departments
-  if (isElevatedRole(user)) return true;
-
   // Users can always see tickets assigned to them or created by them, regardless of department
   if (ticket.assigneeId === user.id) return true;
   if (ticket.createdById === user.id) return true;
 
   if (user.department === "CX") {
-    // All CX users can access any ticket in the CX department.
-    // subDepartment (Seller Support / Customer Support) is used only for the
-    // default list view (filterTicketsByDepartmentAccess), NOT as an access
-    // barrier — any CX agent may need to act on any CX ticket.
+    // All CX users can access any CX-department ticket.
+    // subDepartment is used only for the default list view, NOT as an access barrier.
     return ticket.department === "CX";
   }
 
-  // Match ticket department against user's department OR sub-department
-  // e.g. user dept=Supply, subDept=Marketplace can see dept=Supply AND dept=Marketplace tickets
+  // All other users (including Lead/Manager/Head) can only view tickets in their own department
   return ticket.department === user.department ||
     (!!user.subDepartment && ticket.department === user.subDepartment);
 }
@@ -91,9 +85,6 @@ export function canViewTicket(user: User, ticket: Ticket): boolean {
  */
 export function filterTicketsByDepartmentAccess(tickets: Ticket[], user: User): Ticket[] {
   if (user.role === "Admin" || user.role === "Owner") return tickets;
-
-  // Head / Manager / Lead can see all tickets across all departments
-  if (isElevatedRole(user)) return tickets;
 
   if (user.department === "CX") {
     // Consistent with canViewTicket: CX users see all CX-department tickets
@@ -216,17 +207,17 @@ export function getUserDepartmentAccess(user: User): {
   const elevated = isElevatedRole(user); // Lead, Manager, Head
 
   return {
-    canViewAllDepartments: isAdmin || isCX || elevated,
-    canEditAllTickets: isAdmin || isCX || elevated,
-    departments: isAdmin || isCX || elevated ? ["All"] : [user.department || "None"],
-    restrictions: isAdmin || isCX || elevated
-      ? elevated && !isAdmin
-        ? ["Cannot edit core ticket details (subject, description, category, department)"]
-        : []
-      : [
-          "Can only view tickets in your department (+ assigned tickets)",
-          "Can only update: assignee, status, tags on same-dept or assigned tickets",
-          "Cannot edit: subject, description, category, priority"
-        ]
+    canViewAllDepartments: isAdmin || isCX,
+    canEditAllTickets: isAdmin || isCX,
+    departments: isAdmin || isCX ? ["All"] : [user.department || "None"],
+    restrictions: isAdmin
+      ? []
+      : isCX
+        ? []
+        : [
+            "Can only view tickets in your department (+ assigned/created tickets)",
+            "Can only update: assignee, status, tags on same-dept or assigned tickets",
+            "Cannot edit: subject, description, category, priority"
+          ]
   };
 }
