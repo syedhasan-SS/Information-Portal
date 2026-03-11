@@ -798,20 +798,21 @@ export default function AllTicketsPage() {
         </div>
 
         {showFilters && (
-          <Card className="mb-6 p-4">
-            <div className="flex flex-wrap items-end gap-4">
-              <div className="space-y-1.5">
-                <label className="text-xs font-medium text-muted-foreground">Status</label>
+          <Card className="mb-6 overflow-hidden">
+            {/* Row 1 — toggle pill filters */}
+            <div className="flex flex-wrap items-center gap-6 border-b px-4 py-3">
+              <div className="flex items-center gap-2">
+                <span className="w-14 shrink-0 text-xs font-medium text-muted-foreground">Status</span>
                 <div className="flex flex-wrap gap-1">
                   {STATUSES.map((status) => (
                     <Button
                       key={status}
-                      variant={statusFilter.includes(status) ? "default" : "outline"}
+                      variant={statusFilter.includes(status) ? "secondary" : "outline"}
                       size="sm"
                       onClick={() => toggleStatusFilter(status)}
                       className={cn(
-                        "h-7 text-xs",
-                        statusFilter.includes(status) && "bg-accent text-accent-foreground"
+                        "h-7 rounded-full px-3 text-xs",
+                        statusFilter.includes(status) && "border-accent bg-accent text-accent-foreground"
                       )}
                     >
                       {status}
@@ -820,18 +821,20 @@ export default function AllTicketsPage() {
                 </div>
               </div>
 
-              <div className="space-y-1.5">
-                <label className="text-xs font-medium text-muted-foreground">Priority</label>
+              <div className="h-5 w-px bg-border" />
+
+              <div className="flex items-center gap-2">
+                <span className="w-14 shrink-0 text-xs font-medium text-muted-foreground">Priority</span>
                 <div className="flex flex-wrap gap-1">
                   {PRIORITIES.map((priority) => (
                     <Button
                       key={priority}
-                      variant={priorityFilter.includes(priority) ? "default" : "outline"}
+                      variant={priorityFilter.includes(priority) ? "secondary" : "outline"}
                       size="sm"
                       onClick={() => togglePriorityFilter(priority)}
                       className={cn(
-                        "h-7 text-xs",
-                        priorityFilter.includes(priority) && "bg-accent text-accent-foreground"
+                        "h-7 rounded-full px-3 text-xs",
+                        priorityFilter.includes(priority) && "border-accent bg-accent text-accent-foreground"
                       )}
                     >
                       {priority}
@@ -840,14 +843,24 @@ export default function AllTicketsPage() {
                 </div>
               </div>
 
-              <div className="space-y-1.5">
+              {hasActiveFilters && (
+                <Button variant="ghost" size="sm" onClick={clearFilters} className="ml-auto h-7 text-xs text-muted-foreground hover:text-foreground">
+                  <X className="mr-1 h-3 w-3" />
+                  Clear all
+                </Button>
+              )}
+            </div>
+
+            {/* Row 2 — dropdown filters */}
+            <div className="grid grid-cols-2 gap-3 px-4 py-3 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6">
+              <div className="space-y-1">
                 <label className="text-xs font-medium text-muted-foreground">Department</label>
-                <Select value={departmentFilter} onValueChange={(val) => { setDepartmentFilter(val); setCurrentPage(1); }}>
-                  <SelectTrigger className="h-8 w-40">
-                    <SelectValue placeholder="All" />
+                <Select value={departmentFilter} onValueChange={(val) => { setDepartmentFilter(val === "all" ? "" : val); setCurrentPage(1); }}>
+                  <SelectTrigger className="h-9 w-full">
+                    <SelectValue placeholder="All departments" />
                   </SelectTrigger>
                   <SelectContent className="max-h-[300px] overflow-y-auto">
-                    <SelectItem value="all">All Departments</SelectItem>
+                    <SelectItem value="all">All departments</SelectItem>
                     {departmentsData?.filter(d => d.isActive).map((dept) => (
                       <SelectItem key={dept.id} value={dept.name}>{dept.name}</SelectItem>
                     ))}
@@ -855,14 +868,14 @@ export default function AllTicketsPage() {
                 </Select>
               </div>
 
-              <div className="space-y-1.5">
+              <div className="space-y-1">
                 <label className="text-xs font-medium text-muted-foreground">Issue Type</label>
-                <Select value={issueTypeFilter} onValueChange={(val) => { setIssueTypeFilter(val); setCurrentPage(1); }}>
-                  <SelectTrigger className="h-8 w-36">
-                    <SelectValue placeholder="All" />
+                <Select value={issueTypeFilter} onValueChange={(val) => { setIssueTypeFilter(val === "all" ? "" : val); setCurrentPage(1); }}>
+                  <SelectTrigger className="h-9 w-full">
+                    <SelectValue placeholder="All types" />
                   </SelectTrigger>
                   <SelectContent className="max-h-[300px] overflow-y-auto">
-                    <SelectItem value="all">All Types</SelectItem>
+                    <SelectItem value="all">All types</SelectItem>
                     {ISSUE_TYPES.map((type) => (
                       <SelectItem key={type} value={type}>{type}</SelectItem>
                     ))}
@@ -870,10 +883,10 @@ export default function AllTicketsPage() {
                 </Select>
               </div>
 
-              <div className="space-y-1.5">
+              <div className="space-y-1">
                 <label className="text-xs font-medium text-muted-foreground">SLA Status</label>
-                <Select value={slaStatusFilter} onValueChange={(val) => { setSlaStatusFilter(val); setCurrentPage(1); }}>
-                  <SelectTrigger className="h-8 w-32">
+                <Select value={slaStatusFilter} onValueChange={(val) => { setSlaStatusFilter(val === "all" ? "" : val); setCurrentPage(1); }}>
+                  <SelectTrigger className="h-9 w-full">
                     <SelectValue placeholder="All" />
                   </SelectTrigger>
                   <SelectContent className="max-h-[300px] overflow-y-auto">
@@ -885,40 +898,48 @@ export default function AllTicketsPage() {
                 </Select>
               </div>
 
-              {/* Assignee filter */}
-              <div className="space-y-1.5">
+              <div className="space-y-1">
                 <label className="text-xs font-medium text-muted-foreground">Assignee</label>
                 <Popover open={assigneeFilterOpen} onOpenChange={setAssigneeFilterOpen}>
                   <PopoverTrigger asChild>
-                    <Button variant="outline" role="combobox" className="h-8 w-48 justify-between font-normal text-xs">
-                      {assigneeFilter === "unassigned"
-                        ? "Unassigned"
-                        : assigneeFilter
-                          ? (users?.find((u) => u.id === assigneeFilter)?.name ?? "Select assignee")
-                          : "All assignees"}
-                      <ChevronsUpDown className="ml-2 h-3 w-3 shrink-0 opacity-50" />
+                    <Button
+                      variant="outline"
+                      role="combobox"
+                      className="h-9 w-full justify-between font-normal text-sm"
+                    >
+                      <span className="truncate">
+                        {assigneeFilter === "unassigned"
+                          ? "Unassigned"
+                          : assigneeFilter
+                            ? (users?.find((u) => u.id === assigneeFilter)?.name ?? "Select…")
+                            : "All assignees"}
+                      </span>
+                      <ChevronsUpDown className="ml-2 h-3.5 w-3.5 shrink-0 opacity-50" />
                     </Button>
                   </PopoverTrigger>
                   <PopoverContent className="w-[260px] p-0" align="start">
                     <Command>
-                      <CommandInput placeholder="Search by name..." className="h-8 text-xs" />
+                      <CommandInput placeholder="Search by name…" />
                       <CommandList className="max-h-[220px]">
                         <CommandEmpty>No user found.</CommandEmpty>
                         <CommandGroup>
                           <CommandItem value="all-assignees" onSelect={() => { setAssigneeFilter(""); setAssigneeFilterOpen(false); setCurrentPage(1); }}>
-                            <Check className={cn("mr-2 h-3 w-3", !assigneeFilter ? "opacity-100" : "opacity-0")} />
+                            <Check className={cn("mr-2 h-4 w-4", !assigneeFilter ? "opacity-100" : "opacity-0")} />
                             All assignees
                           </CommandItem>
                           <CommandItem value="unassigned" onSelect={() => { setAssigneeFilter("unassigned"); setAssigneeFilterOpen(false); setCurrentPage(1); }}>
-                            <Check className={cn("mr-2 h-3 w-3", assigneeFilter === "unassigned" ? "opacity-100" : "opacity-0")} />
+                            <Check className={cn("mr-2 h-4 w-4", assigneeFilter === "unassigned" ? "opacity-100" : "opacity-0")} />
                             Unassigned
                           </CommandItem>
                           {users?.map((u) => (
-                            <CommandItem key={u.id} value={`${u.name} ${u.email}`}
-                              onSelect={() => { setAssigneeFilter(u.id); setAssigneeFilterOpen(false); setCurrentPage(1); }}>
-                              <Check className={cn("mr-2 h-3 w-3", assigneeFilter === u.id ? "opacity-100" : "opacity-0")} />
-                              {u.name}
-                              <span className="ml-1 text-xs text-muted-foreground">({u.department})</span>
+                            <CommandItem
+                              key={u.id}
+                              value={`${u.name} ${u.email}`}
+                              onSelect={() => { setAssigneeFilter(u.id); setAssigneeFilterOpen(false); setCurrentPage(1); }}
+                            >
+                              <Check className={cn("mr-2 h-4 w-4", assigneeFilter === u.id ? "opacity-100" : "opacity-0")} />
+                              <span>{u.name}</span>
+                              <span className="ml-auto text-xs text-muted-foreground">{u.department}</span>
                             </CommandItem>
                           ))}
                         </CommandGroup>
@@ -928,28 +949,20 @@ export default function AllTicketsPage() {
                 </Popover>
               </div>
 
-              {/* Assignee's Department filter */}
-              <div className="space-y-1.5">
+              <div className="space-y-1">
                 <label className="text-xs font-medium text-muted-foreground">Assignee's Dept</label>
                 <Select value={assigneeDeptFilter} onValueChange={(val) => { setAssigneeDeptFilter(val === "all" ? "" : val); setCurrentPage(1); }}>
-                  <SelectTrigger className="h-8 w-40">
+                  <SelectTrigger className="h-9 w-full">
                     <SelectValue placeholder="All depts" />
                   </SelectTrigger>
                   <SelectContent className="max-h-[300px] overflow-y-auto">
-                    <SelectItem value="all">All Depts</SelectItem>
+                    <SelectItem value="all">All depts</SelectItem>
                     {departmentsData?.filter(d => d.isActive).map((dept) => (
                       <SelectItem key={dept.id} value={dept.name}>{dept.name}</SelectItem>
                     ))}
                   </SelectContent>
                 </Select>
               </div>
-
-              {hasActiveFilters && (
-                <Button variant="ghost" size="sm" onClick={clearFilters} className="h-8">
-                  <X className="mr-1 h-3 w-3" />
-                  Clear All
-                </Button>
-              )}
             </div>
           </Card>
         )}
