@@ -539,77 +539,100 @@ export default function TicketDetailPage() {
                     <div className="flex items-center justify-center py-8">
                       <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
                     </div>
-                  ) : activities && activities.length > 0 ? (
-                    activities.map((activity: any) => {
-                      const getActivityIcon = () => {
-                        switch (activity.action) {
-                          case "created":
-                            return <Plus className="h-3 w-3" />;
-                          case "status_changed":
-                          case "resolved":
-                          case "closed":
-                            return <CheckCircle className="h-3 w-3" />;
-                          case "reopened":
-                            return <AlertCircle className="h-3 w-3" />;
-                          case "assigned":
-                          case "reassigned":
-                          case "unassigned":
-                            return <User className="h-3 w-3" />;
-                          case "priority_changed":
-                            return <AlertCircle className="h-3 w-3" />;
-                          case "department_changed":
-                            return <Tag className="h-3 w-3" />;
-                          case "comment_added":
-                            return <MessageSquare className="h-3 w-3" />;
-                          case "tags_updated":
-                            return <Tag className="h-3 w-3" />;
-                          default:
-                            return <Activity className="h-3 w-3" />;
-                        }
-                      };
+                  ) : activities ? (
+                    (() => {
+                      // Append a synthetic "Ticket created" entry for old tickets
+                      // that were created before activity logging was in place
+                      const hasCreatedEntry = activities.some((a: any) => a.action === "created");
+                      const allActivities: any[] = hasCreatedEntry || !ticket
+                        ? [...activities]
+                        : [
+                            ...activities,
+                            {
+                              id: "__synthetic_created__",
+                              action: "created",
+                              description: `Ticket created`,
+                              userName: null,
+                              createdAt: ticket.createdAt,
+                            },
+                          ];
 
-                      const getActivityColor = () => {
-                        switch (activity.action) {
-                          case "created":
-                            return "bg-blue-500/10 text-blue-600";
-                          case "resolved":
-                          case "closed":
-                            return "bg-green-500/10 text-green-600";
-                          case "reopened":
-                            return "bg-yellow-500/10 text-yellow-600";
-                          case "assigned":
-                          case "reassigned":
-                            return "bg-purple-500/10 text-purple-600";
-                          case "unassigned":
-                            return "bg-gray-500/10 text-gray-600";
-                          case "priority_changed":
-                            return "bg-orange-500/10 text-orange-600";
-                          case "comment_added":
-                            return "bg-cyan-500/10 text-cyan-600";
-                          default:
-                            return "bg-gray-500/10 text-gray-600";
-                        }
-                      };
+                      if (allActivities.length === 0) {
+                        return <p className="text-sm text-muted-foreground text-center py-8">No activity yet</p>;
+                      }
 
-                      return (
-                        <div key={activity.id} className="flex items-start gap-3 text-sm">
-                          <div className={cn("mt-0.5 flex h-6 w-6 items-center justify-center rounded-full", getActivityColor())}>
-                            {getActivityIcon()}
-                          </div>
-                          <div className="flex-1">
-                            <p className="font-medium">{activity.description}</p>
-                            {activity.fieldName && activity.oldValue && activity.newValue && (
-                              <p className="text-xs text-muted-foreground mt-0.5">
-                                {activity.oldValue} → {activity.newValue}
+                      return allActivities.map((activity: any) => {
+                        const getActivityIcon = () => {
+                          switch (activity.action) {
+                            case "created":
+                              return <Plus className="h-3 w-3" />;
+                            case "status_changed":
+                            case "resolved":
+                            case "closed":
+                              return <CheckCircle className="h-3 w-3" />;
+                            case "reopened":
+                              return <AlertCircle className="h-3 w-3" />;
+                            case "assigned":
+                            case "reassigned":
+                            case "unassigned":
+                              return <User className="h-3 w-3" />;
+                            case "priority_changed":
+                              return <AlertCircle className="h-3 w-3" />;
+                            case "department_changed":
+                              return <Tag className="h-3 w-3" />;
+                            case "comment_added":
+                              return <MessageSquare className="h-3 w-3" />;
+                            case "tags_updated":
+                              return <Tag className="h-3 w-3" />;
+                            default:
+                              return <Activity className="h-3 w-3" />;
+                          }
+                        };
+
+                        const getActivityColor = () => {
+                          switch (activity.action) {
+                            case "created":
+                              return "bg-blue-500/10 text-blue-600";
+                            case "resolved":
+                            case "closed":
+                              return "bg-green-500/10 text-green-600";
+                            case "reopened":
+                              return "bg-yellow-500/10 text-yellow-600";
+                            case "assigned":
+                            case "reassigned":
+                              return "bg-purple-500/10 text-purple-600";
+                            case "unassigned":
+                              return "bg-gray-500/10 text-gray-600";
+                            case "priority_changed":
+                              return "bg-orange-500/10 text-orange-600";
+                            case "comment_added":
+                              return "bg-cyan-500/10 text-cyan-600";
+                            default:
+                              return "bg-gray-500/10 text-gray-600";
+                          }
+                        };
+
+                        return (
+                          <div key={activity.id} className="flex items-start gap-3 text-sm">
+                            <div className={cn("mt-0.5 flex h-6 w-6 items-center justify-center rounded-full", getActivityColor())}>
+                              {getActivityIcon()}
+                            </div>
+                            <div className="flex-1">
+                              <p className="font-medium">{activity.description}</p>
+                              {activity.fieldName && activity.oldValue && activity.newValue && (
+                                <p className="text-xs text-muted-foreground mt-0.5">
+                                  {activity.oldValue} → {activity.newValue}
+                                </p>
+                              )}
+                              <p className="text-xs text-muted-foreground mt-1">
+                                {new Date(activity.createdAt).toLocaleString()}
+                                {activity.userName ? ` • ${activity.userName}` : ""}
                               </p>
-                            )}
-                            <p className="text-xs text-muted-foreground mt-1">
-                              {new Date(activity.createdAt).toLocaleString()} • {activity.userName}
-                            </p>
+                            </div>
                           </div>
-                        </div>
-                      );
-                    })
+                        );
+                      });
+                    })()
                   ) : (
                     <p className="text-sm text-muted-foreground text-center py-8">No activity yet</p>
                   )}

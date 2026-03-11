@@ -1070,6 +1070,12 @@ export default function AllTicketsPage() {
                       <TableHead>SLA Due</TableHead>
                       <TableHead>Aging</TableHead>
                       <TableHead>
+                        <Button variant="ghost" size="sm" onClick={() => handleSort("createdAt")} className="-ml-3 h-8">
+                          Created
+                          <ArrowUpDown className="ml-1 h-3 w-3" />
+                        </Button>
+                      </TableHead>
+                      <TableHead>
                         <Button variant="ghost" size="sm" onClick={() => handleSort("updatedAt")} className="-ml-3 h-8">
                           Last Updated
                           <ArrowUpDown className="ml-1 h-3 w-3" />
@@ -1137,6 +1143,12 @@ export default function AllTicketsPage() {
                           <span className={agingDays > 7 ? 'text-amber-600 font-medium' : 'text-muted-foreground'}>
                             {agingDays}d
                           </span>
+                        </TableCell>
+                        <TableCell className="text-sm text-muted-foreground">
+                          <div className="flex flex-col">
+                            <span>{new Date(ticket.createdAt).toLocaleDateString()}</span>
+                            <span className="text-xs opacity-70">{new Date(ticket.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>
+                          </div>
                         </TableCell>
                         <TableCell className="text-sm text-muted-foreground">
                           {new Date(ticket.updatedAt).toLocaleDateString()}
