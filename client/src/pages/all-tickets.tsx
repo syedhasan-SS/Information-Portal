@@ -105,6 +105,28 @@ const SLA_STATUSES = ["on_track", "at_risk", "breached"] as const;
 type SortField = "ticketNumber" | "subject" | "vendorHandle" | "department" | "issueType" | "status" | "priorityTier" | "createdAt" | "updatedAt";
 type SortDirection = "asc" | "desc";
 
+// Module-level cache: persists across navigation (component remounts) but resets on full page reload
+type FilterCache = {
+  activeTab: "open" | "solved";
+  searchQuery: string;
+  showFilters: boolean;
+  statusFilter: string[];
+  priorityFilter: string[];
+  departmentFilter: string;
+  issueTypeFilter: string;
+  slaStatusFilter: string;
+  assigneeFilter: string;
+  assigneeDeptFilter: string;
+  categoryFilter: string;
+  dateStartFilter: string;
+  dateEndFilter: string;
+  sortField: SortField;
+  sortDirection: SortDirection;
+  currentPage: number;
+  pageSize: number;
+};
+let _filterCache: FilterCache | null = null;
+
 /**
  * Gets category display path with snapshot fallback
  * Priority: snapshot > live category > unknown
@@ -128,25 +150,25 @@ function getCategoryDisplay(ticket: Ticket, categoryMap: Record<string, Category
 export default function AllTicketsPage() {
   const [, setLocation] = useLocation();
   const { user, hasPermission } = useAuth();
-  const [activeTab, setActiveTab] = useState<"open" | "solved">("open");
-  const [searchQuery, setSearchQuery] = useState("");
-  const [showFilters, setShowFilters] = useState(false);
-  const [statusFilter, setStatusFilter] = useState<string[]>([]);
-  const [priorityFilter, setPriorityFilter] = useState<string[]>([]);
-  const [departmentFilter, setDepartmentFilter] = useState("");
-  const [issueTypeFilter, setIssueTypeFilter] = useState("");
-  const [slaStatusFilter, setSlaStatusFilter] = useState("");
-  const [assigneeFilter, setAssigneeFilter] = useState("");        // userId or "unassigned"
+  const [activeTab, setActiveTab] = useState<"open" | "solved">(_filterCache?.activeTab ?? "open");
+  const [searchQuery, setSearchQuery] = useState(_filterCache?.searchQuery ?? "");
+  const [showFilters, setShowFilters] = useState(_filterCache?.showFilters ?? false);
+  const [statusFilter, setStatusFilter] = useState<string[]>(_filterCache?.statusFilter ?? []);
+  const [priorityFilter, setPriorityFilter] = useState<string[]>(_filterCache?.priorityFilter ?? []);
+  const [departmentFilter, setDepartmentFilter] = useState(_filterCache?.departmentFilter ?? "");
+  const [issueTypeFilter, setIssueTypeFilter] = useState(_filterCache?.issueTypeFilter ?? "");
+  const [slaStatusFilter, setSlaStatusFilter] = useState(_filterCache?.slaStatusFilter ?? "");
+  const [assigneeFilter, setAssigneeFilter] = useState(_filterCache?.assigneeFilter ?? "");        // userId or "unassigned"
   const [assigneeFilterOpen, setAssigneeFilterOpen] = useState(false);
-  const [assigneeDeptFilter, setAssigneeDeptFilter] = useState(""); // assignee's department
+  const [assigneeDeptFilter, setAssigneeDeptFilter] = useState(_filterCache?.assigneeDeptFilter ?? ""); // assignee's department
   // Drill-down filters (populated from URL params when arriving from analytics)
-  const [categoryFilter, setCategoryFilter] = useState("");
-  const [dateStartFilter, setDateStartFilter] = useState("");
-  const [dateEndFilter, setDateEndFilter] = useState("");
-  const [sortField, setSortField] = useState<SortField>("createdAt");
-  const [sortDirection, setSortDirection] = useState<SortDirection>("desc");
-  const [currentPage, setCurrentPage] = useState(1);
-  const [pageSize, setPageSize] = useState(25);
+  const [categoryFilter, setCategoryFilter] = useState(_filterCache?.categoryFilter ?? "");
+  const [dateStartFilter, setDateStartFilter] = useState(_filterCache?.dateStartFilter ?? "");
+  const [dateEndFilter, setDateEndFilter] = useState(_filterCache?.dateEndFilter ?? "");
+  const [sortField, setSortField] = useState<SortField>(_filterCache?.sortField ?? "createdAt");
+  const [sortDirection, setSortDirection] = useState<SortDirection>(_filterCache?.sortDirection ?? "desc");
+  const [currentPage, setCurrentPage] = useState(_filterCache?.currentPage ?? 1);
+  const [pageSize, setPageSize] = useState(_filterCache?.pageSize ?? 25);
   const [selectedTickets, setSelectedTickets] = useState<Set<string>>(new Set());
   const [showBulkTransferDialog, setShowBulkTransferDialog] = useState(false);
   const [bulkTransferAssignee, setBulkTransferAssignee] = useState("");
@@ -181,6 +203,29 @@ export default function AllTicketsPage() {
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  // Keep module-level cache in sync so filters survive navigation (component remounts)
+  useEffect(() => {
+    _filterCache = {
+      activeTab,
+      searchQuery,
+      showFilters,
+      statusFilter,
+      priorityFilter,
+      departmentFilter,
+      issueTypeFilter,
+      slaStatusFilter,
+      assigneeFilter,
+      assigneeDeptFilter,
+      categoryFilter,
+      dateStartFilter,
+      dateEndFilter,
+      sortField,
+      sortDirection,
+      currentPage,
+      pageSize,
+    };
+  }, [activeTab, searchQuery, showFilters, statusFilter, priorityFilter, departmentFilter, issueTypeFilter, slaStatusFilter, assigneeFilter, assigneeDeptFilter, categoryFilter, dateStartFilter, dateEndFilter, sortField, sortDirection, currentPage, pageSize]);
 
   // Check if user can view all tickets or only department tickets
   const canViewAllTickets = hasPermission("view:all_tickets");
@@ -609,6 +654,7 @@ export default function AllTicketsPage() {
   };
 
   const clearFilters = () => {
+    _filterCache = null;
     setStatusFilter([]);
     setPriorityFilter([]);
     setDepartmentFilter("");
