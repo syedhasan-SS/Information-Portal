@@ -477,6 +477,7 @@ export default function AllTicketsPage() {
       if (
         !ticket.subject.toLowerCase().includes(query) &&
         !(ticket.vendorHandle || "").toLowerCase().includes(query) &&
+        !(ticket.customer || "").toLowerCase().includes(query) &&
         !(ticket.ticketNumber || "").toLowerCase().includes(query)
       ) {
         return false;
@@ -1037,7 +1038,7 @@ export default function AllTicketsPage() {
                       </TableHead>
                       <TableHead>
                         <Button variant="ghost" size="sm" onClick={() => handleSort("vendorHandle")} className="-ml-3 h-8">
-                          Vendor
+                          Vendor / Customer
                           <ArrowUpDown className="ml-1 h-3 w-3" />
                         </Button>
                       </TableHead>
@@ -1104,8 +1105,12 @@ export default function AllTicketsPage() {
                         <TableCell className="font-mono text-sm">
                           {ticket.ticketNumber || ticket.id.slice(0, 8)}
                         </TableCell>
-                        <TableCell className="font-mono text-sm text-muted-foreground">
-                          {ticket.vendorHandle}
+                        <TableCell className="text-sm text-muted-foreground">
+                          {ticket.vendorHandle ? (
+                            <span className="font-mono">{ticket.vendorHandle}</span>
+                          ) : ticket.customer ? (
+                            <span className="truncate max-w-[120px] block">{ticket.customer}</span>
+                          ) : null}
                         </TableCell>
                         <TableCell>
                           <Badge variant="secondary">{ticket.department}</Badge>

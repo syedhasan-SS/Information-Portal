@@ -859,35 +859,49 @@ export default function TicketDetailPage() {
               )}
             </Card>
 
-            <Card className="p-6">
-              <h3 className="mb-4 font-semibold">Vendor Information</h3>
-              <div className="space-y-3">
-                <div>
-                  <label className="text-xs font-medium text-muted-foreground">Vendor Handle</label>
-                  <Button
-                    variant="link"
-                    className="mt-0.5 h-auto p-0 text-sm font-mono"
-                    onClick={() => setLocation(`/vendors/${ticket.vendorHandle}`)}
-                  >
-                    {ticket.vendorHandle}
-                    <ExternalLink className="ml-1 h-3 w-3" />
-                  </Button>
-                </div>
-
-                {ticket.fleekOrderIds && ticket.fleekOrderIds.length > 0 && (
+            {ticket.vendorHandle && (
+              <Card className="p-6">
+                <h3 className="mb-4 font-semibold">Vendor Information</h3>
+                <div className="space-y-3">
                   <div>
-                    <label className="text-xs font-medium text-muted-foreground">
-                      Fleek Order ID{ticket.fleekOrderIds.length > 1 ? 's' : ''}
-                    </label>
-                    <div className="mt-1 space-y-1">
-                      {ticket.fleekOrderIds.map((orderId, index) => (
-                        <p key={index} className="font-mono text-sm">{orderId}</p>
-                      ))}
-                    </div>
+                    <label className="text-xs font-medium text-muted-foreground">Vendor Handle</label>
+                    <Button
+                      variant="link"
+                      className="mt-0.5 h-auto p-0 text-sm font-mono"
+                      onClick={() => setLocation(`/vendors/${ticket.vendorHandle}`)}
+                    >
+                      {ticket.vendorHandle}
+                      <ExternalLink className="ml-1 h-3 w-3" />
+                    </Button>
                   </div>
-                )}
-              </div>
-            </Card>
+
+                  {ticket.fleekOrderIds && ticket.fleekOrderIds.length > 0 && (
+                    <div>
+                      <label className="text-xs font-medium text-muted-foreground">
+                        Fleek Order ID{ticket.fleekOrderIds.length > 1 ? 's' : ''}
+                      </label>
+                      <div className="mt-1 space-y-1">
+                        {ticket.fleekOrderIds.map((orderId, index) => (
+                          <p key={index} className="font-mono text-sm">{orderId}</p>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                </div>
+              </Card>
+            )}
+
+            {ticket.customer && (
+              <Card className="p-6">
+                <h3 className="mb-4 font-semibold">Customer Information</h3>
+                <div className="space-y-3">
+                  <div>
+                    <label className="text-xs font-medium text-muted-foreground">Customer</label>
+                    <p className="mt-0.5 text-sm">{ticket.customer}</p>
+                  </div>
+                </div>
+              </Card>
+            )}
 
             {ticket.fleekOrderIds && ticket.fleekOrderIds.length > 0 && (
               <Card className="p-6">
