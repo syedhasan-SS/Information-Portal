@@ -43,10 +43,13 @@ export async function notifyTicketCreated(ticket: Ticket, creator: User | undefi
     console.log(`[Notifications] Created ${notificationPromises.length} notifications for new ticket ${ticket.ticketNumber}`);
 
     // Send Slack — save the returned ts so all future updates post in-thread
+    // If creator wasn't resolved from the request, fall back to looking up by ticket.createdById
+    const resolvedCreator = creator
+      ?? (ticket.createdById ? await storage.getUserById(ticket.createdById) : undefined);
     const assignee = ticket.assigneeId ? await storage.getUserById(ticket.assigneeId) : undefined;
     const manager  = assignee?.managerId ? await storage.getUserById(assignee.managerId) : undefined;
 
-    const slackTs = await sendSlackTicketCreated(ticket, creator, assignee, manager);
+    const slackTs = await sendSlackTicketCreated(ticket, resolvedCreator, assignee, manager);
     if (slackTs) {
       await storage.updateTicket(ticket.id, { slackMessageTs: slackTs } as any);
       console.log(`[Slack] Stored thread ts for ${ticket.ticketNumber}: ${slackTs}`);

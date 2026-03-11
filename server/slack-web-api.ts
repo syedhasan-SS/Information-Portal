@@ -92,7 +92,7 @@ export async function sendSlackTicketCreated(
       {
         type: 'section',
         fields: [
-          { type: 'mrkdwn', text: `*Ticket Number:*\n<${ticketUrl}|${ticket.ticketNumber}>` },
+          { type: 'mrkdwn', text: `*Ticket Number:*\n${ticket.ticketNumber}` },
           { type: 'mrkdwn', text: `*Priority:*\n${priorityEmoji} ${ticket.priorityTier || 'Normal'}` },
           { type: 'mrkdwn', text: `*Assigned:*\n${assigneeMention}` },
           { type: 'mrkdwn', text: `*Manager:*\n${managerMention}` },
@@ -112,10 +112,6 @@ export async function sendSlackTicketCreated(
       {
         type: 'section',
         text: { type: 'mrkdwn', text: `*Description:*\n${descSnippet}` },
-      },
-      {
-        type: 'context',
-        elements: [{ type: 'mrkdwn', text: `🔗 <${ticketUrl}|View Ticket in Portal>` }],
       },
     ];
 
