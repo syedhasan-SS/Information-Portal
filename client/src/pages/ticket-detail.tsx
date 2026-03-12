@@ -121,19 +121,34 @@ async function updateTicket(id: string, updates: Partial<Ticket>): Promise<Ticke
 }
 
 async function addComment(ticketId: string, content: string, userId: string, userName: string): Promise<Comment> {
+  const userEmail = localStorage.getItem("userEmail") || "";
   const res = await fetch("/api/comments", {
     method: "POST",
-    headers: { "Content-Type": "application/json" },
+    headers: {
+      "Content-Type": "application/json",
+      ...(userEmail ? { "x-user-email": userEmail } : {}),
+    },
     body: JSON.stringify({
       ticketId,
       author: userName,
       body: content,
       visibility: "Internal",
-      createdById: userId, // Pass user ID for notification filtering
+      createdById: userId,
     }),
   });
   if (!res.ok) throw new Error("Failed to add comment");
   return res.json();
+}
+
+async function deleteComment(commentId: string): Promise<void> {
+  const userEmail = localStorage.getItem("userEmail") || "";
+  const res = await fetch(`/api/comments/${commentId}`, {
+    method: "DELETE",
+    headers: {
+      ...(userEmail ? { "x-user-email": userEmail } : {}),
+    },
+  });
+  if (!res.ok) throw new Error("Failed to delete comment");
 }
 
 // "Closed" is intentionally excluded — tickets are closed automatically 24h after Solved.
@@ -302,6 +317,14 @@ export default function TicketDetailPage() {
       queryClient.invalidateQueries({ queryKey: ["comments", id] });
       queryClient.invalidateQueries({ queryKey: ["activities", id] });
       setNewComment("");
+    },
+  });
+
+  const deleteCommentMutation = useMutation({
+    mutationFn: (commentId: string) => deleteComment(commentId),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["comments", id] });
+      queryClient.invalidateQueries({ queryKey: ["activities", id] });
     },
   });
 
@@ -484,25 +507,41 @@ export default function TicketDetailPage() {
                       <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
                     </div>
                   ) : comments && comments.length > 0 ? (
-                    comments.map((comment) => (
-                      <div key={comment.id} className="flex gap-3 p-3 rounded-lg bg-muted/50">
-                        <div className="flex h-8 w-8 items-center justify-center rounded-full bg-accent text-accent-foreground font-semibold text-sm">
-                          {comment.author.charAt(0).toUpperCase()}
-                        </div>
-                        <div className="flex-1">
-                          <div className="flex items-center gap-2 text-sm">
-                            <span className="font-medium">{comment.author}</span>
-                            <span className="text-muted-foreground">
-                              {new Date(comment.createdAt).toLocaleString()}
-                            </span>
-                            {comment.visibility === "Internal" && (
-                              <Badge variant="outline" className="text-xs">Internal</Badge>
-                            )}
+                    comments.map((comment) => {
+                      const ageMs = Date.now() - new Date(comment.createdAt).getTime();
+                      const withinTwoHours = ageMs < 2 * 60 * 60 * 1000;
+                      const isOwn = comment.author === user?.name;
+                      const canDelete = withinTwoHours && isOwn;
+                      return (
+                        <div key={comment.id} className="flex gap-3 p-3 rounded-lg bg-muted/50">
+                          <div className="flex h-8 w-8 items-center justify-center rounded-full bg-accent text-accent-foreground font-semibold text-sm flex-shrink-0">
+                            {comment.author.charAt(0).toUpperCase()}
                           </div>
-                          <p className="mt-1 text-sm">{comment.body}</p>
+                          <div className="flex-1 min-w-0">
+                            <div className="flex items-center gap-2 text-sm">
+                              <span className="font-medium">{comment.author}</span>
+                              <span className="text-muted-foreground">
+                                {new Date(comment.createdAt).toLocaleString()}
+                              </span>
+                              {comment.visibility === "Internal" && (
+                                <Badge variant="outline" className="text-xs">Internal</Badge>
+                              )}
+                              {canDelete && (
+                                <button
+                                  title="Delete comment (within 2 hours)"
+                                  onClick={() => deleteCommentMutation.mutate(comment.id)}
+                                  disabled={deleteCommentMutation.isPending}
+                                  className="ml-auto text-muted-foreground hover:text-destructive transition-colors p-1 rounded"
+                                >
+                                  <Trash2 className="h-3.5 w-3.5" />
+                                </button>
+                              )}
+                            </div>
+                            <p className="mt-1 text-sm">{comment.body}</p>
+                          </div>
                         </div>
-                      </div>
-                    ))
+                      );
+                    })
                   ) : (
                     <p className="py-8 text-center text-sm text-muted-foreground">
                       No comments yet

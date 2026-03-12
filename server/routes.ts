@@ -979,6 +979,32 @@ export async function registerRoutes(
     }
   });
 
+  app.delete("/api/comments/:id", async (req, res) => {
+    try {
+      const actor = await getCurrentUser(req);
+      if (!actor) return res.status(401).json({ error: "Authentication required" });
+
+      const comment = await storage.getCommentById(req.params.id);
+      if (!comment) return res.status(404).json({ error: "Comment not found" });
+
+      // Only the comment author can delete it
+      if (comment.author !== actor.name) {
+        return res.status(403).json({ error: "You can only delete your own comments" });
+      }
+
+      // Enforce 2-hour recall window
+      const ageMs = Date.now() - new Date(comment.createdAt).getTime();
+      if (ageMs > 2 * 60 * 60 * 1000) {
+        return res.status(403).json({ error: "Comments can only be deleted within 2 hours of posting" });
+      }
+
+      await storage.deleteComment(req.params.id);
+      res.status(204).send();
+    } catch (error: any) {
+      res.status(500).json({ error: error.message });
+    }
+  });
+
   // Users
   app.get("/api/users", async (_req, res) => {
     try {

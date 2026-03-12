@@ -99,6 +99,8 @@ export interface IStorage {
   // Comments
   getCommentsByTicketId(ticketId: string): Promise<Comment[]>;
   createComment(comment: InsertComment): Promise<Comment>;
+  getCommentById(id: string): Promise<Comment | undefined>;
+  deleteComment(id: string): Promise<void>;
 
   // Users
   getUsers(): Promise<User[]>;
@@ -755,6 +757,15 @@ export class DatabaseStorage implements IStorage {
   async createComment(comment: InsertComment): Promise<Comment> {
     const results = await db.insert(comments).values(comment).returning();
     return results[0];
+  }
+
+  async getCommentById(id: string): Promise<Comment | undefined> {
+    const results = await db.select().from(comments).where(eq(comments.id, id));
+    return results[0];
+  }
+
+  async deleteComment(id: string): Promise<void> {
+    await db.delete(comments).where(eq(comments.id, id));
   }
 
   // Users

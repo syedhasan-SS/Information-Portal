@@ -148,20 +148,20 @@ export async function sendSlackTicketAssigned(
   if (!channel) return false;
 
   try {
-    const ticketUrl  = getTicketUrl(ticket.id);
-    const assigneeMention = assignee.slackUserId ? `<@${assignee.slackUserId}>` : `*${assignee.name}*`;
-    const assignerLabel   = assigner ? (assigner.slackUserId ? `<@${assigner.slackUserId}>` : assigner.name) : 'System';
+    const assigneeMention = assignee.slackUserId ? `<@${assignee.slackUserId}>` : assignee.name;
+    const assignerLabel   = assigner
+      ? (assigner.slackUserId ? `<@${assigner.slackUserId}>` : assigner.name)
+      : 'System';
+
+    const msgText = `🔄 ${assignerLabel} assigned ${ticket.ticketNumber} to ${assigneeMention}`;
 
     const payload: any = {
       channel,
-      text: `🔄 ${ticket.ticketNumber} assigned to ${assignee.name} by ${assigner?.name || 'System'}`,
+      text: msgText,
       blocks: [
         {
           type: 'section',
-          text: {
-            type: 'mrkdwn',
-            text: `🔄 *<${ticketUrl}|${ticket.ticketNumber}>* assigned to ${assigneeMention} by ${assignerLabel}`,
-          },
+          text: { type: 'mrkdwn', text: msgText },
         },
       ],
       link_names: true,
@@ -194,22 +194,20 @@ export async function sendSlackCommentAdded(
   if (!channel) return false;
 
   try {
-    const ticketUrl    = getTicketUrl(ticket.id);
-    const commenterLabel = commenter.slackUserId ? `<@${commenter.slackUserId}>` : `*${commenter.name || commenter.email}*`;
+    const commenterLabel = commenter.slackUserId ? `<@${commenter.slackUserId}>` : commenter.name || commenter.email;
     const commentText  = (comment.body || '').length > 300
       ? comment.body.substring(0, 297) + '…'
       : (comment.body || '');
 
+    const msgText = `💬 ${commenterLabel} posted a comment on ${ticket.ticketNumber}\n\nComment: "${commentText}"`;
+
     const payload: any = {
       channel,
-      text: `${commenter.name || commenter.email} added a comment on ${ticket.ticketNumber}: ${commentText}`,
+      text: msgText,
       blocks: [
         {
           type: 'section',
-          text: {
-            type: 'mrkdwn',
-            text: `💬 ${commenterLabel} added a comment on *<${ticketUrl}|${ticket.ticketNumber}>*\n> ${commentText}`,
-          },
+          text: { type: 'mrkdwn', text: msgText },
         },
       ],
       link_names: true,
