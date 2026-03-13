@@ -98,7 +98,8 @@ export async function notifyTicketAssigned(ticket: Ticket, assignee: User, actor
     const manager    = assignee.managerId ? await storage.getUserById(assignee.managerId) : undefined;
     const threadTs   = (ticket as any).slackMessageTs || null;
 
-    sendSlackTicketAssigned(ticket, assignee, actor, manager, threadTs).catch(err => {
+    // Await so callers can sequence multiple notifications (prevents Slack grouping them as one)
+    await sendSlackTicketAssigned(ticket, assignee, actor, manager, threadTs).catch(err => {
       console.error('[Slack] Failed to send ticket assigned notification:', err);
     });
   } catch (error) {
@@ -148,7 +149,8 @@ export async function notifyTicketSolved(ticket: Ticket, solver: User | undefine
 
     if (solver) {
       const threadTs = (ticket as any).slackMessageTs || null;
-      sendSlackTicketResolved(ticket, solver, threadTs).catch(err => {
+      // Await so callers can sequence multiple notifications (prevents Slack grouping them as one)
+      await sendSlackTicketResolved(ticket, solver, threadTs).catch(err => {
         console.error('[Slack] Failed to send ticket resolved notification:', err);
       });
     }

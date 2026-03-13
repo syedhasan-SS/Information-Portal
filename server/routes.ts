@@ -867,21 +867,27 @@ export async function registerRoutes(
         });
       }
 
-      // Check if ticket was assigned (currentUser already declared at top of function)
-      if (req.body.assigneeId && oldTicket.assigneeId !== req.body.assigneeId) {
-        const assignee = await storage.getUserById(req.body.assigneeId);
-        if (assignee) {
-          notifyTicketAssigned(ticket, assignee, currentUser).catch(err => {
-            console.error('Failed to send ticket assignment notification:', err);
-          });
-        }
-      }
+      // Check if ticket was assigned / solved — fire sequentially so Slack
+      // receives each as a distinct message rather than batching them together.
+      const wasAssigned = req.body.assigneeId && oldTicket.assigneeId !== req.body.assigneeId;
+      const wasSolved   = req.body.status === "Solved" && oldTicket.status !== "Solved";
 
-      // Check if ticket was solved
-      if (req.body.status === "Solved" && oldTicket.status !== "Solved") {
-        notifyTicketSolved(ticket, currentUser).catch(err => {
-          console.error('Failed to send ticket solved notification:', err);
-        });
+      if (wasAssigned || wasSolved) {
+        (async () => {
+          if (wasAssigned) {
+            const assignee = await storage.getUserById(req.body.assigneeId);
+            if (assignee) {
+              await notifyTicketAssigned(ticket, assignee, currentUser).catch(err => {
+                console.error('Failed to send ticket assignment notification:', err);
+              });
+            }
+          }
+          if (wasSolved) {
+            await notifyTicketSolved(ticket, currentUser).catch(err => {
+              console.error('Failed to send ticket solved notification:', err);
+            });
+          }
+        })();
       }
 
       res.json(ticket);

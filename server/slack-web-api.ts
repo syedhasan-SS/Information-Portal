@@ -144,6 +144,12 @@ export async function sendSlackTicketAssigned(
   const client = getSlackClient();
   if (!client) return false;
 
+  // Only post in an existing thread — skip if there is no thread ts.
+  if (!threadTs) {
+    console.log(`[Slack] Skipping assignment notification for ${ticket.ticketNumber} — no thread ts`);
+    return false;
+  }
+
   const channel = getChannel(ticket.department);
   if (!channel) return false;
 
@@ -190,6 +196,13 @@ export async function sendSlackCommentAdded(
   const client = getSlackClient();
   if (!client) return false;
 
+  // Only post in an existing thread — skip if there is no thread ts to avoid
+  // cluttering the main channel with out-of-context comment notifications.
+  if (!threadTs) {
+    console.log(`[Slack] Skipping comment notification for ${ticket.ticketNumber} — no thread ts`);
+    return false;
+  }
+
   const channel = getChannel(ticket.department);
   if (!channel) return false;
 
@@ -211,9 +224,8 @@ export async function sendSlackCommentAdded(
         },
       ],
       link_names: true,
+      thread_ts: threadTs,
     };
-
-    if (threadTs) payload.thread_ts = threadTs;
 
     await client.chat.postMessage(payload);
     console.log(`[Slack] Comment notification sent: ${ticket.ticketNumber}${threadTs ? ' (in thread)' : ''}`);
@@ -238,6 +250,12 @@ export async function sendSlackCommentMention(
 ): Promise<boolean> {
   const client = getSlackClient();
   if (!client) return false;
+
+  // Only post in an existing thread — skip if there is no thread ts.
+  if (!threadTs) {
+    console.log(`[Slack] Skipping mention notification for ${ticket.ticketNumber} — no thread ts`);
+    return false;
+  }
 
   const channel = getChannel(ticket.department);
   if (!channel) return false;
@@ -284,22 +302,28 @@ export async function sendSlackTicketResolved(
   const client = getSlackClient();
   if (!client) return false;
 
+  // Only post in an existing thread — skip if there is no thread ts.
+  if (!threadTs) {
+    console.log(`[Slack] Skipping resolved notification for ${ticket.ticketNumber} — no thread ts`);
+    return false;
+  }
+
   const channel = getChannel(ticket.department);
   if (!channel) return false;
 
   try {
-    const ticketUrl     = getTicketUrl(ticket.id);
-    const resolverLabel = resolver.slackUserId ? `<@${resolver.slackUserId}>` : `*${resolver.name || resolver.email}*`;
+    const resolverLabel = resolver.slackUserId ? `<@${resolver.slackUserId}>` : resolver.name || resolver.email;
+    const msgText = `✅ ${ticket.ticketNumber} resolved by ${resolverLabel}`;
 
     const payload: any = {
       channel,
-      text: `✅ ${ticket.ticketNumber} resolved by ${resolver.name || resolver.email}`,
+      text: msgText,
       blocks: [
         {
           type: 'section',
           text: {
             type: 'mrkdwn',
-            text: `✅ *<${ticketUrl}|${ticket.ticketNumber}>* resolved by ${resolverLabel}`,
+            text: msgText,
           },
         },
       ],

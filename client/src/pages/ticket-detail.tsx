@@ -120,13 +120,14 @@ async function updateTicket(id: string, updates: Partial<Ticket>): Promise<Ticke
   return res.json();
 }
 
-async function addComment(ticketId: string, content: string, userId: string, userName: string): Promise<Comment> {
-  const userEmail = localStorage.getItem("userEmail") || "";
+async function addComment(ticketId: string, content: string, userId: string, userName: string, userEmail?: string): Promise<Comment> {
+  // Prefer the caller-supplied email (from the auth hook); fall back to localStorage
+  const email = userEmail || localStorage.getItem("userEmail") || "";
   const res = await fetch("/api/comments", {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
-      ...(userEmail ? { "x-user-email": userEmail } : {}),
+      ...(email ? { "x-user-email": email } : {}),
     },
     body: JSON.stringify({
       ticketId,
@@ -312,7 +313,7 @@ export default function TicketDetailPage() {
   };
 
   const commentMutation = useMutation({
-    mutationFn: (content: string) => addComment(id!, content, user?.id!, user?.name || "Unknown User"),
+    mutationFn: (content: string) => addComment(id!, content, user?.id!, user?.name || "Unknown User", user?.email),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["comments", id] });
       queryClient.invalidateQueries({ queryKey: ["activities", id] });

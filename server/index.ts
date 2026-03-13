@@ -36,6 +36,31 @@ export function log(message: string, source = "express") {
   console.log(`${formattedTime} [${source}] ${message}`);
 }
 
+// Ensure all default departments exist in the database
+async function ensureDefaultDepartments() {
+  const DEFAULT_DEPARTMENTS = [
+    { name: "Finance",     description: "Financial operations and payments",      color: "#10b981", displayOrder: 1 },
+    { name: "Operations",  description: "Order fulfillment and logistics",        color: "#f59e0b", displayOrder: 2 },
+    { name: "Marketplace", description: "Product listings and seller management", color: "#8b5cf6", displayOrder: 3 },
+    { name: "Tech",        description: "Technical support and platform issues",  color: "#3b82f6", displayOrder: 4 },
+    { name: "Supply",      description: "Supply chain and inventory management",  color: "#ec4899", displayOrder: 5 },
+    { name: "Growth",      description: "Business development and expansion",     color: "#f97316", displayOrder: 6 },
+    { name: "Experience",  description: "Customer experience and service",        color: "#6366f1", displayOrder: 7 },
+    { name: "CX",          description: "Customer Support",                       color: "#06b6d4", displayOrder: 8 },
+  ];
+  try {
+    for (const dept of DEFAULT_DEPARTMENTS) {
+      const existing = await storage.getDepartmentByName(dept.name);
+      if (!existing) {
+        await storage.createDepartment(dept);
+        log(`Created missing department: ${dept.name}`, "startup");
+      }
+    }
+  } catch (error) {
+    console.error("Failed to ensure default departments:", error);
+  }
+}
+
 // Fix department types for vendorHandle and customer fields on startup
 async function fixFieldDepartmentTypes() {
   try {
@@ -107,6 +132,9 @@ app.use((req, res, next) => {
 
 (async () => {
   await registerRoutes(httpServer, app);
+
+  // Ensure all default departments exist (creates any missing ones, e.g. Marketplace, Supply)
+  await ensureDefaultDepartments();
 
   // Fix field department types on startup
   await fixFieldDepartmentTypes();
