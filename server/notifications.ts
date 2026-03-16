@@ -14,6 +14,34 @@ import {
  */
 
 /**
+ * Ensures a Slack thread exists for the ticket.
+ *
+ * If slackMessageTs is already stored → returns it immediately.
+ * If not (ticket was created before Slack was set up, or the creation
+ * notification failed) → creates the initial ticket message now, stores
+ * the returned ts on the ticket, and returns it.
+ *
+ * This guarantees every notification is always a thread reply, never a
+ * stray top-level message.
+ */
+async function ensureSlackThread(ticket: Ticket): Promise<string | null> {
+  const existing = (ticket as any).slackMessageTs as string | null | undefined;
+  if (existing) return existing;
+
+  console.log(`[Slack] No thread for ${ticket.ticketNumber} — creating on-demand`);
+  const creator  = ticket.createdById ? await storage.getUserById(ticket.createdById) : undefined;
+  const assignee = ticket.assigneeId  ? await storage.getUserById(ticket.assigneeId)  : undefined;
+  const manager  = assignee?.managerId ? await storage.getUserById(assignee.managerId) : undefined;
+
+  const newTs = await sendSlackTicketCreated(ticket, creator, assignee, manager);
+  if (newTs) {
+    await storage.updateTicket(ticket.id, { slackMessageTs: newTs } as any);
+    console.log(`[Slack] On-demand thread created for ${ticket.ticketNumber}: ${newTs}`);
+  }
+  return newTs;
+}
+
+/**
  * Create notification when a new ticket is created.
  * The Slack ts is saved on the ticket so all future updates reply in-thread.
  */
@@ -95,8 +123,8 @@ export async function notifyTicketAssigned(ticket: Ticket, assignee: User, actor
 
     console.log(`[Notifications] Notified user ${assignee.name} about ticket assignment: ${ticket.ticketNumber}`);
 
-    const manager    = assignee.managerId ? await storage.getUserById(assignee.managerId) : undefined;
-    const threadTs   = (ticket as any).slackMessageTs || null;
+    const manager  = assignee.managerId ? await storage.getUserById(assignee.managerId) : undefined;
+    const threadTs = await ensureSlackThread(ticket);
 
     // Await so callers can sequence multiple notifications (prevents Slack grouping them as one)
     await sendSlackTicketAssigned(ticket, assignee, actor, manager, threadTs).catch(err => {
@@ -148,7 +176,7 @@ export async function notifyTicketSolved(ticket: Ticket, solver: User | undefine
     await Promise.all(notificationPromises);
 
     if (solver) {
-      const threadTs = (ticket as any).slackMessageTs || null;
+      const threadTs = await ensureSlackThread(ticket);
       // Await so callers can sequence multiple notifications (prevents Slack grouping them as one)
       await sendSlackTicketResolved(ticket, solver, threadTs).catch(err => {
         console.error('[Slack] Failed to send ticket resolved notification:', err);
@@ -202,10 +230,13 @@ export async function notifyCommentAdded(
 
     // Post the comment in the ticket's Slack thread (non-blocking)
     if (commenter) {
-      const threadTs = (ticket as any).slackMessageTs || null;
-      sendSlackCommentAdded(ticket, comment, commenter, threadTs).catch(err => {
-        console.error('[Slack] Failed to send comment notification:', err);
-      });
+      ensureSlackThread(ticket).then(threadTs => {
+        if (threadTs) {
+          sendSlackCommentAdded(ticket, comment, commenter, threadTs).catch(err => {
+            console.error('[Slack] Failed to send comment notification:', err);
+          });
+        }
+      }).catch(err => console.error('[Slack] Failed to ensure thread for comment:', err));
     }
   } catch (error) {
     console.error("[Notifications] Failed to create comment notifications:", error);
