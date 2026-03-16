@@ -30,12 +30,13 @@ export function isSlackConfigured(): boolean {
 
 function getChannel(department?: string): string | null {
   if (department) {
+    // Use department-specific channel if configured (e.g. SLACK_CHANNEL_CX for CX tickets)
     const deptChannel = process.env[`SLACK_CHANNEL_${department.toUpperCase()}`]?.trim();
     if (deptChannel) return deptChannel;
-    console.warn(`[Slack] No channel configured for department "${department}" (SLACK_CHANNEL_${department.toUpperCase()}) — skipping notification`);
-    return null;
+    // Fall back to the default channel (SLACK_CHANNEL_ID) for departments without
+    // a dedicated channel — this is intentional for SS / general tickets.
+    console.log(`[Slack] No dedicated channel for "${department}", falling back to SLACK_CHANNEL_ID`);
   }
-  // Only fall back to SLACK_CHANNEL_ID when no department is provided at all
   return process.env.SLACK_CHANNEL_ID?.trim() || null;
 }
 
