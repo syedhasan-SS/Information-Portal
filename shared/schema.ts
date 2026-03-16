@@ -239,7 +239,7 @@ export const subDepartments = pgTable("sub_departments", {
 export const notifications = pgTable("notifications", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
   userId: varchar("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
-  type: text("type").notNull().$type<"case_created" | "comment_mention" | "ticket_assigned" | "ticket_solved" | "comment_added">(),
+  type: text("type").notNull().$type<"case_created" | "comment_mention" | "ticket_assigned" | "ticket_solved" | "comment_added" | "ticket_transferred">(),
   title: text("title").notNull(),
   message: text("message").notNull(),
   ticketId: varchar("ticket_id").references(() => tickets.id, { onDelete: "cascade" }),

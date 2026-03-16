@@ -144,12 +144,6 @@ export async function sendSlackTicketAssigned(
   const client = getSlackClient();
   if (!client) return false;
 
-  // Only post in an existing thread — skip if there is no thread ts.
-  if (!threadTs) {
-    console.log(`[Slack] Skipping assignment notification for ${ticket.ticketNumber} — no thread ts`);
-    return false;
-  }
-
   const channel = getChannel(ticket.department);
   if (!channel) return false;
 
@@ -173,6 +167,7 @@ export async function sendSlackTicketAssigned(
       link_names: true,
     };
 
+    // Reply in the existing thread when available; otherwise post to channel
     if (threadTs) payload.thread_ts = threadTs;
 
     await client.chat.postMessage(payload);
@@ -302,12 +297,6 @@ export async function sendSlackTicketResolved(
   const client = getSlackClient();
   if (!client) return false;
 
-  // Only post in an existing thread — skip if there is no thread ts.
-  if (!threadTs) {
-    console.log(`[Slack] Skipping resolved notification for ${ticket.ticketNumber} — no thread ts`);
-    return false;
-  }
-
   const channel = getChannel(ticket.department);
   if (!channel) return false;
 
@@ -338,6 +327,90 @@ export async function sendSlackTicketResolved(
   } catch (error: any) {
     console.error('[Slack] Failed to send ticket resolved notification:', error.message);
     return false;
+  }
+}
+
+/**
+ * Send a department transfer notification.
+ *
+ * Two-part message:
+ *   1. Departure note in the OLD department's thread (if slackMessageTs exists) — so the
+ *      original channel thread shows the ticket was handed off.
+ *   2. Arrival notice in the NEW department's channel as a fresh top-level message — so
+ *      Finance (for example) immediately sees an incoming ticket in their channel.
+ *
+ * Returns the new thread ts from the arrival message so the caller can overwrite
+ * slackMessageTs on the ticket (future replies go to the new channel's thread).
+ */
+export async function sendSlackTicketTransferred(
+  ticket: Ticket,
+  fromDepartment: string,
+  actor: User,
+  oldThreadTs?: string | null
+): Promise<string | null> {
+  const client = getSlackClient();
+  if (!client) return null;
+
+  const actorLabel    = actor.slackUserId ? `<@${actor.slackUserId}>` : actor.name || actor.email;
+  const priorityEmoji = getPriorityEmoji(ticket.priorityTier);
+
+  // ── 1. Departure note in old thread ──────────────────────────────────────
+  if (oldThreadTs) {
+    const oldChannel = getChannel(fromDepartment);
+    if (oldChannel) {
+      try {
+        await client.chat.postMessage({
+          channel:   oldChannel,
+          thread_ts: oldThreadTs,
+          text:      `📤 ${ticket.ticketNumber} transferred to ${ticket.department} by ${actor.name || actor.email}`,
+          blocks: [{
+            type: 'section',
+            text: { type: 'mrkdwn', text: `📤 ${ticket.ticketNumber} transferred to *${ticket.department}* by ${actorLabel}` },
+          }],
+          link_names: true,
+        });
+        console.log(`[Slack] Departure note posted in ${fromDepartment} thread for ${ticket.ticketNumber}`);
+      } catch (err: any) {
+        console.warn(`[Slack] Failed to post departure note: ${err.message}`);
+      }
+    }
+  }
+
+  // ── 2. Arrival notice in new department channel (new top-level message) ──
+  const newChannel = getChannel(ticket.department);
+  if (!newChannel) {
+    console.warn(`[Slack] No channel configured for new department "${ticket.department}" — skipping arrival notice`);
+    return null;
+  }
+
+  try {
+    const result = await client.chat.postMessage({
+      channel: newChannel,
+      text:    `📨 Incoming transfer — ${ticket.ticketNumber}: ${ticket.subject}`,
+      blocks: [
+        {
+          type: 'section',
+          fields: [
+            { type: 'mrkdwn', text: `*Ticket:*\n${ticket.ticketNumber}` },
+            { type: 'mrkdwn', text: `*Priority:*\n${priorityEmoji} ${ticket.priorityTier || 'Normal'}` },
+            { type: 'mrkdwn', text: `*Transferred From:*\n${fromDepartment}` },
+            { type: 'mrkdwn', text: `*Transferred By:*\n${actorLabel}` },
+          ],
+        },
+        {
+          type: 'section',
+          text: { type: 'mrkdwn', text: `*Subject:*\n${ticket.subject || '—'}` },
+        },
+      ],
+      link_names: true,
+    });
+
+    const ts = result.ts as string;
+    console.log(`[Slack] Transfer arrival notice sent: ${ticket.ticketNumber} (${fromDepartment} → ${ticket.department}, new ts: ${ts})`);
+    return ts;
+  } catch (error: any) {
+    console.error('[Slack] Failed to send transfer arrival notice:', error.message);
+    return null;
   }
 }
 
