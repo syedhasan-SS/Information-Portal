@@ -160,6 +160,18 @@ async function sendPendingReportToSlack(channelId: string) {
   return res.json();
 }
 
+async function getResolutionTime(from?: string, to?: string) {
+  const userEmail = localStorage.getItem("userEmail");
+  const params = new URLSearchParams();
+  if (from) params.set("from", from);
+  if (to) params.set("to", to);
+  const res = await fetch(`/api/analytics/resolution-time?${params.toString()}`, {
+    headers: { ...(userEmail ? { "x-user-email": userEmail } : {}) },
+  });
+  if (!res.ok) throw new Error("Failed to fetch resolution time data");
+  return res.json();
+}
+
 async function sendAllDeptReports() {
   const userEmail = localStorage.getItem("userEmail");
   const res = await fetch("/api/reports/send-all-dept-reports", {
@@ -288,6 +300,13 @@ function exportToCSV(tickets: TicketType[]) {
   URL.revokeObjectURL(url);
 }
 
+function formatResolutionHours(hours: number): string {
+  if (hours < 1) return `${Math.round(hours * 60)}m`;
+  if (hours < 24) return `${Math.round(hours * 10) / 10}h`;
+  const days = hours / 8;
+  return `${Math.round(days * 10) / 10}d`;
+}
+
 export default function AnalyticsPage() {
   const [, setLocation] = useLocation();
   const [timeGrouping, setTimeGrouping] = useState<string>("Daily");
@@ -382,6 +401,11 @@ export default function AnalyticsPage() {
       default: return { start: undefined, end: undefined };
     }
   }, [datePreset, customDateStart, customDateEnd]);
+
+  const { data: resolutionTimeData, isLoading: resolutionTimeLoading } = useQuery({
+    queryKey: ["resolution-time", dateRange.start?.toISOString(), dateRange.end?.toISOString()],
+    queryFn: () => getResolutionTime(dateRange.start?.toISOString(), dateRange.end?.toISOString()),
+  });
 
   // Filter tickets
   const filtered = useMemo(() => {
@@ -964,6 +988,58 @@ export default function AnalyticsPage() {
             )}
           </Card>
         </div>
+
+        {/* ── Resolution Time by Department ── */}
+        <Card className="p-6">
+          <div className="mb-4 flex items-center justify-between">
+            <div>
+              <h2 className="text-base font-semibold">Resolution Time by Department</h2>
+              <p className="text-xs text-muted-foreground">Business days only — weekends excluded</p>
+            </div>
+            {resolutionTimeData && (
+              <Badge variant="outline" className="text-xs">{resolutionTimeData.totalTickets} resolved tickets</Badge>
+            )}
+          </div>
+          {resolutionTimeLoading ? (
+            <div className="space-y-3">
+              {[1, 2, 3, 4].map((i) => (
+                <div key={i} className="h-9 animate-pulse rounded-lg bg-muted" />
+              ))}
+            </div>
+          ) : resolutionTimeData?.departments?.length > 0 ? (
+            <div className="space-y-1">
+              <div className="grid grid-cols-4 text-xs font-medium text-muted-foreground mb-2 px-1">
+                <span className="col-span-2">Department</span>
+                <span className="text-center">Avg Resolution</span>
+                <span className="text-center">P90 Resolution</span>
+              </div>
+              {resolutionTimeData.departments.map((d: { name: string; ticketCount: number; avgResolutionHours: number; p90ResolutionHours: number }) => (
+                <div
+                  key={d.name}
+                  className="grid grid-cols-4 items-center gap-2 rounded-lg px-1 py-2 hover:bg-muted/50 transition-colors"
+                >
+                  <div className="col-span-2 flex items-center gap-2">
+                    <span className="truncate text-sm font-medium">{d.name}</span>
+                    <Badge variant="secondary" className="text-[10px] h-4 px-1.5 shrink-0">{d.ticketCount}</Badge>
+                  </div>
+                  <span className="text-center text-sm font-semibold text-blue-600">
+                    {formatResolutionHours(d.avgResolutionHours)}
+                  </span>
+                  <span className="text-center text-sm font-semibold text-amber-600">
+                    {formatResolutionHours(d.p90ResolutionHours)}
+                  </span>
+                </div>
+              ))}
+            </div>
+          ) : (
+            <div className="flex h-40 items-center justify-center text-sm text-muted-foreground">
+              <div className="text-center">
+                <Clock className="mx-auto mb-2 h-8 w-8 text-muted-foreground/40" />
+                No resolved tickets in the selected range
+              </div>
+            </div>
+          )}
+        </Card>
 
         {/* ── Row 4: Issue Type + Agent Table ── */}
         <div className="grid gap-6 lg:grid-cols-2">

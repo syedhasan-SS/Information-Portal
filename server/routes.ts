@@ -69,6 +69,7 @@ import {
 } from "./slack-reporter";
 import { getCachedImage } from "./report-image";
 import { buildPendingReportData, buildPendingReportHtml } from "./report-html-builder";
+import { businessHoursBetween } from "./business-days";
 
 // Permission check helper
 async function checkPermission(req: any, requiredPermission: string): Promise<{ hasPermission: boolean; user?: any; error?: string }> {
@@ -3595,6 +3596,115 @@ export async function registerRoutes(
       res.json(analytics);
     } catch (error: any) {
       console.error("Error fetching analytics:", error);
+      res.status(500).json({ error: error.message });
+    }
+  });
+
+  /**
+   * GET /api/analytics/resolution-time
+   *
+   * Returns per-department resolution time metrics calculated from the
+   * ticket activity log (assignment durations, weekends excluded).
+   *
+   * Query params:
+   *   from  – ISO date string (optional, default: 90 days ago)
+   *   to    – ISO date string (optional, default: now)
+   */
+  app.get("/api/analytics/resolution-time", async (req, res) => {
+    try {
+      const to   = req.query.to   ? new Date(req.query.to as string)   : new Date();
+      const from = req.query.from ? new Date(req.query.from as string) : new Date(to.getTime() - 90 * 24 * 3_600_000);
+
+      // ── 1. Fetch all resolved / closed tickets in range ───────────────────
+      const allTickets = await storage.getTickets();
+      const resolved = allTickets.filter(t =>
+        (t.status === "Solved" || t.status === "Closed") &&
+        t.resolvedAt &&
+        new Date(t.resolvedAt) >= from &&
+        new Date(t.resolvedAt) <= to
+      );
+
+      // dept → array of per-ticket durations (business hours)
+      const deptDurations = new Map<string, number[]>();
+
+      // ── 2. Process each resolved ticket ───────────────────────────────────
+      for (const ticket of resolved) {
+        const resolvedAt = new Date(ticket.resolvedAt!);
+        const activities = await getTicketActivity(ticket.id);
+
+        const assignments = activities
+          .filter((a: any) => a.action === "assigned" || a.action === "reassigned" || a.action === "unassigned")
+          .sort((a: any, b: any) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime());
+
+        if (assignments.length === 0) continue;
+
+        // Per-dept hold time for THIS ticket (sum across multiple spells)
+        const ticketDeptHours = new Map<string, number>();
+
+        for (let i = 0; i < assignments.length; i++) {
+          const ev = assignments[i];
+
+          // Unassigned = nobody holds the ticket → skip
+          if (ev.action === "unassigned") continue;
+
+          const assigneeId = ev.metadata?.newAssigneeId as string | undefined;
+          if (!assigneeId) continue;
+
+          const assignee = await storage.getUserById(assigneeId);
+          if (!assignee) continue;
+
+          const dept      = assignee.department || "Unknown";
+          const startTime = new Date(ev.createdAt);
+
+          // End of this spell = next event's timestamp OR ticket resolvedAt
+          const endTime = i + 1 < assignments.length
+            ? new Date(assignments[i + 1].createdAt)
+            : resolvedAt;
+
+          if (endTime <= startTime) continue;
+
+          const hrs = businessHoursBetween(startTime, endTime);
+
+          ticketDeptHours.set(dept, (ticketDeptHours.get(dept) ?? 0) + hrs);
+        }
+
+        // Push per-ticket dept totals into the aggregate buckets
+        ticketDeptHours.forEach((hrs, dept) => {
+          if (!deptDurations.has(dept)) deptDurations.set(dept, []);
+          deptDurations.get(dept)!.push(hrs);
+        });
+      }
+
+      // ── 3. Compute avg + P90 per department ───────────────────────────────
+      const p90 = (arr: number[]): number => {
+        if (arr.length === 0) return 0;
+        const sorted = [...arr].sort((a, b) => a - b);
+        const idx    = Math.min(Math.ceil(sorted.length * 0.9) - 1, sorted.length - 1);
+        return sorted[Math.max(0, idx)];
+      };
+
+      const departments = Array.from(deptDurations.entries())
+        .map(([name, durations]) => {
+          const avg = durations.reduce((s, h) => s + h, 0) / durations.length;
+          return {
+            name,
+            ticketCount:          durations.length,
+            avgResolutionHours:   Math.round(avg * 10) / 10,
+            p90ResolutionHours:   Math.round(p90(durations) * 10) / 10,
+            // Display as "business days" (÷ 8 for an 8-h working day)
+            avgResolutionDays:    Math.round((avg / 8) * 10) / 10,
+            p90ResolutionDays:    Math.round((p90(durations) / 8) * 10) / 10,
+          };
+        })
+        .sort((a, b) => b.avgResolutionHours - a.avgResolutionHours);
+
+      res.json({
+        from:        from.toISOString(),
+        to:          to.toISOString(),
+        totalTickets: resolved.length,
+        departments,
+      });
+    } catch (error: any) {
       res.status(500).json({ error: error.message });
     }
   });

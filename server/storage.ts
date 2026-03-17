@@ -1,5 +1,6 @@
 import { eq, and, desc, sql, isNull, asc } from "drizzle-orm";
 import { db } from "./db";
+import { addBusinessHours } from "./business-days";
 import {
   vendors,
   categories,
@@ -542,10 +543,10 @@ export class DatabaseStorage implements IStorage {
    * Calculates SLA target timestamp
    */
   private calculateSlaTarget(startTime: Date, hours: number, useBusinessHours: boolean): string {
-    // For now, simple calculation (business hours logic can be added later)
-    const targetTime = new Date(startTime);
-    targetTime.setHours(targetTime.getHours() + hours);
-    return targetTime.toISOString();
+    const target = useBusinessHours
+      ? addBusinessHours(startTime, hours)
+      : new Date(startTime.getTime() + hours * 3_600_000);
+    return target.toISOString();
   }
 
   /**
