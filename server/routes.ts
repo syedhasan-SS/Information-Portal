@@ -26,6 +26,7 @@ import {
   notifyTicketSolved,
   notifyCommentAdded,
   notifyMentions,
+  notifyDepartmentTransfer,
   getCurrentUser,
 } from "./notifications";
 import {
@@ -816,6 +817,16 @@ export async function registerRoutes(
         }
       }
 
+      // Department transfer: sync ownerTeam and clear assignee
+      const isDepartmentTransfer = !!(parsed.data.department && parsed.data.department !== oldTicket.department);
+      if (isDepartmentTransfer) {
+        // Keep ownerTeam in sync with the new department
+        parsed.data.ownerTeam = parsed.data.department;
+        // Clear assignee so the new department team can pick it up
+        (parsed.data as any).assigneeId = null;
+        console.log(`[Transfer] ${oldTicket.ticketNumber}: ${oldTicket.department} → ${parsed.data.department}, assignee cleared`);
+      }
+
       // Auto-stamp resolvedAt when status transitions to Solved
       if (parsed.data.status === 'Solved' && oldTicket.status !== 'Solved') {
         (parsed.data as any).resolvedAt = new Date();
@@ -854,7 +865,7 @@ export async function registerRoutes(
         });
       }
 
-      // Department change
+      // Department change — also sync ownerTeam and clear assignee on transfer
       if (parsed.data.department && parsed.data.department !== oldTicket.department) {
         logDepartmentChange(ticket, oldTicket.department, parsed.data.department, currentUser).catch(err => {
           console.error('Failed to log department change:', err);
@@ -868,9 +879,17 @@ export async function registerRoutes(
         });
       }
 
+      // Department transfer notification (non-blocking, but fires before assignment/solved)
+      if (isDepartmentTransfer) {
+        notifyDepartmentTransfer(ticket, oldTicket.department || '', currentUser).catch(err => {
+          console.error('Failed to send department transfer notification:', err);
+        });
+      }
+
       // Check if ticket was assigned / solved — fire sequentially so Slack
       // receives each as a distinct message rather than batching them together.
-      const wasAssigned = req.body.assigneeId && oldTicket.assigneeId !== req.body.assigneeId;
+      // Note: on a transfer, assigneeId was just cleared so wasAssigned will be false.
+      const wasAssigned = !isDepartmentTransfer && req.body.assigneeId && oldTicket.assigneeId !== req.body.assigneeId;
       const wasSolved   = req.body.status === "Solved" && oldTicket.status !== "Solved";
 
       if (wasAssigned || wasSolved) {

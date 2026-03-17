@@ -7,6 +7,7 @@ import {
   sendSlackCommentMention,
   sendSlackTicketResolved,
   sendSlackUrgentAlert,
+  sendSlackTicketTransferred,
 } from "./slack-web-api";
 
 /**
@@ -327,6 +328,69 @@ export async function notifyMentions(
     }
   } catch (error) {
     console.error("[Notifications] Failed to create mention notifications:", error);
+  }
+}
+
+/**
+ * Notify when a ticket is transferred to a different department.
+ *
+ * In-app:
+ *   - All active members of the NEW department receive a "ticket_transferred" notification.
+ *
+ * Slack:
+ *   - Departure note posted in the OLD department's thread.
+ *   - Fresh arrival notice posted in the NEW department's channel.
+ *   - The new Slack ts replaces slackMessageTs on the ticket so all
+ *     future replies go to the new department's thread.
+ */
+export async function notifyDepartmentTransfer(
+  ticket: Ticket,
+  fromDepartment: string,
+  actor: User | undefined
+) {
+  try {
+    const newDept = ticket.department || ticket.ownerTeam;
+
+    // ── In-app notifications → all active members of the new department ──
+    const newTeamMembers = await storage.getUsersByDepartment(newDept, { isActive: true });
+    const relevantUsers = newTeamMembers.filter(u => u.id !== actor?.id);
+
+    const notificationPromises = relevantUsers.map(user =>
+      storage.createNotification({
+        userId: user.id,
+        type: "ticket_transferred",
+        title: "Ticket Transferred to Your Department",
+        message: `${actor?.name || "Someone"} transferred ticket ${ticket.ticketNumber} from ${fromDepartment} to ${newDept}: ${ticket.subject}`,
+        ticketId: ticket.id,
+        actorId: actor?.id,
+        metadata: {
+          ticketNumber: ticket.ticketNumber,
+          fromDepartment,
+          toDepartment: newDept,
+          transferredBy: actor?.name,
+        },
+        isRead: false,
+      })
+    );
+
+    await Promise.all(notificationPromises);
+    console.log(`[Notifications] Created ${relevantUsers.length} transfer notifications for ${ticket.ticketNumber} (${fromDepartment} → ${newDept})`);
+
+    // ── Slack ──
+    const oldThreadTs = (ticket as any).slackMessageTs as string | null | undefined;
+    if (actor) {
+      const newTs = await sendSlackTicketTransferred(ticket, fromDepartment, actor, oldThreadTs).catch(err => {
+        console.error('[Slack] Failed to send transfer notification:', err);
+        return null;
+      });
+      // Replace slackMessageTs so all future thread replies go to the new channel
+      if (newTs) {
+        await storage.updateTicket(ticket.id, { slackMessageTs: newTs } as any);
+        console.log(`[Slack] Updated slackMessageTs for ${ticket.ticketNumber}: ${newTs}`);
+      }
+    }
+  } catch (error) {
+    console.error("[Notifications] Failed to create department transfer notifications:", error);
   }
 }
 
