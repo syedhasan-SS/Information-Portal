@@ -997,7 +997,14 @@ export default function AnalyticsPage() {
               <p className="text-xs text-muted-foreground">Business days only — weekends excluded</p>
             </div>
             {resolutionTimeData && (
-              <Badge variant="outline" className="text-xs">{resolutionTimeData.totalTickets} resolved tickets</Badge>
+              <div className="flex items-center gap-2">
+                <Badge variant="outline" className="text-xs">
+                  {resolutionTimeData.totalCreated ?? resolutionTimeData.totalTickets} total cases
+                </Badge>
+                <Badge variant="secondary" className="text-xs">
+                  {resolutionTimeData.totalResolved ?? resolutionTimeData.totalTickets} resolved
+                </Badge>
+              </div>
             )}
           </div>
           {resolutionTimeLoading ? (
@@ -1039,6 +1046,34 @@ export default function AnalyticsPage() {
                   </span>
                 </div>
               ))}
+
+              {/* Total row */}
+              {(() => {
+                const depts: { ticketCount: number; avgResolutionHours: number; p90ResolutionHours: number }[] = resolutionTimeData.departments;
+                const totalCount = depts.reduce((s: number, d: { ticketCount: number }) => s + d.ticketCount, 0);
+                const weightedAvg = totalCount > 0
+                  ? depts.reduce((s: number, d: { ticketCount: number; avgResolutionHours: number }) => s + d.avgResolutionHours * d.ticketCount, 0) / totalCount
+                  : 0;
+                const weightedP90 = totalCount > 0
+                  ? depts.reduce((s: number, d: { ticketCount: number; p90ResolutionHours: number }) => s + d.p90ResolutionHours * d.ticketCount, 0) / totalCount
+                  : 0;
+                return (
+                  <div className="grid grid-cols-4 items-center gap-2 rounded-lg px-1 py-2 mt-1 border-t border-border">
+                    <div className="col-span-2 flex items-center gap-2">
+                      <span className="text-sm font-semibold text-foreground">Total</span>
+                      <Badge variant="outline" className="text-[10px] h-4 px-1.5 shrink-0 font-bold">
+                        {totalCount}
+                      </Badge>
+                    </div>
+                    <span className="text-center text-sm font-semibold text-blue-600">
+                      {formatResolutionHours(Math.round(weightedAvg * 10) / 10)}
+                    </span>
+                    <span className="text-center text-sm font-semibold text-amber-600">
+                      {formatResolutionHours(Math.round(weightedP90 * 10) / 10)}
+                    </span>
+                  </div>
+                );
+              })()}
             </div>
           ) : (
             <div className="flex h-40 items-center justify-center text-sm text-muted-foreground">

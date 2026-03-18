@@ -3642,8 +3642,17 @@ export async function registerRoutes(
       const to   = req.query.to   ? new Date(req.query.to as string)   : new Date();
       const from = req.query.from ? new Date(req.query.from as string) : new Date(to.getTime() - 90 * 24 * 3_600_000);
 
-      // ── 1. Fetch all resolved / closed tickets in range ───────────────────
+      // ── 1. Fetch tickets in range ─────────────────────────────────────────
       const allTickets = await storage.getTickets();
+
+      // Total created in range (what the user sees as the "case count")
+      const createdInRange = allTickets.filter(t =>
+        t.createdAt &&
+        new Date(t.createdAt) >= from &&
+        new Date(t.createdAt) <= to
+      );
+
+      // Resolved/closed tickets (used for resolution-time calculations)
       const resolved = allTickets.filter(t =>
         (t.status === "Solved" || t.status === "Closed") &&
         t.resolvedAt &&
@@ -3747,9 +3756,10 @@ export async function registerRoutes(
         .sort((a, b) => b.avgResolutionHours - a.avgResolutionHours);
 
       res.json({
-        from:         from.toISOString(),
-        to:           to.toISOString(),
-        totalTickets: resolved.length,
+        from:           from.toISOString(),
+        to:             to.toISOString(),
+        totalCreated:   createdInRange.length,   // tickets created in range (primary count)
+        totalResolved:  resolved.length,          // tickets resolved in range (for reference)
         departments,
       });
     } catch (error: any) {
