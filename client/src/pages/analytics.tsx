@@ -1010,17 +1010,26 @@ export default function AnalyticsPage() {
             <div className="space-y-1">
               <div className="grid grid-cols-4 text-xs font-medium text-muted-foreground mb-2 px-1">
                 <span className="col-span-2">Department</span>
-                <span className="text-center">Avg Resolution</span>
-                <span className="text-center">P90 Resolution</span>
+                <span className="text-center">Avg</span>
+                <span className="text-center">P90</span>
               </div>
-              {resolutionTimeData.departments.map((d: { name: string; ticketCount: number; avgResolutionHours: number; p90ResolutionHours: number }) => (
+              {resolutionTimeData.departments.map((d: { name: string; metricLabel?: string; ticketCount: number; avgResolutionHours: number; p90ResolutionHours: number }) => (
                 <div
                   key={d.name}
                   className="grid grid-cols-4 items-center gap-2 rounded-lg px-1 py-2 hover:bg-muted/50 transition-colors"
                 >
                   <div className="col-span-2 flex items-center gap-2">
                     <span className="truncate text-sm font-medium">{d.name}</span>
-                    <Badge variant="secondary" className="text-[10px] h-4 px-1.5 shrink-0">{d.ticketCount}</Badge>
+                    <Badge
+                      variant="secondary"
+                      className="text-[10px] h-4 px-1.5 shrink-0"
+                      title={`${d.ticketCount} tickets · ${d.metricLabel ?? (d.name === "CX" ? "Resolution Time" : "Hold Time")}`}
+                    >
+                      {d.ticketCount}
+                    </Badge>
+                    {d.name !== "CX" && (
+                      <span className="hidden sm:inline text-[10px] text-muted-foreground italic">hold</span>
+                    )}
                   </div>
                   <span className="text-center text-sm font-semibold text-blue-600">
                     {formatResolutionHours(d.avgResolutionHours)}

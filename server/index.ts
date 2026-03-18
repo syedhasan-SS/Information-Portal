@@ -61,6 +61,28 @@ async function ensureDefaultDepartments() {
   }
 }
 
+// Migrate all existing SLA configs to use business hours (exclude weekends)
+async function ensureBusinessHoursSla() {
+  try {
+    const { db } = await import("./db");
+    const { slaConfigurations } = await import("@shared/schema");
+    const { eq } = await import("drizzle-orm");
+
+    // Flip every config that still has useBusinessHours = false
+    const result = await db
+      .update(slaConfigurations)
+      .set({ useBusinessHours: true, updatedAt: new Date() })
+      .where(eq(slaConfigurations.useBusinessHours, false))
+      .returning({ id: slaConfigurations.id });
+
+    if (result.length > 0) {
+      log(`Enabled business-hours SLA on ${result.length} config(s) — weekends now excluded`, "startup");
+    }
+  } catch (error) {
+    console.error("Failed to migrate SLA configs to business hours:", error);
+  }
+}
+
 // Fix department types for vendorHandle and customer fields on startup
 async function fixFieldDepartmentTypes() {
   try {
@@ -135,6 +157,9 @@ app.use((req, res, next) => {
 
   // Ensure all default departments exist (creates any missing ones, e.g. Marketplace, Supply)
   await ensureDefaultDepartments();
+
+  // Migrate SLA configs to exclude weekends from SLA calculations
+  await ensureBusinessHoursSla();
 
   // Fix field department types on startup
   await fixFieldDepartmentTypes();

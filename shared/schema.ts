@@ -371,7 +371,7 @@ export const slaConfigurations = pgTable("sla_configurations", {
   l4CategoryId: varchar("l4_category_id").references(() => categoryHierarchy.id, { onDelete: "cascade" }),
   responseTimeHours: integer("response_time_hours"),
   resolutionTimeHours: integer("resolution_time_hours").notNull(),
-  useBusinessHours: boolean("use_business_hours").notNull().default(false),
+  useBusinessHours: boolean("use_business_hours").notNull().default(true),
   isActive: boolean("is_active").notNull().default(true),
   createdAt: timestamp("created_at").notNull().defaultNow(),
   updatedAt: timestamp("updated_at").notNull().defaultNow(),
