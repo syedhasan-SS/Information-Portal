@@ -1015,33 +1015,30 @@ export default function AnalyticsPage() {
             </div>
           ) : resolutionTimeData?.departments?.length > 0 ? (
             <div className="space-y-1">
-              <div className="grid grid-cols-4 text-xs font-medium text-muted-foreground mb-2 px-1">
-                <span className="col-span-2">Department</span>
+              {/* Header: Department | Cases | Avg | P90 */}
+              <div className="grid grid-cols-[1fr_64px_80px_80px] text-xs font-medium text-muted-foreground mb-2 px-1">
+                <span>Department</span>
+                <span className="text-center">Cases</span>
                 <span className="text-center">Avg</span>
                 <span className="text-center">P90</span>
               </div>
+
               {resolutionTimeData.departments.map((d: { name: string; metricLabel?: string; ticketCount: number; avgResolutionHours: number; p90ResolutionHours: number }) => (
                 <div
                   key={d.name}
-                  className="grid grid-cols-4 items-center gap-2 rounded-lg px-1 py-2 hover:bg-muted/50 transition-colors"
+                  className="grid grid-cols-[1fr_64px_80px_80px] items-center gap-2 rounded-lg px-1 py-2 hover:bg-muted/50 transition-colors"
                 >
-                  <div className="col-span-2 flex items-center gap-2">
+                  <div className="flex items-center gap-1.5 min-w-0">
                     <span className="truncate text-sm font-medium">{d.name}</span>
-                    <Badge
-                      variant="secondary"
-                      className="text-[10px] h-4 px-1.5 shrink-0"
-                      title={`${d.ticketCount} tickets · ${d.metricLabel ?? (d.name === "CX" ? "Resolution Time" : "Hold Time")}`}
-                    >
-                      {d.ticketCount}
-                    </Badge>
                     {d.name !== "CX" && (
-                      <span className="hidden sm:inline text-[10px] text-muted-foreground italic">hold</span>
+                      <span className="hidden sm:inline text-[10px] text-muted-foreground italic shrink-0">hold</span>
                     )}
                   </div>
-                  <span className="text-center text-sm font-semibold text-blue-600">
+                  <span className="text-center text-sm font-semibold tabular-nums">{d.ticketCount}</span>
+                  <span className="text-center text-sm font-semibold text-blue-600 tabular-nums">
                     {formatResolutionHours(d.avgResolutionHours)}
                   </span>
-                  <span className="text-center text-sm font-semibold text-amber-600">
+                  <span className="text-center text-sm font-semibold text-amber-600 tabular-nums">
                     {formatResolutionHours(d.p90ResolutionHours)}
                   </span>
                 </div>
@@ -1058,17 +1055,13 @@ export default function AnalyticsPage() {
                   ? depts.reduce((s: number, d: { ticketCount: number; p90ResolutionHours: number }) => s + d.p90ResolutionHours * d.ticketCount, 0) / totalCount
                   : 0;
                 return (
-                  <div className="grid grid-cols-4 items-center gap-2 rounded-lg px-1 py-2 mt-1 border-t border-border">
-                    <div className="col-span-2 flex items-center gap-2">
-                      <span className="text-sm font-semibold text-foreground">Total</span>
-                      <Badge variant="outline" className="text-[10px] h-4 px-1.5 shrink-0 font-bold">
-                        {totalCount}
-                      </Badge>
-                    </div>
-                    <span className="text-center text-sm font-semibold text-blue-600">
+                  <div className="grid grid-cols-[1fr_64px_80px_80px] items-center gap-2 px-1 py-2 mt-1 border-t border-border">
+                    <span className="text-sm font-bold">Total</span>
+                    <span className="text-center text-sm font-bold tabular-nums">{totalCount}</span>
+                    <span className="text-center text-sm font-bold text-blue-600 tabular-nums">
                       {formatResolutionHours(Math.round(weightedAvg * 10) / 10)}
                     </span>
-                    <span className="text-center text-sm font-semibold text-amber-600">
+                    <span className="text-center text-sm font-bold text-amber-600 tabular-nums">
                       {formatResolutionHours(Math.round(weightedP90 * 10) / 10)}
                     </span>
                   </div>
