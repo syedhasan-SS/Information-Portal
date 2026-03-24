@@ -1014,60 +1014,99 @@ export default function AnalyticsPage() {
               ))}
             </div>
           ) : resolutionTimeData?.departments?.length > 0 ? (
-            <div className="space-y-1">
-              {/* Header: Department | Cases | Avg | P90 */}
-              <div className="grid grid-cols-[1fr_64px_80px_80px] text-xs font-medium text-muted-foreground mb-2 px-1">
-                <span>Department</span>
-                <span className="text-center">Cases</span>
-                <span className="text-center">Avg</span>
-                <span className="text-center">P90</span>
-              </div>
+            {(() => {
+                type DeptRow = { name: string; subDepartment: string | null; metricLabel?: string; ticketCount: number; avgResolutionHours: number; p90ResolutionHours: number };
+                const rows: DeptRow[] = resolutionTimeData.departments;
 
-              {resolutionTimeData.departments.map((d: { name: string; metricLabel?: string; ticketCount: number; avgResolutionHours: number; p90ResolutionHours: number }) => (
-                <div
-                  key={d.name}
-                  className="grid grid-cols-[1fr_64px_80px_80px] items-center gap-2 rounded-lg px-1 py-2 hover:bg-muted/50 transition-colors"
-                >
-                  <div className="flex items-center gap-1.5 min-w-0">
-                    <span className="truncate text-sm font-medium">{d.name}</span>
-                    {d.name !== "CX" && (
-                      <span className="hidden sm:inline text-[10px] text-muted-foreground italic shrink-0">hold</span>
-                    )}
-                  </div>
-                  <span className="text-center text-sm font-semibold tabular-nums">{d.ticketCount}</span>
-                  <span className="text-center text-sm font-semibold text-blue-600 tabular-nums">
-                    {formatResolutionHours(d.avgResolutionHours)}
-                  </span>
-                  <span className="text-center text-sm font-semibold text-amber-600 tabular-nums">
-                    {formatResolutionHours(d.p90ResolutionHours)}
-                  </span>
-                </div>
-              ))}
+                // Group rows by department name for rendering
+                const grouped = rows.reduce((acc: Record<string, DeptRow[]>, d) => {
+                  if (!acc[d.name]) acc[d.name] = [];
+                  acc[d.name].push(d);
+                  return acc;
+                }, {});
 
-              {/* Total row */}
-              {(() => {
-                const depts: { ticketCount: number; avgResolutionHours: number; p90ResolutionHours: number }[] = resolutionTimeData.departments;
-                const totalCount = depts.reduce((s: number, d: { ticketCount: number }) => s + d.ticketCount, 0);
-                const weightedAvg = totalCount > 0
-                  ? depts.reduce((s: number, d: { ticketCount: number; avgResolutionHours: number }) => s + d.avgResolutionHours * d.ticketCount, 0) / totalCount
-                  : 0;
-                const weightedP90 = totalCount > 0
-                  ? depts.reduce((s: number, d: { ticketCount: number; p90ResolutionHours: number }) => s + d.p90ResolutionHours * d.ticketCount, 0) / totalCount
-                  : 0;
+                // Dept-level totals for the weighted total row
+                const totalCount  = rows.reduce((s, d) => s + d.ticketCount, 0);
+                const weightedAvg = totalCount > 0 ? rows.reduce((s, d) => s + d.avgResolutionHours * d.ticketCount, 0) / totalCount : 0;
+                const weightedP90 = totalCount > 0 ? rows.reduce((s, d) => s + d.p90ResolutionHours * d.ticketCount, 0) / totalCount : 0;
+
+                const isCX = (name: string) => name === "CX";
+
                 return (
-                  <div className="grid grid-cols-[1fr_64px_80px_80px] items-center gap-2 px-1 py-2 mt-1 border-t border-border">
-                    <span className="text-sm font-bold">Total</span>
-                    <span className="text-center text-sm font-bold tabular-nums">{totalCount}</span>
-                    <span className="text-center text-sm font-bold text-blue-600 tabular-nums">
-                      {formatResolutionHours(Math.round(weightedAvg * 10) / 10)}
-                    </span>
-                    <span className="text-center text-sm font-bold text-amber-600 tabular-nums">
-                      {formatResolutionHours(Math.round(weightedP90 * 10) / 10)}
-                    </span>
+                  <div className="space-y-1">
+                    {/* Header */}
+                    <div className="grid grid-cols-[1fr_64px_80px_80px] text-xs font-medium text-muted-foreground mb-2 px-1">
+                      <span>Department / Sub-dept</span>
+                      <span className="text-center">Cases</span>
+                      <span className="text-center">Avg</span>
+                      <span className="text-center">P90</span>
+                    </div>
+
+                    {Object.entries(grouped).map(([deptName, deptRows]) => {
+                      const hasSubDepts = deptRows.some(r => r.subDepartment);
+                      // Dept-level aggregated row
+                      const deptTotal  = deptRows.reduce((s, r) => s + r.ticketCount, 0);
+                      const deptAvg    = deptTotal > 0 ? deptRows.reduce((s, r) => s + r.avgResolutionHours * r.ticketCount, 0) / deptTotal : 0;
+                      const deptP90    = deptTotal > 0 ? deptRows.reduce((s, r) => s + r.p90ResolutionHours * r.ticketCount, 0) / deptTotal : 0;
+
+                      return (
+                        <div key={deptName}>
+                          {/* Department header row */}
+                          <div className="grid grid-cols-[1fr_64px_80px_80px] items-center gap-2 rounded-lg px-1 py-2 hover:bg-muted/50 transition-colors">
+                            <div className="flex items-center gap-1.5 min-w-0">
+                              <span className="truncate text-sm font-semibold">{deptName}</span>
+                              {!isCX(deptName) && (
+                                <span className="hidden sm:inline text-[10px] text-muted-foreground italic shrink-0">hold</span>
+                              )}
+                            </div>
+                            <span className="text-center text-sm font-semibold tabular-nums">{deptTotal}</span>
+                            <span className="text-center text-sm font-semibold text-blue-600 tabular-nums">
+                              {formatResolutionHours(Math.round(deptAvg * 10) / 10)}
+                            </span>
+                            <span className="text-center text-sm font-semibold text-amber-600 tabular-nums">
+                              {formatResolutionHours(Math.round(deptP90 * 10) / 10)}
+                            </span>
+                          </div>
+
+                          {/* Sub-department rows (indented) */}
+                          {hasSubDepts && deptRows
+                            .filter(r => r.subDepartment)
+                            .map(r => (
+                              <div
+                                key={`${r.name}|${r.subDepartment}`}
+                                className="grid grid-cols-[1fr_64px_80px_80px] items-center gap-2 rounded-lg pl-5 pr-1 py-1.5 hover:bg-muted/40 transition-colors"
+                              >
+                                <div className="flex items-center gap-1.5 min-w-0">
+                                  <span className="text-muted-foreground text-xs mr-0.5">└</span>
+                                  <span className="truncate text-xs text-muted-foreground font-medium">{r.subDepartment}</span>
+                                </div>
+                                <span className="text-center text-xs tabular-nums text-muted-foreground">{r.ticketCount}</span>
+                                <span className="text-center text-xs tabular-nums text-blue-500">
+                                  {formatResolutionHours(r.avgResolutionHours)}
+                                </span>
+                                <span className="text-center text-xs tabular-nums text-amber-500">
+                                  {formatResolutionHours(r.p90ResolutionHours)}
+                                </span>
+                              </div>
+                            ))}
+                        </div>
+                      );
+                    })}
+
+                    {/* Total row */}
+                    <div className="grid grid-cols-[1fr_64px_80px_80px] items-center gap-2 px-1 py-2 mt-1 border-t border-border">
+                      <span className="text-sm font-bold">Total</span>
+                      <span className="text-center text-sm font-bold tabular-nums">{totalCount}</span>
+                      <span className="text-center text-sm font-bold text-blue-600 tabular-nums">
+                        {formatResolutionHours(Math.round(weightedAvg * 10) / 10)}
+                      </span>
+                      <span className="text-center text-sm font-bold text-amber-600 tabular-nums">
+                        {formatResolutionHours(Math.round(weightedP90 * 10) / 10)}
+                      </span>
+                    </div>
                   </div>
                 );
               })()}
-            </div>
           ) : (
             <div className="flex h-40 items-center justify-center text-sm text-muted-foreground">
               <div className="text-center">

@@ -3661,13 +3661,15 @@ export async function registerRoutes(
         new Date(t.resolvedAt) <= to
       );
 
-      // dept → array of per-ticket durations (business hours)
+      // Grouping key: "dept|subDept" — subDept may be empty string for no sub-dept
+      // e.g. "CX|Seller Support", "CX|Customer Support", "Operations|", "Finance|Payments"
       const deptDurations = new Map<string, number[]>();
 
-      const addDuration = (dept: string, hrs: number) => {
+      const addDuration = (dept: string, subDept: string, hrs: number) => {
         if (hrs <= 0) return;
-        if (!deptDurations.has(dept)) deptDurations.set(dept, []);
-        deptDurations.get(dept)!.push(hrs);
+        const key = `${dept}|${subDept}`;
+        if (!deptDurations.has(key)) deptDurations.set(key, []);
+        deptDurations.get(key)!.push(hrs);
       };
 
       // ── 2. Process each resolved ticket ───────────────────────────────────
@@ -3676,15 +3678,19 @@ export async function registerRoutes(
         const createdAt  = new Date(ticket.createdAt!);
         const ticketDept = ticket.ownerTeam || ticket.department || "";
 
-        // ── CX: full creation → resolution span ─────────────────────────────
+        // ── CX: full creation → resolution span, split by sub-department ─────
+        // Sub-dept is derived from the ticket's category departmentType snapshot
         if (ticketDept === "CX") {
+          const snap = (ticket as any).categorySnapshot as any;
+          const rawType = snap?.departmentType as string | undefined;
+          // "All" or missing → not sub-dept-specific, group as general CX
+          const subDept = (rawType && rawType !== "All") ? rawType : "";
           const hrs = businessHoursBetween(createdAt, resolvedAt);
-          addDuration("CX", hrs);
-          // Still fall through to activity log so non-CX hold times on this
-          // ticket (e.g. it passed through Operations first) are captured too.
+          addDuration("CX", subDept, hrs);
+          // Fall through so non-CX hold times on this ticket are captured too.
         }
 
-        // ── Non-CX: sum of assignment spells per department ──────────────────
+        // ── Non-CX: sum of assignment spells per dept + sub-dept ─────────────
         const activities = await getTicketActivity(ticket.id);
 
         const assignments = activities
@@ -3693,14 +3699,12 @@ export async function registerRoutes(
 
         if (assignments.length === 0) continue;
 
-        // Accumulate hold time per non-CX dept for THIS ticket
-        // (multiple spells to the same dept are summed before being pushed)
+        // Accumulate hold time per (dept, subDept) pair for THIS ticket
         const ticketDeptHours = new Map<string, number>();
 
         for (let i = 0; i < assignments.length; i++) {
           const ev = assignments[i];
 
-          // Unassigned = gap with nobody holding the ticket → skip
           if (ev.action === "unassigned") continue;
 
           const assigneeId = ev.metadata?.newAssigneeId as string | undefined;
@@ -3709,29 +3713,31 @@ export async function registerRoutes(
           const assignee = await storage.getUserById(assigneeId);
           if (!assignee) continue;
 
-          const dept = assignee.department || "Unknown";
+          const dept    = assignee.department || "Unknown";
+          const subDept = (assignee as any).subDepartment as string | undefined ?? "";
 
           // CX hold-time is measured differently (creation→resolution above)
           if (dept === "CX") continue;
 
           const startTime = new Date(ev.createdAt);
-
-          // End of this spell = next event's timestamp OR ticket resolvedAt
-          const endTime = i + 1 < assignments.length
+          const endTime   = i + 1 < assignments.length
             ? new Date(assignments[i + 1].createdAt)
             : resolvedAt;
 
           if (endTime <= startTime) continue;
 
           const hrs = businessHoursBetween(startTime, endTime);
-          ticketDeptHours.set(dept, (ticketDeptHours.get(dept) ?? 0) + hrs);
+          const key  = `${dept}|${subDept}`;
+          ticketDeptHours.set(key, (ticketDeptHours.get(key) ?? 0) + hrs);
         }
 
-        // Push each dept's aggregated hold time as one data point
-        ticketDeptHours.forEach((hrs, dept) => addDuration(dept, hrs));
+        ticketDeptHours.forEach((hrs, key) => {
+          const [dept, subDept] = key.split("|");
+          addDuration(dept, subDept, hrs);
+        });
       }
 
-      // ── 3. Compute avg + P90 per department ───────────────────────────────
+      // ── 3. Compute avg + P90 per (dept, subDept) ──────────────────────────
       const p90 = (arr: number[]): number => {
         if (arr.length === 0) return 0;
         const sorted = [...arr].sort((a, b) => a - b);
@@ -3740,20 +3746,28 @@ export async function registerRoutes(
       };
 
       const departments = Array.from(deptDurations.entries())
-        .map(([name, durations]) => {
+        .map(([key, durations]) => {
+          const [name, subDepartment] = key.split("|");
           const avg = durations.reduce((s, h) => s + h, 0) / durations.length;
           return {
             name,
-            // For CX: "resolution time"; for others: "hold time"
-            metricLabel:          name === "CX" ? "Resolution Time" : "Hold Time",
-            ticketCount:          durations.length,
-            avgResolutionHours:   Math.round(avg * 10) / 10,
-            p90ResolutionHours:   Math.round(p90(durations) * 10) / 10,
-            avgResolutionDays:    Math.round((avg / 8) * 10) / 10,
-            p90ResolutionDays:    Math.round((p90(durations) / 8) * 10) / 10,
+            subDepartment: subDepartment || null,
+            metricLabel:        name === "CX" ? "Resolution Time" : "Hold Time",
+            ticketCount:        durations.length,
+            avgResolutionHours: Math.round(avg * 10) / 10,
+            p90ResolutionHours: Math.round(p90(durations) * 10) / 10,
+            avgResolutionDays:  Math.round((avg / 8) * 10) / 10,
+            p90ResolutionDays:  Math.round((p90(durations) / 8) * 10) / 10,
           };
         })
-        .sort((a, b) => b.avgResolutionHours - a.avgResolutionHours);
+        // Sort: CX first, then alphabetically; within same dept, sub-depts follow parent
+        .sort((a, b) => {
+          if (a.name !== b.name) return a.name === "CX" ? -1 : b.name === "CX" ? 1 : a.name.localeCompare(b.name);
+          // Same dept: no-subDept row first, then sub-depts alphabetically
+          if (!a.subDepartment && b.subDepartment) return -1;
+          if (a.subDepartment && !b.subDepartment) return 1;
+          return (a.subDepartment ?? "").localeCompare(b.subDepartment ?? "");
+        });
 
       res.json({
         from:           from.toISOString(),
