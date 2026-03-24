@@ -1014,7 +1014,7 @@ export default function AnalyticsPage() {
               ))}
             </div>
           ) : resolutionTimeData?.departments?.length > 0 ? (
-            {(() => {
+            <>{(() => {
                 type DeptRow = { name: string; subDepartment: string | null; metricLabel?: string; ticketCount: number; avgResolutionHours: number; p90ResolutionHours: number };
                 const rows: DeptRow[] = resolutionTimeData.departments;
 
@@ -1106,7 +1106,7 @@ export default function AnalyticsPage() {
                     </div>
                   </div>
                 );
-              })()}
+              })()}</>
           ) : (
             <div className="flex h-40 items-center justify-center text-sm text-muted-foreground">
               <div className="text-center">
