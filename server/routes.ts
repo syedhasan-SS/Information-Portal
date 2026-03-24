@@ -3679,8 +3679,8 @@ export async function registerRoutes(
         const ticketDept = ticket.ownerTeam || ticket.department || "";
 
         // ── CX: full creation → resolution span, split by sub-department ─────
-        // Sub-dept is derived from the ticket's category departmentType snapshot
-        if (ticketDept === "CX") {
+        // Check both ownerTeam and department so older tickets aren't missed
+        if (ticketDept === "CX" || ticket.department === "CX") {
           const snap = (ticket as any).categorySnapshot as any;
           const rawType = snap?.departmentType as string | undefined;
           // "All" or missing → not sub-dept-specific, group as general CX
@@ -3690,44 +3690,67 @@ export async function registerRoutes(
           // Fall through so non-CX hold times on this ticket are captured too.
         }
 
-        // ── Non-CX: sum of assignment spells per dept + sub-dept ─────────────
+        // ── Non-CX: build dept timeline from department_changed events ───────
+        // This captures ALL queue time in each department regardless of whether
+        // the ticket was ever assigned to a specific person.
         const activities = await getTicketActivity(ticket.id);
 
-        const assignments = activities
-          .filter((a: any) => a.action === "assigned" || a.action === "reassigned" || a.action === "unassigned")
+        const deptChanges = activities
+          .filter((a: any) => a.action === "department_changed")
           .sort((a: any, b: any) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime());
 
-        if (assignments.length === 0) continue;
+        // Build spans: [{dept, start, end}]
+        // Span 0 starts at ticket creation in the original dept
+        interface DeptSpan { dept: string; start: Date; end: Date }
+        const spans: DeptSpan[] = [];
 
-        // Accumulate hold time per (dept, subDept) pair for THIS ticket
+        // First span: ticket created in its original ownerTeam
+        let spanDept  = ticket.ownerTeam || ticket.department || "Unknown";
+        let spanStart = createdAt;
+
+        for (const ev of deptChanges) {
+          const spanEnd = new Date(ev.createdAt);
+          if (spanEnd > spanStart) {
+            spans.push({ dept: spanDept, start: spanStart, end: spanEnd });
+          }
+          // New dept starts from this event
+          spanDept  = (ev as any).newValue as string || spanDept;
+          spanStart = spanEnd;
+        }
+        // Final span ends at resolution
+        if (resolvedAt > spanStart) {
+          spans.push({ dept: spanDept, start: spanStart, end: resolvedAt });
+        }
+
+        // Accumulate hold time per non-CX dept for THIS ticket.
+        // Sub-dept for non-CX spans: look up the assignee at that point in time
+        // (last assignment event before or during the span) for sub-dept label;
+        // fall back to empty string if no assignment found.
+        const assignmentEvents = activities
+          .filter((a: any) => a.action === "assigned" || a.action === "reassigned")
+          .sort((a: any, b: any) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime());
+
         const ticketDeptHours = new Map<string, number>();
 
-        for (let i = 0; i < assignments.length; i++) {
-          const ev = assignments[i];
+        for (const span of spans) {
+          if (span.dept === "CX") continue; // CX measured differently above
 
-          if (ev.action === "unassigned") continue;
+          // Find the active assignee's sub-dept at the start of this span
+          let subDept = "";
+          for (const aev of assignmentEvents) {
+            if (new Date(aev.createdAt) <= span.start) {
+              const aId = (aev as any).metadata?.newAssigneeId as string | undefined;
+              if (aId) {
+                const assignee = await storage.getUserById(aId);
+                if (assignee?.department === span.dept) {
+                  subDept = (assignee as any).subDepartment as string ?? "";
+                }
+              }
+            } else break;
+          }
 
-          const assigneeId = ev.metadata?.newAssigneeId as string | undefined;
-          if (!assigneeId) continue;
-
-          const assignee = await storage.getUserById(assigneeId);
-          if (!assignee) continue;
-
-          const dept    = assignee.department || "Unknown";
-          const subDept = (assignee as any).subDepartment as string | undefined ?? "";
-
-          // CX hold-time is measured differently (creation→resolution above)
-          if (dept === "CX") continue;
-
-          const startTime = new Date(ev.createdAt);
-          const endTime   = i + 1 < assignments.length
-            ? new Date(assignments[i + 1].createdAt)
-            : resolvedAt;
-
-          if (endTime <= startTime) continue;
-
-          const hrs = businessHoursBetween(startTime, endTime);
-          const key  = `${dept}|${subDept}`;
+          const hrs = businessHoursBetween(span.start, span.end);
+          const key  = `${span.dept}|${subDept}`;
           ticketDeptHours.set(key, (ticketDeptHours.get(key) ?? 0) + hrs);
         }
 
