@@ -312,7 +312,7 @@ function formatResolutionHours(hours: number): string {
 type ResolutionRow = {
   name: string;
   subDepartment: string | null;
-  isCX: boolean;
+  isSupport: boolean;
   ticketCount: number;
   avgResolutionHours: number;
   p90ResolutionHours: number;
@@ -320,20 +320,14 @@ type ResolutionRow = {
 
 type GroupedDept = {
   name: string;
-  isCX: boolean;
+  isSupport: boolean;
   ticketCount: number;
   avgHours: number;
   p90Hours: number;
   subRows: ResolutionRow[];
 };
 
-function ResolutionTimeCard({
-  data,
-  isLoading,
-}: {
-  data: any;
-  isLoading: boolean;
-}) {
+function ResolutionTimeCard({ data, isLoading }: { data: any; isLoading: boolean }) {
   const grouped = useMemo<GroupedDept[]>(() => {
     if (!data?.departments?.length) return [];
 
@@ -342,25 +336,22 @@ function ResolutionTimeCard({
 
     for (const r of rows) {
       if (!map.has(r.name)) {
-        map.set(r.name, { name: r.name, isCX: r.isCX, ticketCount: 0, avgHours: 0, p90Hours: 0, subRows: [] });
+        map.set(r.name, { name: r.name, isSupport: r.isSupport, ticketCount: 0, avgHours: 0, p90Hours: 0, subRows: [] });
       }
       const g = map.get(r.name)!;
-      if (r.subDepartment) {
-        g.subRows.push(r);
-      }
+      if (r.subDepartment) g.subRows.push(r);
       g.ticketCount += r.ticketCount;
     }
 
-    // Compute dept-level weighted avg + p90 from sub-rows (or direct row if no sub-rows)
     map.forEach((g, name) => {
-      const relevant = g.subRows.length > 0 ? g.subRows : rows.filter(r => r.name === name);
-      const total    = relevant.reduce((s, r) => s + r.ticketCount, 0);
-      g.avgHours = total > 0 ? relevant.reduce((s, r) => s + r.avgResolutionHours * r.ticketCount, 0) / total : 0;
-      g.p90Hours = total > 0 ? relevant.reduce((s, r) => s + r.p90ResolutionHours * r.ticketCount, 0) / total : 0;
+      const src   = g.subRows.length > 0 ? g.subRows : rows.filter(r => r.name === name);
+      const total = src.reduce((s, r) => s + r.ticketCount, 0);
+      g.avgHours  = total > 0 ? src.reduce((s, r) => s + r.avgResolutionHours * r.ticketCount, 0) / total : 0;
+      g.p90Hours  = total > 0 ? src.reduce((s, r) => s + r.p90ResolutionHours * r.ticketCount, 0) / total : 0;
     });
 
     return Array.from(map.values()).sort((a, b) =>
-      a.name === "CX" ? -1 : b.name === "CX" ? 1 : a.name.localeCompare(b.name)
+      a.name === "Support" ? -1 : b.name === "Support" ? 1 : a.name.localeCompare(b.name)
     );
   }, [data]);
 
@@ -375,27 +366,23 @@ function ResolutionTimeCard({
 
   return (
     <Card className="p-6">
-      {/* Header */}
       <div className="mb-5 flex items-start justify-between gap-4">
         <div>
           <h2 className="text-base font-semibold">Resolution Time by Department</h2>
-          <p className="mt-0.5 text-xs text-muted-foreground">
-            Business days only — weekends excluded
-          </p>
+          <p className="mt-0.5 text-xs text-muted-foreground">Business days only — weekends excluded</p>
         </div>
         {data && (
           <div className="flex shrink-0 items-center gap-2">
             <Badge variant="outline" className="text-xs">{data.totalCreated ?? 0} total</Badge>
-            <Badge variant="secondary" className="text-xs">{data.totalResolved ?? 0} resolved</Badge>
+            {/* totalSolved matches the Solved KPI card — consistent across the page */}
+            <Badge variant="secondary" className="text-xs">{data.totalSolved ?? data.totalResolved ?? 0} resolved</Badge>
           </div>
         )}
       </div>
 
       {isLoading ? (
         <div className="space-y-3">
-          {[1, 2, 3, 4].map(i => (
-            <div key={i} className="h-10 animate-pulse rounded-lg bg-muted" />
-          ))}
+          {[1, 2, 3, 4].map(i => <div key={i} className="h-10 animate-pulse rounded-lg bg-muted" />)}
         </div>
       ) : grouped.length === 0 ? (
         <div className="flex h-40 flex-col items-center justify-center gap-2 text-sm text-muted-foreground">
@@ -404,7 +391,6 @@ function ResolutionTimeCard({
         </div>
       ) : (
         <div>
-          {/* Column headers */}
           <div className={`${col} mb-1 border-b border-border pb-2 text-xs font-medium text-muted-foreground`}>
             <span className="px-2">Department</span>
             <span className="text-center">Cases</span>
@@ -412,14 +398,15 @@ function ResolutionTimeCard({
             <span className="text-center">P90</span>
           </div>
 
-          {/* Department rows */}
           {grouped.map(g => (
             <div key={g.name}>
-              {/* Parent dept row */}
               <div className={`${col} items-center rounded-lg px-2 py-2.5 hover:bg-muted/50 transition-colors`}>
                 <div className="flex items-center gap-2 min-w-0">
-                  <span className="truncate text-sm font-medium">{g.name}</span>
-                  {!g.isCX && (
+                  <span className="truncate text-sm font-medium">
+                    {/* "Support" row header label explains the umbrella */}
+                    {g.name === "Support" ? "CX / Support" : g.name}
+                  </span>
+                  {!g.isSupport && (
                     <span className="shrink-0 rounded bg-muted px-1.5 py-0.5 text-[10px] font-medium text-muted-foreground">
                       hold
                     </span>
@@ -434,29 +421,20 @@ function ResolutionTimeCard({
                 </span>
               </div>
 
-              {/* Sub-department rows */}
               {g.subRows.map(r => (
-                <div
-                  key={r.subDepartment}
-                  className={`${col} items-center rounded-lg py-2 pr-2 pl-7 hover:bg-muted/30 transition-colors`}
-                >
+                <div key={r.subDepartment} className={`${col} items-center rounded-lg py-2 pr-2 pl-7 hover:bg-muted/30 transition-colors`}>
                   <div className="flex items-center gap-1.5 min-w-0">
                     <span className="text-muted-foreground/60">↳</span>
                     <span className="truncate text-xs text-muted-foreground">{r.subDepartment}</span>
                   </div>
                   <span className="text-center text-xs tabular-nums text-muted-foreground">{r.ticketCount}</span>
-                  <span className="text-center text-xs tabular-nums text-blue-500">
-                    {formatResolutionHours(r.avgResolutionHours)}
-                  </span>
-                  <span className="text-center text-xs tabular-nums text-amber-500">
-                    {formatResolutionHours(r.p90ResolutionHours)}
-                  </span>
+                  <span className="text-center text-xs tabular-nums text-blue-500">{formatResolutionHours(r.avgResolutionHours)}</span>
+                  <span className="text-center text-xs tabular-nums text-amber-500">{formatResolutionHours(r.p90ResolutionHours)}</span>
                 </div>
               ))}
             </div>
           ))}
 
-          {/* Total row */}
           <div className={`${col} mt-1 items-center border-t border-border px-2 pt-2.5 pb-1`}>
             <span className="text-sm font-bold">Total</span>
             <span className="text-center text-sm font-bold tabular-nums">{totals.count}</span>

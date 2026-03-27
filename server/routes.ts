@@ -3644,16 +3644,30 @@ export async function registerRoutes(
 
       const allTickets = await storage.getTickets();
 
+      // ── Support teams: full lifecycle (creation → solved) ─────────────────
+      // These teams own the ticket from start to finish.
+      const SUPPORT_DEPTS = new Set(["CX", "Seller Support", "Customer Support"]);
+
+      // Counts that match the KPI cards on the same page:
+      //   totalCreated  = tickets CREATED within the selected date range
+      //   totalSolved   = ALL tickets currently Solved/Closed (no date filter)
+      //                   This matches the "Solved" KPI card so numbers are consistent.
       const createdInRange = allTickets.filter(t =>
         t.createdAt && new Date(t.createdAt) >= from && new Date(t.createdAt) <= to
       );
-      const resolved = allTickets.filter(t =>
-        (t.status === "Solved" || t.status === "Closed") &&
-        t.resolvedAt && t.createdAt &&
-        new Date(t.resolvedAt) >= from && new Date(t.resolvedAt) <= to
+      const allSolved = allTickets.filter(t =>
+        t.status === "Solved" || t.status === "Closed"
       );
 
-      // key = "dept|subDept"  (subDept is "" when not applicable)
+      // Tickets to run time calculations on:
+      // - Created within the selected date range
+      // - Status is Solved or Closed
+      // - Use resolvedAt if available; fall back to updatedAt for older tickets
+      //   that were solved before the resolvedAt column existed.
+      const resolved = createdInRange.filter(t =>
+        t.status === "Solved" || t.status === "Closed"
+      );
+
       const deptDurations = new Map<string, number[]>();
       const push = (dept: string, subDept: string, hrs: number) => {
         if (hrs <= 0) return;
@@ -3662,72 +3676,102 @@ export async function registerRoutes(
         deptDurations.get(key)!.push(hrs);
       };
 
-      const p90 = (arr: number[]) => {
+      const p90calc = (arr: number[]) => {
         if (!arr.length) return 0;
         const s = [...arr].sort((a, b) => a - b);
         return s[Math.min(Math.ceil(s.length * 0.9) - 1, s.length - 1)];
       };
 
       for (const ticket of resolved) {
-        const resolvedAt = new Date(ticket.resolvedAt!);
         const createdAt  = new Date(ticket.createdAt!);
-        const isCX       = ticket.ownerTeam === "CX" || ticket.department === "CX";
+        // resolvedAt fallback: updatedAt covers old tickets solved before the
+        // resolvedAt column was added; ensures they are included in calculations.
+        const resolvedAt = ticket.resolvedAt
+          ? new Date(ticket.resolvedAt)
+          : new Date((ticket as any).updatedAt);
 
-        // ── CX: full lifecycle, split by sub-department ────────────────────
-        if (isCX) {
-          const snap    = (ticket as any).categorySnapshot as any;
-          const rawType = snap?.departmentType as string | undefined;
-          const subDept = rawType && rawType !== "All" ? rawType : "";
-          push("CX", subDept, businessHoursBetween(createdAt, resolvedAt));
+        const ownerDept = ticket.ownerTeam || ticket.department || "Unknown";
+
+        // ── Support teams: creation → resolution (full lifecycle) ────────────
+        if (SUPPORT_DEPTS.has(ownerDept)) {
+          // Sub-department: for CX tickets derive from category snapshot;
+          // for Seller Support / Customer Support ownerTeam IS the sub-dept.
+          let subDept = "";
+          if (ownerDept === "CX") {
+            const snap    = (ticket as any).categorySnapshot as any;
+            const rawType = snap?.departmentType as string | undefined;
+            subDept = rawType && rawType !== "All" ? rawType : "";
+          } else {
+            subDept = ownerDept; // "Seller Support" or "Customer Support"
+          }
+          push("Support", subDept, businessHoursBetween(createdAt, resolvedAt));
+          continue; // support tickets don't contribute internal hold-time
         }
 
-        // ── Non-CX: queue hold time per department ─────────────────────────
-        // Build a department timeline using department_changed log events.
-        const activities  = await getTicketActivity(ticket.id);
-        const deptChanges = activities
-          .filter((a: any) => a.action === "department_changed")
+        // ── Internal teams: assignment-based hold time ───────────────────────
+        // Measured as: time from assignment → reassignment back to support
+        // (or resolution if the internal team closes it directly).
+        const activities = await getTicketActivity(ticket.id);
+
+        const assignEvents = activities
+          .filter((a: any) =>
+            a.action === "assigned" || a.action === "reassigned" || a.action === "unassigned"
+          )
           .sort((a: any, b: any) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime());
 
-        // Each span = { dept, start, end }
-        let curDept  = ticket.ownerTeam || ticket.department || "Unknown";
-        let curStart = createdAt;
-        const ticketDeptHrs = new Map<string, number>(); // dept → total hrs this ticket
+        const ticketDeptHrs = new Map<string, number>();
 
-        for (const ev of deptChanges) {
-          const evTime = new Date((ev as any).createdAt);
-          if (evTime > curStart && curDept !== "CX") {
-            const hrs = businessHoursBetween(curStart, evTime);
-            ticketDeptHrs.set(curDept, (ticketDeptHrs.get(curDept) ?? 0) + hrs);
-          }
-          curDept  = (ev as any).newValue as string || curDept;
-          curStart = evTime;
+        for (let i = 0; i < assignEvents.length; i++) {
+          const ev = assignEvents[i];
+          if (ev.action === "unassigned") continue;
+
+          const assigneeId = ev.metadata?.newAssigneeId as string | undefined;
+          if (!assigneeId) continue;
+
+          const assignee = await storage.getUserById(assigneeId);
+          if (!assignee) continue;
+
+          const assigneeDept = assignee.department || "Unknown";
+          if (SUPPORT_DEPTS.has(assigneeDept)) continue; // skip support agents
+
+          const spanStart = new Date(ev.createdAt);
+          // Span ends at the next assignment event or at resolution
+          const spanEnd = i + 1 < assignEvents.length
+            ? new Date(assignEvents[i + 1].createdAt)
+            : resolvedAt;
+
+          if (spanEnd <= spanStart) continue;
+
+          const hrs = businessHoursBetween(spanStart, spanEnd);
+          ticketDeptHrs.set(assigneeDept, (ticketDeptHrs.get(assigneeDept) ?? 0) + hrs);
         }
-        // Final span closes at resolution
-        if (resolvedAt > curStart && curDept !== "CX") {
-          const hrs = businessHoursBetween(curStart, resolvedAt);
-          ticketDeptHrs.set(curDept, (ticketDeptHrs.get(curDept) ?? 0) + hrs);
+
+        // If ticket was never assigned but still in an internal dept, measure
+        // the full queue time (creation → resolution) for that dept.
+        if (ticketDeptHrs.size === 0 && !SUPPORT_DEPTS.has(ownerDept)) {
+          const hrs = businessHoursBetween(createdAt, resolvedAt);
+          ticketDeptHrs.set(ownerDept, hrs);
         }
 
         ticketDeptHrs.forEach((hrs, dept) => push(dept, "", hrs));
       }
 
-      // Build output rows
+      const p90 = p90calc;
       const rows = Array.from(deptDurations.entries()).map(([key, durations]) => {
         const [name, subDepartment] = key.split("||");
         const avg = durations.reduce((s, h) => s + h, 0) / durations.length;
         return {
           name,
           subDepartment: subDepartment || null,
-          isCX:          name === "CX",
+          isSupport:     name === "Support",
           ticketCount:   durations.length,
           avgResolutionHours: Math.round(avg * 10) / 10,
           p90ResolutionHours: Math.round(p90(durations) * 10) / 10,
         };
       }).sort((a, b) => {
-        // CX first, then alphabetically by dept; sub-depts after their parent
         if (a.name !== b.name) {
-          if (a.name === "CX") return -1;
-          if (b.name === "CX") return 1;
+          if (a.name === "Support") return -1;
+          if (b.name === "Support") return 1;
           return a.name.localeCompare(b.name);
         }
         if (!a.subDepartment && b.subDepartment) return -1;
@@ -3736,11 +3780,12 @@ export async function registerRoutes(
       });
 
       res.json({
-        from:          from.toISOString(),
-        to:            to.toISOString(),
-        totalCreated:  createdInRange.length,
-        totalResolved: resolved.length,
-        departments:   rows,
+        from:         from.toISOString(),
+        to:           to.toISOString(),
+        totalCreated: createdInRange.length,   // created in range (matches KPI Total)
+        totalSolved:  allSolved.length,         // all-time solved (matches KPI Solved card)
+        totalInRange: resolved.length,          // solved within range (for reference)
+        departments:  rows,
       });
     } catch (error: any) {
       res.status(500).json({ error: error.message });
