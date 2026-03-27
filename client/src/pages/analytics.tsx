@@ -309,63 +309,72 @@ function formatResolutionHours(hours: number): string {
 
 // ─── Resolution Time Card ────────────────────────────────────────────────────
 
-type ResolutionRow = {
+type DeptRow = {
   name: string;
-  subDepartment: string | null;
-  isSupport: boolean;
   ticketCount: number;
   avgResolutionHours: number;
   p90ResolutionHours: number;
 };
 
-type GroupedDept = {
-  name: string;
-  isSupport: boolean;
-  ticketCount: number;
-  avgHours: number;
-  p90Hours: number;
-  subRows: ResolutionRow[];
-};
+function sectionTotal(rows: DeptRow[]) {
+  const count = rows.reduce((s, r) => s + r.ticketCount, 0);
+  const avg   = count > 0 ? rows.reduce((s, r) => s + r.avgResolutionHours * r.ticketCount, 0) / count : 0;
+  const p90   = count > 0 ? rows.reduce((s, r) => s + r.p90ResolutionHours * r.ticketCount, 0) / count : 0;
+  return { count, avg, p90 };
+}
+
+const COL = "grid grid-cols-[1fr_68px_88px_88px]";
+
+function SectionHeader({ label }: { label: string }) {
+  return (
+    <div className={`${COL} pb-1.5 text-xs font-medium text-muted-foreground border-b border-border`}>
+      <span>{label}</span>
+      <span className="text-center">Cases</span>
+      <span className="text-center">Avg</span>
+      <span className="text-center">P90</span>
+    </div>
+  );
+}
+
+function DeptTableRow({ row }: { row: DeptRow }) {
+  return (
+    <div className={`${COL} items-center rounded-lg px-1 py-2 hover:bg-muted/40 transition-colors`}>
+      <span className="truncate text-sm font-medium pl-1">{row.name}</span>
+      <span className="text-center text-sm tabular-nums font-semibold">{row.ticketCount}</span>
+      <span className="text-center text-sm tabular-nums font-semibold text-blue-600">
+        {formatResolutionHours(row.avgResolutionHours)}
+      </span>
+      <span className="text-center text-sm tabular-nums font-semibold text-amber-600">
+        {formatResolutionHours(row.p90ResolutionHours)}
+      </span>
+    </div>
+  );
+}
+
+function TotalRow({ rows }: { rows: DeptRow[] }) {
+  const t = sectionTotal(rows);
+  return (
+    <div className={`${COL} items-center border-t border-border px-1 pt-2 pb-1`}>
+      <span className="text-xs font-bold text-muted-foreground pl-1">Total</span>
+      <span className="text-center text-xs font-bold tabular-nums text-muted-foreground">{t.count}</span>
+      <span className="text-center text-xs font-bold tabular-nums text-blue-500">
+        {formatResolutionHours(Math.round(t.avg * 10) / 10)}
+      </span>
+      <span className="text-center text-xs font-bold tabular-nums text-amber-500">
+        {formatResolutionHours(Math.round(t.p90 * 10) / 10)}
+      </span>
+    </div>
+  );
+}
 
 function ResolutionTimeCard({ data, isLoading }: { data: any; isLoading: boolean }) {
-  const grouped = useMemo<GroupedDept[]>(() => {
-    if (!data?.departments?.length) return [];
-
-    const rows: ResolutionRow[] = data.departments;
-    const map = new Map<string, GroupedDept>();
-
-    for (const r of rows) {
-      if (!map.has(r.name)) {
-        map.set(r.name, { name: r.name, isSupport: r.isSupport, ticketCount: 0, avgHours: 0, p90Hours: 0, subRows: [] });
-      }
-      const g = map.get(r.name)!;
-      if (r.subDepartment) g.subRows.push(r);
-      g.ticketCount += r.ticketCount;
-    }
-
-    map.forEach((g, name) => {
-      const src   = g.subRows.length > 0 ? g.subRows : rows.filter(r => r.name === name);
-      const total = src.reduce((s, r) => s + r.ticketCount, 0);
-      g.avgHours  = total > 0 ? src.reduce((s, r) => s + r.avgResolutionHours * r.ticketCount, 0) / total : 0;
-      g.p90Hours  = total > 0 ? src.reduce((s, r) => s + r.p90ResolutionHours * r.ticketCount, 0) / total : 0;
-    });
-
-    return Array.from(map.values()).sort((a, b) =>
-      a.name === "Support" ? -1 : b.name === "Support" ? 1 : a.name.localeCompare(b.name)
-    );
-  }, [data]);
-
-  const totals = useMemo(() => {
-    const count = grouped.reduce((s, g) => s + g.ticketCount, 0);
-    const avg   = count > 0 ? grouped.reduce((s, g) => s + g.avgHours * g.ticketCount, 0) / count : 0;
-    const p90   = count > 0 ? grouped.reduce((s, g) => s + g.p90Hours * g.ticketCount, 0) / count : 0;
-    return { count, avg, p90 };
-  }, [grouped]);
-
-  const col = "grid grid-cols-[1fr_68px_88px_88px]";
+  const supportRows: DeptRow[]  = useMemo(() => data?.support  ?? [], [data]);
+  const internalRows: DeptRow[] = useMemo(() => data?.internal ?? [], [data]);
+  const hasData = supportRows.length > 0 || internalRows.length > 0;
 
   return (
     <Card className="p-6">
+      {/* Card header */}
       <div className="mb-5 flex items-start justify-between gap-4">
         <div>
           <h2 className="text-base font-semibold">Resolution Time by Department</h2>
@@ -374,77 +383,64 @@ function ResolutionTimeCard({ data, isLoading }: { data: any; isLoading: boolean
         {data && (
           <div className="flex shrink-0 items-center gap-2">
             <Badge variant="outline" className="text-xs">{data.totalCreated ?? 0} total</Badge>
-            {/* totalSolved matches the Solved KPI card — consistent across the page */}
-            <Badge variant="secondary" className="text-xs">{data.totalSolved ?? data.totalResolved ?? 0} resolved</Badge>
+            <Badge variant="secondary" className="text-xs">{data.totalSolved ?? 0} resolved</Badge>
           </div>
         )}
       </div>
 
       {isLoading ? (
         <div className="space-y-3">
-          {[1, 2, 3, 4].map(i => <div key={i} className="h-10 animate-pulse rounded-lg bg-muted" />)}
+          {[1, 2, 3, 4, 5].map(i => <div key={i} className="h-10 animate-pulse rounded-lg bg-muted" />)}
         </div>
-      ) : grouped.length === 0 ? (
+      ) : !hasData ? (
         <div className="flex h-40 flex-col items-center justify-center gap-2 text-sm text-muted-foreground">
           <Clock className="h-8 w-8 text-muted-foreground/40" />
           No resolved tickets in the selected range
         </div>
       ) : (
-        <div>
-          <div className={`${col} mb-1 border-b border-border pb-2 text-xs font-medium text-muted-foreground`}>
-            <span className="px-2">Department</span>
-            <span className="text-center">Cases</span>
-            <span className="text-center">Avg</span>
-            <span className="text-center">P90</span>
-          </div>
+        <div className="space-y-6">
 
-          {grouped.map(g => (
-            <div key={g.name}>
-              <div className={`${col} items-center rounded-lg px-2 py-2.5 hover:bg-muted/50 transition-colors`}>
-                <div className="flex items-center gap-2 min-w-0">
-                  <span className="truncate text-sm font-medium">
-                    {/* "Support" row header label explains the umbrella */}
-                    {g.name === "Support" ? "CX / Support" : g.name}
-                  </span>
-                  {!g.isSupport && (
-                    <span className="shrink-0 rounded bg-muted px-1.5 py-0.5 text-[10px] font-medium text-muted-foreground">
-                      hold
-                    </span>
-                  )}
-                </div>
-                <span className="text-center text-sm font-semibold tabular-nums">{g.ticketCount}</span>
-                <span className="text-center text-sm font-semibold tabular-nums text-blue-600">
-                  {formatResolutionHours(Math.round(g.avgHours * 10) / 10)}
-                </span>
-                <span className="text-center text-sm font-semibold tabular-nums text-amber-600">
-                  {formatResolutionHours(Math.round(g.p90Hours * 10) / 10)}
-                </span>
-              </div>
-
-              {g.subRows.map(r => (
-                <div key={r.subDepartment} className={`${col} items-center rounded-lg py-2 pr-2 pl-7 hover:bg-muted/30 transition-colors`}>
-                  <div className="flex items-center gap-1.5 min-w-0">
-                    <span className="text-muted-foreground/60">↳</span>
-                    <span className="truncate text-xs text-muted-foreground">{r.subDepartment}</span>
-                  </div>
-                  <span className="text-center text-xs tabular-nums text-muted-foreground">{r.ticketCount}</span>
-                  <span className="text-center text-xs tabular-nums text-blue-500">{formatResolutionHours(r.avgResolutionHours)}</span>
-                  <span className="text-center text-xs tabular-nums text-amber-500">{formatResolutionHours(r.p90ResolutionHours)}</span>
-                </div>
-              ))}
+          {/* ── Section A: CX Teams ── */}
+          <div>
+            <div className="mb-2">
+              <p className="text-xs font-semibold uppercase tracking-wide text-foreground/70">
+                Customer Experience (CX) Teams
+              </p>
+              <p className="text-[11px] text-muted-foreground">
+                End-to-end resolution — ticket creation → ticket closed
+              </p>
             </div>
-          ))}
-
-          <div className={`${col} mt-1 items-center border-t border-border px-2 pt-2.5 pb-1`}>
-            <span className="text-sm font-bold">Total</span>
-            <span className="text-center text-sm font-bold tabular-nums">{totals.count}</span>
-            <span className="text-center text-sm font-bold tabular-nums text-blue-600">
-              {formatResolutionHours(Math.round(totals.avg * 10) / 10)}
-            </span>
-            <span className="text-center text-sm font-bold tabular-nums text-amber-600">
-              {formatResolutionHours(Math.round(totals.p90 * 10) / 10)}
-            </span>
+            {supportRows.length === 0 ? (
+              <p className="py-3 text-center text-xs text-muted-foreground">No CX tickets resolved in this range</p>
+            ) : (
+              <>
+                <SectionHeader label="Team" />
+                {supportRows.map(r => <DeptTableRow key={r.name} row={r} />)}
+                <TotalRow rows={supportRows} />
+              </>
+            )}
           </div>
+
+          {/* ── Divider ── */}
+          {internalRows.length > 0 && <div className="border-t border-dashed border-border" />}
+
+          {/* ── Section B: Internal Departments ── */}
+          {internalRows.length > 0 && (
+            <div>
+              <div className="mb-2">
+                <p className="text-xs font-semibold uppercase tracking-wide text-foreground/70">
+                  Internal Departments
+                </p>
+                <p className="text-[11px] text-muted-foreground">
+                  Queue hold time — from assignment until reassigned back to CX
+                </p>
+              </div>
+              <SectionHeader label="Department" />
+              {internalRows.map(r => <DeptTableRow key={r.name} row={r} />)}
+              <TotalRow rows={internalRows} />
+            </div>
+          )}
+
         </div>
       )}
     </Card>
