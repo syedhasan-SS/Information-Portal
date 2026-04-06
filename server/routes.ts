@@ -1040,7 +1040,8 @@ export async function registerRoutes(
 
         const portalUser = msg.user ? await storage.getUserBySlackId(msg.user) : undefined;
         const authorName = portalUser?.name ?? (msg.user ? `Slack (${msg.user})` : 'Slack');
-        const body = combinedBody.replace(/<@([A-Z0-9]+)>/g, (_: string, uid: string) => `@${uid}`);
+        // Handle both <@USERID> and <@USERID|displayname> formats from conversations.replies
+        const body = combinedBody.replace(/<@([A-Z0-9]+)(?:\|[^>]*)?>/g, (_: string, uid: string) => `@${uid}`);
 
         // Check legacy: if a Slack comment with same body+author already exists but no slackTs,
         // backfill its slackTs instead of creating a duplicate
@@ -4395,14 +4396,14 @@ export async function registerRoutes(
           // Resolve <@Uxxxxxxx> mentions to names properly (String.replace doesn't
           // support async callbacks — collect all UIDs first, then substitute).
           const mentionUids = Array.from(new Set(
-            [...eventBody.matchAll(/<@([A-Z0-9]+)>/g)].map((m: RegExpMatchArray) => m[1])
+            [...eventBody.matchAll(/<@([A-Z0-9]+)(?:\|[^>]*)?>/g)].map((m: RegExpMatchArray) => m[1])
           ));
           const uidToName: Record<string, string> = {};
           await Promise.all(mentionUids.map(async (uid: string) => {
             const u = await storage.getUserBySlackId(uid);
             uidToName[uid] = u ? `@${u.name}` : `@${uid}`;
           }));
-          const resolvedText = eventBody.replace(/<@([A-Z0-9]+)>/g, (_: string, uid: string) => uidToName[uid] ?? `@${uid}`);
+          const resolvedText = eventBody.replace(/<@([A-Z0-9]+)(?:\|[^>]*)?>/g, (_: string, uid: string) => uidToName[uid] ?? `@${uid}`);
 
           const comment = await storage.createComment({
             ticketId:   ticket.id,
@@ -6912,7 +6913,7 @@ roles: ${JSON.stringify(updated.roles, null, 2)}</pre>
           const authorName = portalUser?.name ?? (msg.user ? `Slack user (${msg.user})` : 'Slack');
 
           // Strip Slack user mention syntax <@Uxxxxxxx>
-          let body = msg.text.replace(/<@([A-Z0-9]+)>/g, (_: string, uid: string) => `@${uid}`);
+          let body = msg.text.replace(/<@([A-Z0-9]+)(?:\|[^>]*)?>/g, (_: string, uid: string) => `@${uid}`);
 
           // Create the comment
           const comment = await storage.createComment({
