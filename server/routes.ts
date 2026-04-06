@@ -2,6 +2,7 @@ import type { Express } from "express";
 import { createServer, type Server } from "http";
 import { storage } from "./storage";
 import { db } from "./db";
+import { sql } from "drizzle-orm";
 import { registerPageAccessRoutes } from "./routes-page-access";
 import {
   insertVendorSchema,
@@ -28,6 +29,8 @@ import {
   notifyMentions,
   notifyDepartmentTransfer,
   getCurrentUser,
+  notifyLeaveSubmitted,
+  notifyLeaveReviewed,
 } from "./notifications";
 import {
   logTicketCreated,
@@ -39,6 +42,7 @@ import {
   logTagsUpdate,
   logFieldUpdate,
   getTicketActivity,
+  getActivitiesForTickets,
 } from "./activity-logger";
 import { auditService } from "./audit-service";
 import {
@@ -70,7 +74,8 @@ import {
 } from "./slack-reporter";
 import { getCachedImage } from "./report-image";
 import { buildPendingReportData, buildPendingReportHtml } from "./report-html-builder";
-import { businessHoursBetween } from "./business-days";
+import { businessHoursBetween, isWeekend } from "./business-days";
+import crypto from "crypto";
 
 // Permission check helper
 async function checkPermission(req: any, requiredPermission: string): Promise<{ hasPermission: boolean; user?: any; error?: string }> {
@@ -164,7 +169,7 @@ const HARDCODED_ROLE_PERMISSIONS: Record<string, string[]> = {
   Head: [
     "view:dashboard", "view:tickets", "create:tickets", "edit:tickets",
     "view:users", "view:vendors", "view:analytics",
-    "view:department_tickets", "view:department_users",
+    "view:all_tickets", "view:department_tickets", "view:department_users",
   ],
   Manager: [
     "view:dashboard", "view:tickets", "create:tickets", "edit:tickets",
@@ -889,25 +894,30 @@ export async function registerRoutes(
       // Check if ticket was assigned / solved — fire sequentially so Slack
       // receives each as a distinct message rather than batching them together.
       // Note: on a transfer, assigneeId was just cleared so wasAssigned will be false.
-      const wasAssigned = !isDepartmentTransfer && req.body.assigneeId && oldTicket.assigneeId !== req.body.assigneeId;
-      const wasSolved   = req.body.status === "Solved" && oldTicket.status !== "Solved";
+      const newAssigneeId = parsed.data.assigneeId ?? req.body.assigneeId;
+      const wasAssigned = !isDepartmentTransfer && !!newAssigneeId && oldTicket.assigneeId !== newAssigneeId;
+      const wasSolved   = parsed.data.status === "Solved" && oldTicket.status !== "Solved";
 
-      if (wasAssigned || wasSolved) {
-        (async () => {
-          if (wasAssigned) {
-            const assignee = await storage.getUserById(req.body.assigneeId);
-            if (assignee) {
-              await notifyTicketAssigned(ticket, assignee, currentUser).catch(err => {
-                console.error('Failed to send ticket assignment notification:', err);
-              });
-            }
+      // Run notifications synchronously BEFORE sending the response.
+      // On Vercel Serverless, the function is terminated as soon as res.json()
+      // is called — fire-and-forget async work gets killed before it completes.
+      if (wasAssigned) {
+        try {
+          const assignee = await storage.getUserById(newAssigneeId);
+          if (assignee) {
+            await notifyTicketAssigned(ticket, assignee, currentUser);
           }
-          if (wasSolved) {
-            await notifyTicketSolved(ticket, currentUser).catch(err => {
-              console.error('Failed to send ticket solved notification:', err);
-            });
-          }
-        })();
+        } catch (err) {
+          console.error('Failed to send assignment notification:', err);
+        }
+      }
+
+      if (wasSolved) {
+        try {
+          await notifyTicketSolved(ticket, currentUser);
+        } catch (err) {
+          console.error('Failed to send solved notification:', err);
+        }
       }
 
       res.json(ticket);
@@ -949,6 +959,129 @@ export async function registerRoutes(
       res.json(comments);
     } catch (error: any) {
       res.status(500).json({ error: error.message });
+    }
+  });
+
+  /**
+   * POST /api/tickets/:ticketId/sync-slack
+   * Called silently by the ticket detail page on mount.
+   * Fetches the Slack thread for this ticket and imports any unseen replies
+   * as portal comments.  Returns the count of newly created comments.
+   */
+  app.post("/api/tickets/:ticketId/sync-slack", async (req, res) => {
+    try {
+      const ticket = await storage.getTicketById(req.params.ticketId);
+      if (!ticket?.slackMessageTs) return res.json({ synced: 0 });
+
+      const botToken = process.env.SLACK_BOT_TOKEN;
+      if (!botToken) return res.json({ synced: 0, reason: "no bot token" });
+
+      // Determine channel — must match the channel used when the thread was created.
+      // sendSlackTicketCreated uses ticket.department (not ownerTeam), so we do the same
+      // to ensure conversations.replies is called on the correct channel.
+      const dept = ticket.department || '';
+      const channel =
+        process.env[`SLACK_CHANNEL_${dept.toUpperCase()}`]?.trim() ||
+        process.env.SLACK_CHANNEL_ID ||
+        '';
+      if (!channel) return res.json({ synced: 0, reason: "no channel" });
+
+      const url =
+        `https://slack.com/api/conversations.replies` +
+        `?channel=${encodeURIComponent(channel)}` +
+        `&ts=${encodeURIComponent(ticket.slackMessageTs)}` +
+        `&oldest=${encodeURIComponent(ticket.slackMessageTs)}`;
+
+      const slackRes  = await fetch(url, { headers: { Authorization: `Bearer ${botToken}` } });
+      const slackData = await slackRes.json() as any;
+      if (!slackData.ok || !Array.isArray(slackData.messages)) {
+        console.log(`[SlackSync] Slack API error for ${ticket.ticketNumber}: ${JSON.stringify(slackData)}`);
+        return res.json({ synced: 0, error: slackData.error });
+      }
+
+      // Primary dedup: use slack_ts column on comments (most reliable)
+      const existingComments = await storage.getCommentsByTicketId(ticket.id);
+      const syncedBySlackTs = new Set<string>(
+        existingComments
+          .filter(c => (c as any).slackTs)
+          .map(c => (c as any).slackTs as string)
+      );
+
+      // Secondary dedup (legacy fallback): activity log slackTs for comments created before
+      // the slack_ts column existed
+      const existingActivity = await getTicketActivity(ticket.id);
+      const syncedByActivity = new Set<string>(
+        existingActivity
+          .filter(a => a.metadata && (a.metadata as any).slackTs)
+          .map(a => (a.metadata as any).slackTs as string)
+      );
+
+      console.log(`[SlackSync] Ticket ${ticket.ticketNumber} — channel=${channel}, slackMessageTs=${ticket.slackMessageTs}, messages=${slackData.messages.length}, synced-by-col=${syncedBySlackTs.size}, synced-by-log=${syncedByActivity.size}`);
+
+      let synced = 0;
+      for (const msg of slackData.messages) {
+        if (msg.bot_id) continue;
+        if (msg.ts === ticket.slackMessageTs) continue;
+
+        // Skip if already synced (check both sources)
+        if (syncedBySlackTs.has(msg.ts) || syncedByActivity.has(msg.ts)) continue;
+
+        // Build body: use text if present, otherwise fall back to attached file names
+        // (Slack sometimes sends image/file messages with empty text field)
+        const rawText = msg.text?.trim() || '';
+        const fileNames = Array.isArray(msg.files)
+          ? msg.files.map((f: any) => `[Attachment: ${f.name || f.filetype || 'file'}]`).join(' ')
+          : '';
+        const combinedBody = [rawText, fileNames].filter(Boolean).join(' ');
+        if (!combinedBody) {
+          console.log(`[SlackSync] Skipping empty message ts=${msg.ts}`);
+          continue;
+        }
+
+        const portalUser = msg.user ? await storage.getUserBySlackId(msg.user) : undefined;
+        const authorName = portalUser?.name ?? (msg.user ? `Slack (${msg.user})` : 'Slack');
+        const body = combinedBody.replace(/<@([A-Z0-9]+)>/g, (_: string, uid: string) => `@${uid}`);
+
+        // Check legacy: if a Slack comment with same body+author already exists but no slackTs,
+        // backfill its slackTs instead of creating a duplicate
+        const legacyMatch = existingComments.find(
+          c => (c as any).source === 'slack' && !(c as any).slackTs && c.author === authorName && c.body === body
+        );
+        if (legacyMatch) {
+          // Backfill the slackTs on the existing comment to prevent future duplicates
+          await db.execute(sql`UPDATE comments SET slack_ts = ${msg.ts} WHERE id = ${legacyMatch.id}`);
+          syncedBySlackTs.add(msg.ts); // mark as handled
+          console.log(`[SlackSync] Backfilled slackTs on existing comment ${legacyMatch.id}`);
+          continue;
+        }
+
+        const comment = await storage.createComment({
+          ticketId:   ticket.id,
+          author:     authorName,
+          body,
+          visibility: 'Internal',
+          source:     'slack',
+          slackTs:    msg.ts,
+        } as any);
+
+        await storage.createTicketActivity({
+          ticketId:     ticket.id,
+          ticketNumber: ticket.ticketNumber ?? '',
+          action:       'comment_added',
+          userId:       portalUser?.id ?? null,
+          userEmail:    portalUser?.email ?? null,
+          userName:     authorName,
+          description:  `Comment synced from Slack thread by ${authorName}`,
+          metadata:     { source: 'slack', slackTs: msg.ts, slackUserId: msg.user, commentId: comment.id },
+        });
+        synced++;
+      }
+
+      res.json({ synced });
+    } catch (error: any) {
+      // Non-fatal — don't break the ticket page
+      console.error('[SlackSync] per-ticket sync error:', error.message);
+      res.json({ synced: 0, error: error.message });
     }
   });
 
@@ -3639,10 +3772,29 @@ export async function registerRoutes(
    */
   app.get("/api/analytics/resolution-time", async (req, res) => {
     try {
-      const to   = req.query.to   ? new Date(req.query.to as string)   : new Date();
-      const from = req.query.from ? new Date(req.query.from as string) : new Date(to.getTime() - 90 * 24 * 3_600_000);
+      const to       = req.query.to       ? new Date(req.query.to as string)       : new Date();
+      const from     = req.query.from     ? new Date(req.query.from as string)     : new Date(to.getTime() - 90 * 24 * 3_600_000);
+      const grouping = (req.query.grouping as string) || "Daily";
+
+      const MONTHS = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
+      const formatPeriodKey = (d: Date): { label: string; sortKey: string } => {
+        if (grouping === "Weekly") {
+          const dow = d.getDay();
+          const ws  = new Date(d.getTime() - dow * 86_400_000);
+          const wm  = String(ws.getMonth() + 1).padStart(2, "0");
+          const wd  = String(ws.getDate()).padStart(2, "0");
+          return { label: `W${wm}/${wd}`, sortKey: ws.toISOString().slice(0, 10) };
+        }
+        if (grouping === "Monthly") {
+          return { label: `${MONTHS[d.getMonth()]} ${d.getFullYear()}`, sortKey: d.toISOString().slice(0, 7) };
+        }
+        // Daily (default)
+        return { label: `${MONTHS[d.getMonth()]} ${d.getDate()}`, sortKey: d.toISOString().slice(0, 10) };
+      };
 
       const allTickets = await storage.getTickets();
+      const allUsers   = await storage.getUsers();
+      const userMap    = new Map(allUsers.map((u: any) => [u.id, u.name || u.email]));
 
       // Internal departments — anything NOT a support team
       const INTERNAL_DEPTS = new Set(["Finance", "Operations", "Growth", "Tech", "Supply", "Marketplace", "Experience"]);
@@ -3708,8 +3860,17 @@ export async function registerRoutes(
       };
 
       // ── Accumulate durations ──────────────────────────────────────────────
-      const supportDurations = new Map<string, number[]>(); // "Seller Support" | "Customer Support"
+      const supportDurations  = new Map<string, number[]>(); // "Seller Support" | "Customer Support"
       const internalDurations = new Map<string, number[]>(); // dept name
+      // Agent-level: keyed by assigneeId; same business-hours lifecycle logic
+      const agentDurations    = new Map<string, { name: string; durations: number[]; solved: number; total: number; breached: number }>();
+      // Per-team CX trend: keyed by period label
+      const trendByCxMap      = new Map<string, { sortKey: string; ss: number[]; cs: number[] }>();
+      // Per-dept internal trend: keyed by period label
+      const trendByInternalMap = new Map<string, { sortKey: string; depts: Map<string, number[]> }>();
+
+      // Pre-fetch all activity logs in one query instead of N per-ticket queries
+      const activitiesByTicket = await getActivitiesForTickets(resolved.map((t: any) => t.id as string));
 
       for (const ticket of resolved) {
         const createdAt  = new Date(ticket.createdAt!);
@@ -3725,15 +3886,35 @@ export async function registerRoutes(
           if (hrs > 0) {
             if (!supportDurations.has(supportTeam)) supportDurations.set(supportTeam, []);
             supportDurations.get(supportTeam)!.push(hrs);
+
+            // Per-team CX trend
+            const { label, sortKey } = formatPeriodKey(resolvedAt);
+            if (!trendByCxMap.has(label)) trendByCxMap.set(label, { sortKey, ss: [], cs: [] });
+            const cxEntry = trendByCxMap.get(label)!;
+            if (supportTeam === "Seller Support") cxEntry.ss.push(hrs);
+            else cxEntry.cs.push(hrs);
           }
           // Support tickets can still accumulate internal hold-time if they
           // were routed through an internal dept at some point (fall through).
         }
 
+        // ── Agent Performance — full lifecycle per assignee ───────────────
+        if (ticket.assigneeId) {
+          const agentId   = ticket.assigneeId as string;
+          const agentName = (userMap.get(agentId) as string) || "Unknown";
+          if (!agentDurations.has(agentId)) {
+            agentDurations.set(agentId, { name: agentName, durations: [], solved: 0, total: 0, breached: 0 });
+          }
+          const entry = agentDurations.get(agentId)!;
+          entry.solved++;
+          const hrs = businessHoursBetween(createdAt, resolvedAt);
+          if (hrs > 0) entry.durations.push(hrs);
+        }
+
         // ── Section B: Internal Departments — queue hold time ─────────────
         // Build a dept timeline: initial ownerTeam + dept_changed events.
         // Measure time spent in each internal dept's queue.
-        const activities   = await getTicketActivity(ticket.id);
+        const activities   = activitiesByTicket.get(ticket.id as string) ?? [];
         const deptChanges  = activities
           .filter((a: any) => a.action === "department_changed")
           .sort((a: any, b: any) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime());
@@ -3765,11 +3946,31 @@ export async function registerRoutes(
           if (hrs > 0) ticketInternalHrs.set(ticket.ownerTeam!, hrs);
         }
 
+        const { label: iLabel, sortKey: iSortKey } = formatPeriodKey(resolvedAt);
         ticketInternalHrs.forEach((hrs, dept) => {
           if (!internalDurations.has(dept)) internalDurations.set(dept, []);
           internalDurations.get(dept)!.push(hrs);
+
+          // Per-dept internal trend
+          if (!trendByInternalMap.has(iLabel)) trendByInternalMap.set(iLabel, { sortKey: iSortKey, depts: new Map() });
+          const iEntry = trendByInternalMap.get(iLabel)!;
+          if (!iEntry.depts.has(dept)) iEntry.depts.set(dept, []);
+          iEntry.depts.get(dept)!.push(hrs);
         });
       }
+
+      // ── Count total assigned & SLA-breached for agents (all in-range tickets) ──
+      createdInRange.forEach((ticket: any) => {
+        if (!ticket.assigneeId) return;
+        const agentId = ticket.assigneeId as string;
+        if (!agentDurations.has(agentId)) {
+          const agentName = (userMap.get(agentId) as string) || "Unknown";
+          agentDurations.set(agentId, { name: agentName, durations: [], solved: 0, total: 0, breached: 0 });
+        }
+        const entry = agentDurations.get(agentId)!;
+        entry.total++;
+        if (ticket.slaStatus === "breached") entry.breached++;
+      });
 
       // ── Build response rows ───────────────────────────────────────────────
       const supportRows = Array.from(supportDurations.entries())
@@ -3780,14 +3981,63 @@ export async function registerRoutes(
         .map(([name, d]) => toRow(name, d))
         .sort((a, b) => b.avgResolutionHours - a.avgResolutionHours);
 
+      const agentRows = Array.from(agentDurations.entries())
+        .map(([, v]) => ({
+          name:               v.name,
+          total:              v.total,
+          solved:             v.solved,
+          breached:           v.breached,
+          rate:               v.total > 0 ? Math.round((v.solved / v.total) * 100) : 0,
+          avgResolutionHours: v.durations.length > 0
+            ? Math.round((v.durations.reduce((s, h) => s + h, 0) / v.durations.length) * 10) / 10
+            : null,
+          p90ResolutionHours: v.durations.length > 0
+            ? Math.round(p90(v.durations) * 10) / 10
+            : null,
+        }))
+        .sort((a, b) => b.total - a.total)
+        .slice(0, 10);
+
+      const avgHrs = (arr: number[]) =>
+        arr.length > 0 ? Math.round((arr.reduce((s, h) => s + h, 0) / arr.length) * 10) / 10 : null;
+
+      // CX trend — one row per period, columns: sellerSupport + customerSupport (days)
+      const trendByCx = Array.from(trendByCxMap.entries())
+        .map(([label, { sortKey, ss, cs }]) => ({
+          date: label, sortKey,
+          sellerSupport:   avgHrs(ss) !== null ? Math.round(avgHrs(ss)! / 8 * 10) / 10 : null,
+          customerSupport: avgHrs(cs) !== null ? Math.round(avgHrs(cs)! / 8 * 10) / 10 : null,
+        }))
+        .sort((a, b) => a.sortKey.localeCompare(b.sortKey))
+        .map(({ sortKey, ...rest }) => rest);
+
+      // Internal trend — one row per period, columns per dept (days)
+      const allInternalDeptNames = new Set<string>();
+      trendByInternalMap.forEach(({ depts }) => depts.forEach((_, d) => allInternalDeptNames.add(d)));
+
+      const trendByInternal = Array.from(trendByInternalMap.entries())
+        .map(([label, { sortKey, depts }]) => {
+          const row: Record<string, any> = { date: label, sortKey };
+          allInternalDeptNames.forEach(dept => {
+            const arr = depts.get(dept) ?? [];
+            row[dept] = arr.length > 0 ? Math.round(arr.reduce((s, h) => s + h, 0) / arr.length / 8 * 10) / 10 : null;
+          });
+          return row;
+        })
+        .sort((a, b) => a.sortKey.localeCompare(b.sortKey))
+        .map(({ sortKey, ...rest }) => rest);
+
       res.json({
         from:         from.toISOString(),
         to:           to.toISOString(),
         totalCreated: createdInRange.length,
         totalSolved:  allSolved.length,
         totalInRange: resolved.length,
-        support:      supportRows,   // Section A — CX teams, full lifecycle
-        internal:     internalRows,  // Section B — internal depts, queue time
+        support:      supportRows,    // CX teams table
+        internal:     internalRows,   // Internal depts table
+        agents:       agentRows,      // Agent leaderboard
+        trendByCx,                    // CX trend lines per team
+        trendByInternal,              // Internal trend lines per dept
       });
     } catch (error: any) {
       res.status(500).json({ error: error.message });
@@ -4029,6 +4279,160 @@ export async function registerRoutes(
     } catch (error: any) {
       console.error('[Webhook] Error:', error);
       res.status(500).json({ error: error.message });
+    }
+  });
+
+  // ===== Slack Events API — two-way comment bridge =====
+
+  app.post("/api/webhook/slack", async (req, res) => {
+    try {
+      // ── 1. Signature verification ──────────────────────────────────────────
+      const signingSecret = process.env.SLACK_SIGNING_SECRET;
+      if (signingSecret) {
+        const timestamp = req.headers["x-slack-request-timestamp"] as string;
+        const slackSig  = req.headers["x-slack-signature"] as string;
+        const rawBody   = (req as any).rawBody as Buffer | undefined;
+
+        if (!timestamp || !slackSig || !rawBody) {
+          return res.status(400).json({ error: "Missing Slack signature headers" });
+        }
+        if (Math.abs(Date.now() / 1000 - parseInt(timestamp)) > 300) {
+          return res.status(400).json({ error: "Request timestamp too old" });
+        }
+        const baseString = `v0:${timestamp}:${rawBody.toString()}`;
+        const computed   = "v0=" + crypto.createHmac("sha256", signingSecret).update(baseString).digest("hex");
+        if (!crypto.timingSafeEqual(Buffer.from(computed), Buffer.from(slackSig))) {
+          console.warn("[Slack Webhook] Invalid signature");
+          return res.status(401).json({ error: "Invalid signature" });
+        }
+      }
+
+      const body = req.body as any;
+
+      // ── 2. URL verification challenge (one-time, during app setup) ─────────
+      if (body.type === "url_verification") {
+        return res.json({ challenge: body.challenge });
+      }
+
+      // ── 3. Only handle event_callback ─────────────────────────────────────
+      if (body.type !== "event_callback") {
+        return res.sendStatus(200);
+      }
+
+      const event = body.event as any;
+
+      // ── 4. Only handle plain messages that are thread replies ──────────────
+      if (
+        event.type !== "message" ||
+        event.bot_id ||
+        event.subtype ||
+        !event.thread_ts ||
+        event.thread_ts === event.ts
+      ) {
+        return res.sendStatus(200);
+      }
+
+      const { thread_ts, user: slackUserId, text } = event;
+
+      // Build body from text + any file attachments (image-only messages have empty text)
+      const rawText = (text as string | undefined)?.trim() || '';
+      const fileNames = Array.isArray(event.files)
+        ? (event.files as any[]).map((f) => `[Attachment: ${f.name || f.filetype || 'file'}]`).join(' ')
+        : '';
+      const eventBody = [rawText, fileNames].filter(Boolean).join(' ');
+      if (!eventBody) return res.sendStatus(200);
+
+      // ── 5. DB-level deduplication by event_id ─────────────────────────────
+      // In-memory caches don't survive across Vercel serverless instances.
+      // Use RETURNING so we can reliably tell whether the row was inserted or
+      // was already there (ON CONFLICT DO NOTHING returns no rows on conflict).
+      const eventId = body.event_id as string | undefined;
+      const slackTs = event.ts as string | undefined;
+
+      if (eventId) {
+        const result = await db.execute(
+          sql`INSERT INTO slack_processed_events (event_id) VALUES (${eventId})
+              ON CONFLICT (event_id) DO NOTHING
+              RETURNING event_id`
+        );
+        // If no rows returned the event was already processed — drop it
+        const rows = (result as any).rows ?? (result as any).result?.rows ?? [];
+        if (rows.length === 0) {
+          console.log(`[Slack Webhook] Duplicate event_id ${eventId} — skipping`);
+          return res.sendStatus(200);
+        }
+        // Prune entries older than 24 hours to keep the table small
+        db.execute(sql`DELETE FROM slack_processed_events WHERE processed_at < NOW() - INTERVAL '24 hours'`).catch(() => {});
+      }
+
+      // Secondary dedup: also block if we already have a comment with this exact Slack ts
+      if (slackTs) {
+        const existing = await db.execute(
+          sql`SELECT 1 FROM ticket_activity_log WHERE metadata->>'slackTs' = ${slackTs} LIMIT 1`
+        );
+        const existingRows = (existing as any).rows ?? (existing as any).result?.rows ?? [];
+        if (existingRows.length > 0) {
+          console.log(`[Slack Webhook] Duplicate slack ts ${slackTs} — skipping`);
+          return res.sendStatus(200);
+        }
+      }
+
+      // ── 6. ACK immediately — Slack requires a 200 within 3 seconds or it retries
+      res.sendStatus(200);
+
+      // ── 7. Process asynchronously (after ack) ─────────────────────────────
+      (async () => {
+        try {
+          const ticket = await storage.getTicketBySlackTs(thread_ts);
+          if (!ticket) {
+            console.log(`[Slack Webhook] No ticket found for thread_ts=${thread_ts}`);
+            return;
+          }
+
+          const portalUser = slackUserId ? await storage.getUserBySlackId(slackUserId) : undefined;
+          const authorName = portalUser?.name ?? (slackUserId ? `Slack user (${slackUserId})` : "Slack");
+
+          // Resolve <@Uxxxxxxx> mentions to names properly (String.replace doesn't
+          // support async callbacks — collect all UIDs first, then substitute).
+          const mentionUids = Array.from(new Set(
+            [...eventBody.matchAll(/<@([A-Z0-9]+)>/g)].map((m: RegExpMatchArray) => m[1])
+          ));
+          const uidToName: Record<string, string> = {};
+          await Promise.all(mentionUids.map(async (uid: string) => {
+            const u = await storage.getUserBySlackId(uid);
+            uidToName[uid] = u ? `@${u.name}` : `@${uid}`;
+          }));
+          const resolvedText = eventBody.replace(/<@([A-Z0-9]+)>/g, (_: string, uid: string) => uidToName[uid] ?? `@${uid}`);
+
+          const comment = await storage.createComment({
+            ticketId:   ticket.id,
+            author:     authorName,
+            body:       resolvedText,
+            visibility: "Internal",
+            source:     "slack",
+            slackTs:    slackTs,
+          } as any);
+
+          await storage.createTicketActivity({
+            ticketId:     ticket.id,
+            ticketNumber: ticket.ticketNumber ?? "",
+            action:       "comment_added",
+            userId:       portalUser?.id ?? null,
+            userEmail:    portalUser?.email ?? null,
+            userName:     authorName,
+            description:  `Comment synced from Slack thread by ${authorName}`,
+            metadata:     { source: "slack", slackTs, slackUserId, commentId: comment.id },
+          });
+
+          console.log(`[Slack Webhook] Synced Slack reply → comment ${comment.id} on ticket ${ticket.ticketNumber}`);
+        } catch (err: any) {
+          console.error("[Slack Webhook] Async processing error:", err);
+        }
+      })();
+
+    } catch (error: any) {
+      console.error("[Slack Webhook] Error:", error);
+      return res.sendStatus(200);
     }
   });
 
@@ -6029,6 +6433,12 @@ roles: ${JSON.stringify(updated.roles, null, 2)}</pre>
 
       console.log('[Cron] /api/cron/daily-report triggered at', new Date().toISOString());
 
+      // Skip weekends — no report on Saturday or Sunday
+      if (isWeekend(new Date())) {
+        console.log('[Cron] Weekend detected — skipping daily report.');
+        return res.json({ ok: true, message: 'Skipped — weekend', timestamp: new Date().toISOString() });
+      }
+
       // Run reports fully before responding — ensures Vercel lambda stays alive
       await runFullDailyReports();
 
@@ -6066,6 +6476,473 @@ roles: ${JSON.stringify(updated.roles, null, 2)}</pre>
       res.json({ ok: true, closedCount, timestamp: new Date().toISOString() });
     } catch (error: any) {
       console.error('[Cron] auto-close-tickets error:', error);
+      res.status(500).json({ error: error.message });
+    }
+  });
+
+  // ── Portal Presence ───────────────────────────────────────────────────────
+  /** POST /api/users/heartbeat — called every 30 s by logged-in clients */
+  app.post("/api/users/heartbeat", async (req, res) => {
+    try {
+      const email = req.headers["x-user-email"] as string;
+      if (!email) return res.status(400).json({ error: "Missing x-user-email" });
+      const user = await storage.getUserByEmail(email);
+      if (!user) return res.status(404).json({ error: "User not found" });
+      await storage.updateUserLastSeen(user.id);
+      res.json({ ok: true });
+    } catch (err: any) {
+      res.status(500).json({ error: err.message });
+    }
+  });
+
+  /** GET /api/users/online — users active in the last 5 minutes */
+  app.get("/api/users/online", async (req, res) => {
+    try {
+      const email = req.headers["x-user-email"] as string;
+      if (!email) return res.status(401).json({ error: "Unauthorized" });
+      const requester = await storage.getUserByEmail(email);
+      if (!requester) return res.status(401).json({ error: "Unauthorized" });
+      const isManager = ["Owner", "Admin", "Head", "Manager", "Lead"].includes(requester.role);
+      if (!isManager) return res.status(403).json({ error: "Forbidden" });
+      const onlineUsers = await storage.getOnlineUsers(5);
+      res.json(onlineUsers.map(({ password: _, ...u }) => u));
+    } catch (err: any) {
+      res.status(500).json({ error: err.message });
+    }
+  });
+
+  // ── Leave Requests ────────────────────────────────────────────────────────
+  /** POST /api/leave-requests — submit a new leave request */
+  app.post("/api/leave-requests", async (req, res) => {
+    try {
+      const email = req.headers["x-user-email"] as string;
+      if (!email) return res.status(401).json({ error: "Unauthorized" });
+      const user = await storage.getUserByEmail(email);
+      if (!user) return res.status(401).json({ error: "User not found" });
+
+      const { startDate, endDate, leaveType, reason } = req.body;
+      if (!startDate || !endDate || !leaveType || !reason) {
+        return res.status(400).json({ error: "Missing required fields" });
+      }
+
+      const lr = await storage.createLeaveRequest({
+        userId:    user.id,
+        startDate: new Date(startDate),
+        endDate:   new Date(endDate),
+        leaveType,
+        reason,
+        status:    "pending",
+      });
+      res.status(201).json(lr);
+
+      // Fire-and-forget: notify managers
+      notifyLeaveSubmitted({
+        leaveId:   lr.id,
+        employee:  user,
+        startDate: new Date(startDate),
+        endDate:   new Date(endDate),
+        leaveType,
+        reason,
+      }).catch(() => {});
+    } catch (err: any) {
+      res.status(500).json({ error: err.message });
+    }
+  });
+
+  /** GET /api/leave-requests — list leave requests */
+  app.get("/api/leave-requests", async (req, res) => {
+    try {
+      const email = req.headers["x-user-email"] as string;
+      if (!email) return res.status(401).json({ error: "Unauthorized" });
+      const user = await storage.getUserByEmail(email);
+      if (!user) return res.status(401).json({ error: "User not found" });
+
+      const isManager = ["Owner", "Admin", "Head", "Manager", "Lead"].includes(user.role);
+
+      // Managers see their dept (or all for admins); regular users see their own
+      const filters: { userId?: string; department?: string; status?: string } = {};
+      if (!isManager) {
+        filters.userId = user.id;
+      } else if (user.role !== "Owner" && user.role !== "Admin") {
+        filters.department = user.department ?? undefined;
+      }
+
+      if (req.query.status) filters.status = req.query.status as string;
+
+      const results = await storage.getLeaveRequests(filters);
+      res.json(results);
+    } catch (err: any) {
+      res.status(500).json({ error: err.message });
+    }
+  });
+
+  /** PATCH /api/leave-requests/:id — approve or reject */
+  app.patch("/api/leave-requests/:id", async (req, res) => {
+    try {
+      const email = req.headers["x-user-email"] as string;
+      if (!email) return res.status(401).json({ error: "Unauthorized" });
+      const user = await storage.getUserByEmail(email);
+      if (!user) return res.status(401).json({ error: "User not found" });
+
+      const isManager = ["Owner", "Admin", "Head", "Manager", "Lead"].includes(user.role);
+      if (!isManager) return res.status(403).json({ error: "Forbidden" });
+
+      const { status, reviewNote } = req.body;
+      if (status !== "approved" && status !== "rejected") {
+        return res.status(400).json({ error: "status must be 'approved' or 'rejected'" });
+      }
+
+      const updated = await storage.updateLeaveRequestStatus(req.params.id, status, user.id, reviewNote);
+      if (!updated) return res.status(404).json({ error: "Leave request not found" });
+      res.json(updated);
+
+      // Fire-and-forget: notify employee
+      const employee = await storage.getUserById(updated.userId);
+      if (employee) {
+        notifyLeaveReviewed({
+          leaveId:    updated.id,
+          employee,
+          reviewer:   user,
+          status,
+          reviewNote,
+          startDate:  updated.startDate,
+          endDate:    updated.endDate,
+        }).catch(() => {});
+      }
+    } catch (err: any) {
+      res.status(500).json({ error: err.message });
+    }
+  });
+
+  // ── Shift Schedules ───────────────────────────────────────────────────────
+  app.get("/api/shift-schedules", async (req, res) => {
+    try {
+      const email = req.headers["x-user-email"] as string;
+      if (!email) return res.status(401).json({ error: "Unauthorized" });
+      const user = await storage.getUserByEmail(email);
+      if (!user) return res.status(401).json({ error: "User not found" });
+      const isManager = ["Owner","Admin","Head","Manager","Lead"].includes(user.role);
+      const filters: any = {};
+      if (req.query.weekStart) filters.weekStart = req.query.weekStart as string;
+      if (req.query.weekEnd)   filters.weekEnd   = req.query.weekEnd   as string;
+      if (req.query.date)      filters.date      = req.query.date      as string;
+      if (!isManager)          filters.userId    = user.id;
+      else if (req.query.department) filters.department = req.query.department as string;
+      const results = await storage.getShiftSchedules(filters);
+      res.json(results);
+    } catch (err: any) { res.status(500).json({ error: err.message }); }
+  });
+
+  app.post("/api/shift-schedules", async (req, res) => {
+    try {
+      const email = req.headers["x-user-email"] as string;
+      if (!email) return res.status(401).json({ error: "Unauthorized" });
+      const user = await storage.getUserByEmail(email);
+      if (!user) return res.status(401).json({ error: "User not found" });
+      const isManager = ["Owner","Admin","Head","Manager","Lead"].includes(user.role);
+      if (!isManager) return res.status(403).json({ error: "Forbidden" });
+      const { userId, date, shiftType, startTime, endTime, notes, slotType } = req.body;
+      if (!userId || !date || !shiftType) return res.status(400).json({ error: "Missing required fields" });
+      const result = await storage.createShiftSchedule({ userId, date, shiftType, startTime, endTime, notes, slotType: slotType || "shift", createdBy: user.id });
+      res.json(result);
+    } catch (err: any) { res.status(500).json({ error: err.message }); }
+  });
+
+  app.post("/api/shift-schedules/bulk", async (req, res) => {
+    try {
+      const email = req.headers["x-user-email"] as string;
+      if (!email) return res.status(401).json({ error: "Unauthorized" });
+      const user = await storage.getUserByEmail(email);
+      if (!user) return res.status(401).json({ error: "User not found" });
+      const isManager = ["Owner","Admin","Head","Manager","Lead"].includes(user.role);
+      if (!isManager) return res.status(403).json({ error: "Forbidden" });
+      const { memberIds, startDate, endDate, shiftType, startTime, endTime, notes, excludeWeekends, slotType } = req.body;
+      if (!memberIds?.length || !startDate || !endDate || !shiftType) {
+        return res.status(400).json({ error: "Missing required fields" });
+      }
+      // Generate all date × member combinations
+      const records: any[] = [];
+      const start = new Date(startDate);
+      const end   = new Date(endDate);
+      for (let d = new Date(start); d <= end; d.setDate(d.getDate() + 1)) {
+        const dow = d.getDay(); // 0=Sun, 6=Sat
+        if (excludeWeekends && (dow === 0 || dow === 6)) continue;
+        const dateStr = d.toISOString().split("T")[0];
+        for (const uid of memberIds) {
+          records.push({ userId: uid, date: dateStr, shiftType, startTime: startTime || null, endTime: endTime || null, notes: notes || null, slotType: slotType || "shift", createdBy: user.id });
+        }
+      }
+      const created = await storage.createShiftSchedulesBulk(records);
+      res.json({ created });
+    } catch (err: any) { res.status(500).json({ error: err.message }); }
+  });
+
+  app.delete("/api/shift-schedules/:id", async (req, res) => {
+    try {
+      const email = req.headers["x-user-email"] as string;
+      if (!email) return res.status(401).json({ error: "Unauthorized" });
+      const user = await storage.getUserByEmail(email);
+      if (!user) return res.status(401).json({ error: "User not found" });
+      const isManager = ["Owner","Admin","Head","Manager","Lead"].includes(user.role);
+      if (!isManager) return res.status(403).json({ error: "Forbidden" });
+      await storage.deleteShiftSchedule(req.params.id);
+      res.json({ ok: true });
+    } catch (err: any) { res.status(500).json({ error: err.message }); }
+  });
+
+  // ── Shift Configurations ─────────────────────────────────────────────────
+  app.get("/api/shift-configurations", async (req, res) => {
+    try {
+      const email = req.headers["x-user-email"] as string;
+      if (!email) return res.status(401).json({ error: "Unauthorized" });
+      const user = await storage.getUserByEmail(email);
+      if (!user) return res.status(401).json({ error: "User not found" });
+      const isAdmin = ["Owner","Admin"].includes(user.role);
+      const configs = isAdmin ? await storage.getAllShiftConfigurations() : await storage.getShiftConfigurations();
+      res.json(configs);
+    } catch (err: any) { res.status(500).json({ error: err.message }); }
+  });
+
+  app.post("/api/shift-configurations", async (req, res) => {
+    try {
+      const email = req.headers["x-user-email"] as string;
+      if (!email) return res.status(401).json({ error: "Unauthorized" });
+      const user = await storage.getUserByEmail(email);
+      if (!user || !["Owner","Admin"].includes(user.role)) return res.status(403).json({ error: "Forbidden" });
+      const config = await storage.createShiftConfiguration({ ...req.body, createdBy: user.id });
+      res.json(config);
+    } catch (err: any) { res.status(500).json({ error: err.message }); }
+  });
+
+  app.patch("/api/shift-configurations/:id", async (req, res) => {
+    try {
+      const email = req.headers["x-user-email"] as string;
+      if (!email) return res.status(401).json({ error: "Unauthorized" });
+      const user = await storage.getUserByEmail(email);
+      if (!user || !["Owner","Admin"].includes(user.role)) return res.status(403).json({ error: "Forbidden" });
+      const config = await storage.updateShiftConfiguration(req.params.id, req.body);
+      res.json(config);
+    } catch (err: any) { res.status(500).json({ error: err.message }); }
+  });
+
+  app.delete("/api/shift-configurations/:id", async (req, res) => {
+    try {
+      const email = req.headers["x-user-email"] as string;
+      if (!email) return res.status(401).json({ error: "Unauthorized" });
+      const user = await storage.getUserByEmail(email);
+      if (!user || !["Owner","Admin"].includes(user.role)) return res.status(403).json({ error: "Forbidden" });
+      await storage.deleteShiftConfiguration(req.params.id);
+      res.json({ ok: true });
+    } catch (err: any) { res.status(500).json({ error: err.message }); }
+  });
+
+  // ── Overtime Records ──────────────────────────────────────────────────────
+  app.get("/api/overtime-records", async (req, res) => {
+    try {
+      const email = req.headers["x-user-email"] as string;
+      if (!email) return res.status(401).json({ error: "Unauthorized" });
+      const user = await storage.getUserByEmail(email);
+      if (!user) return res.status(401).json({ error: "User not found" });
+      const isManager = ["Owner","Admin","Head","Manager","Lead"].includes(user.role);
+      const filters: any = {};
+      if (req.query.weekStart)  filters.weekStart = req.query.weekStart as string;
+      if (req.query.weekEnd)    filters.weekEnd   = req.query.weekEnd   as string;
+      if (req.query.startDate)  filters.weekStart = req.query.startDate as string;
+      if (req.query.endDate)    filters.weekEnd   = req.query.endDate   as string;
+      if (req.query.status)     filters.status    = req.query.status    as string;
+      if (!isManager) filters.userId = user.id;
+      else if (req.query.userId) filters.userId = req.query.userId as string;
+      if (req.query.department) filters.department = req.query.department as string;
+      const records = await storage.getOvertimeRecords(filters);
+      res.json(records);
+    } catch (err: any) { res.status(500).json({ error: err.message }); }
+  });
+
+  app.post("/api/overtime-records", async (req, res) => {
+    try {
+      const email = req.headers["x-user-email"] as string;
+      if (!email) return res.status(401).json({ error: "Unauthorized" });
+      const user = await storage.getUserByEmail(email);
+      if (!user) return res.status(401).json({ error: "User not found" });
+      const record = await storage.createOvertimeRecord({ ...req.body, createdBy: user.id });
+      res.json(record);
+    } catch (err: any) { res.status(500).json({ error: err.message }); }
+  });
+
+  app.patch("/api/overtime-records/:id", async (req, res) => {
+    try {
+      const email = req.headers["x-user-email"] as string;
+      if (!email) return res.status(401).json({ error: "Unauthorized" });
+      const user = await storage.getUserByEmail(email);
+      if (!user) return res.status(401).json({ error: "User not found" });
+      const isManager = ["Owner","Admin","Head","Manager","Lead"].includes(user.role);
+      if (!isManager && req.body.status) return res.status(403).json({ error: "Only managers can approve/reject OT" });
+      const updates: any = { ...req.body };
+      if (req.body.status && isManager) updates.approvedBy = user.id;
+      const record = await storage.updateOvertimeRecord(req.params.id, updates);
+      res.json(record);
+    } catch (err: any) { res.status(500).json({ error: err.message }); }
+  });
+
+  app.delete("/api/overtime-records/:id", async (req, res) => {
+    try {
+      const email = req.headers["x-user-email"] as string;
+      if (!email) return res.status(401).json({ error: "Unauthorized" });
+      const user = await storage.getUserByEmail(email);
+      if (!user) return res.status(401).json({ error: "User not found" });
+      await storage.deleteOvertimeRecord(req.params.id);
+      res.json({ ok: true });
+    } catch (err: any) { res.status(500).json({ error: err.message }); }
+  });
+
+  // ── WFH Records ───────────────────────────────────────────────────────────
+  app.get("/api/wfh-records", async (req, res) => {
+    try {
+      const email = req.headers["x-user-email"] as string;
+      if (!email) return res.status(401).json({ error: "Unauthorized" });
+      const user = await storage.getUserByEmail(email);
+      if (!user) return res.status(401).json({ error: "User not found" });
+      const isManager = ["Owner","Admin","Head","Manager","Lead"].includes(user.role);
+      const filters: any = {};
+      if (req.query.date)      filters.date      = req.query.date      as string;
+      if (req.query.startDate) filters.startDate = req.query.startDate as string;
+      if (req.query.endDate)   filters.endDate   = req.query.endDate   as string;
+      if (!isManager) filters.department = user.department ?? undefined;
+      else if (req.query.department) filters.department = req.query.department as string;
+      const results = await storage.getWfhRecords(filters);
+      res.json(results);
+    } catch (err: any) { res.status(500).json({ error: err.message }); }
+  });
+
+  app.post("/api/wfh-records", async (req, res) => {
+    try {
+      const email = req.headers["x-user-email"] as string;
+      if (!email) return res.status(401).json({ error: "Unauthorized" });
+      const user = await storage.getUserByEmail(email);
+      if (!user) return res.status(401).json({ error: "User not found" });
+      const { date, workLocation, notes } = req.body;
+      if (!date || !workLocation) return res.status(400).json({ error: "Missing required fields" });
+      const result = await storage.upsertWfhRecord({ userId: user.id, date, workLocation, notes });
+      res.json(result);
+    } catch (err: any) { res.status(500).json({ error: err.message }); }
+  });
+
+  app.get("/api/wfh-records/today", async (req, res) => {
+    try {
+      const email = req.headers["x-user-email"] as string;
+      if (!email) return res.status(401).json({ error: "Unauthorized" });
+      const user = await storage.getUserByEmail(email);
+      if (!user) return res.status(401).json({ error: "User not found" });
+      const record = await storage.getTodayWfhStatus(user.id);
+      res.json(record ?? null);
+    } catch (err: any) { res.status(500).json({ error: err.message }); }
+  });
+
+  /**
+   * GET /api/cron/sync-slack-replies
+   * Runs every 5 minutes via Vercel Cron.
+   * Polls every open ticket's Slack thread for new replies and syncs
+   * them as comments in the portal.  Deduplication is done by comparing
+   * each Slack message timestamp (ts) against already-synced activity log
+   * entries (metadata.slackTs).
+   */
+  app.get("/api/cron/sync-slack-replies", async (req, res) => {
+    try {
+      const cronSecret   = (process.env.CRON_SECRET   || '').trim();
+      const reportSecret = (process.env.REPORT_SECRET || '').trim();
+      const authHeader   = (req.headers['authorization'] as string) || '';
+      const bearerToken  = authHeader.startsWith('Bearer ') ? authHeader.slice(7).trim() : '';
+
+      const isAuthorized =
+        (cronSecret   && bearerToken === cronSecret)   ||
+        (reportSecret && bearerToken === reportSecret);
+
+      if (!isAuthorized) {
+        return res.status(403).json({ error: 'Forbidden: invalid or missing cron secret' });
+      }
+
+      const botToken = process.env.SLACK_BOT_TOKEN;
+      if (!botToken) {
+        return res.json({ ok: true, skipped: true, reason: 'SLACK_BOT_TOKEN not configured' });
+      }
+
+      console.log('[Cron] sync-slack-replies triggered at', new Date().toISOString());
+
+      const openTickets = await storage.getOpenTicketsWithSlackThread();
+      let synced = 0;
+      let checked = 0;
+
+      for (const ticket of openTickets) {
+        if (!ticket.slackMessageTs) continue;
+        checked++;
+
+        // Fetch all replies in this ticket's Slack thread
+        const repliesRes = await fetch(
+          `https://slack.com/api/conversations.replies?channel=${encodeURIComponent(
+            // Must match the channel used in sendSlackTicketCreated (uses ticket.department)
+            (() => {
+              const dept = ticket.department || '';
+              const deptChannel = process.env[`SLACK_CHANNEL_${dept.toUpperCase()}`]?.trim();
+              return deptChannel || process.env.SLACK_CHANNEL_ID || '';
+            })()
+          )}&ts=${encodeURIComponent(ticket.slackMessageTs)}&oldest=${encodeURIComponent(ticket.slackMessageTs)}`,
+          { headers: { Authorization: `Bearer ${botToken}` } }
+        );
+        const repliesData = await repliesRes.json() as any;
+
+        if (!repliesData.ok || !Array.isArray(repliesData.messages)) continue;
+
+        // Get already-synced Slack message timestamps for this ticket
+        const existingActivity = await getTicketActivity(ticket.id);
+        const syncedSlackTs = new Set<string>(
+          existingActivity
+            .filter(a => a.metadata && (a.metadata as any).slackTs)
+            .map(a => (a.metadata as any).slackTs as string)
+        );
+
+        for (const msg of repliesData.messages) {
+          // Skip: bot messages, the root message itself, already-synced, empty
+          if (msg.bot_id) continue;
+          if (msg.ts === ticket.slackMessageTs) continue; // root message
+          if (!msg.text?.trim()) continue;
+          if (syncedSlackTs.has(msg.ts)) continue; // already imported
+
+          // Resolve Slack user → portal user
+          const portalUser = msg.user ? await storage.getUserBySlackId(msg.user) : undefined;
+          const authorName = portalUser?.name ?? (msg.user ? `Slack user (${msg.user})` : 'Slack');
+
+          // Strip Slack user mention syntax <@Uxxxxxxx>
+          let body = msg.text.replace(/<@([A-Z0-9]+)>/g, (_: string, uid: string) => `@${uid}`);
+
+          // Create the comment
+          const comment = await storage.createComment({
+            ticketId: ticket.id,
+            author:   authorName,
+            body,
+            visibility: 'Internal',
+          });
+
+          // Log activity — store slackTs so we don't re-import on next poll
+          await storage.createTicketActivity({
+            ticketId:     ticket.id,
+            ticketNumber: ticket.ticketNumber ?? '',
+            action:       'comment_added',
+            userId:       portalUser?.id ?? null,
+            userEmail:    portalUser?.email ?? null,
+            userName:     authorName,
+            description:  `Comment synced from Slack thread by ${authorName}`,
+            metadata:     { source: 'slack', slackTs: msg.ts, slackUserId: msg.user, commentId: comment.id },
+          });
+
+          synced++;
+        }
+      }
+
+      console.log(`[Cron] sync-slack-replies: checked ${checked} tickets, synced ${synced} new comment(s)`);
+      res.json({ ok: true, checked, synced, timestamp: new Date().toISOString() });
+
+    } catch (error: any) {
+      console.error('[Cron] sync-slack-replies error:', error);
       res.status(500).json({ error: error.message });
     }
   });

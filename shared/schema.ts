@@ -146,6 +146,8 @@ export const comments = pgTable("comments", {
   author: text("author").notNull(),
   body: text("body").notNull(),
   visibility: text("visibility").notNull().default("Internal").$type<"Internal" | "Zendesk">(),
+  source: text("source").$type<"slack" | null>(),
+  slackTs: text("slack_ts"),   // Slack message ts — used for dedup; unique per ticket
   createdAt: timestamp("created_at").notNull().defaultNow(),
 });
 
@@ -196,6 +198,7 @@ export const users = pgTable("users", {
   customPermissions: text("custom_permissions").array(), // Agent-level custom permissions
   isActive: boolean("is_active").notNull().default(true),
   passwordChangedAt: timestamp("password_changed_at"),
+  lastSeenAt: timestamp("last_seen_at"), // Updated by heartbeat — tracks portal presence
   createdAt: timestamp("created_at").notNull().defaultNow(),
   updatedAt: timestamp("updated_at").notNull().defaultNow(),
 });
@@ -858,6 +861,111 @@ export const insertAttendanceRecordSchema = createInsertSchema(attendanceRecords
   updatedAt: true,
 });
 
+// ── Leave Requests ─────────────────────────────────────────────────────────
+export const leaveRequests = pgTable("leave_requests", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  userId: varchar("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+  startDate: timestamp("start_date").notNull(),
+  endDate:   timestamp("end_date").notNull(),
+  leaveType: text("leave_type").notNull().$type<"sick" | "annual" | "personal" | "emergency">(),
+  reason:    text("reason").notNull(),
+  status:    text("status").notNull().$type<"pending" | "approved" | "rejected">().default("pending"),
+  reviewedBy: varchar("reviewed_by").references(() => users.id, { onDelete: "set null" }),
+  reviewedAt: timestamp("reviewed_at"),
+  reviewNote: text("review_note"),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+  updatedAt: timestamp("updated_at").notNull().defaultNow(),
+}, (table) => ({
+  userIdIdx:  index("leave_user_id_idx").on(table.userId),
+  statusIdx:  index("leave_status_idx").on(table.status),
+  startIdx:   index("leave_start_date_idx").on(table.startDate),
+}));
+
+export const insertLeaveRequestSchema = createInsertSchema(leaveRequests).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+});
+
+// ── Shift Schedules ────────────────────────────────────────────────────────
+export const shiftSchedules = pgTable("shift_schedules", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  userId:    varchar("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+  date:      text("date").notNull(), // "YYYY-MM-DD"
+  shiftType: text("shift_type").notNull().$type<"morning" | "evening" | "night" | "off" | "remote">(),
+  startTime: text("start_time"), // "09:00"
+  endTime:   text("end_time"),   // "17:00"
+  notes:     text("notes"),
+  slotType:  text("slot_type").default("shift").$type<"shift" | "frt">(),
+  createdBy: varchar("created_by").references(() => users.id, { onDelete: "set null" }),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+  updatedAt: timestamp("updated_at").notNull().defaultNow(),
+}, (table) => ({
+  shiftUserDateIdx: index("shift_user_date_idx").on(table.userId, table.date),
+  shiftDateIdx:     index("shift_date_idx").on(table.date),
+}));
+
+export const insertShiftScheduleSchema = createInsertSchema(shiftSchedules).omit({
+  id: true, createdAt: true, updatedAt: true,
+});
+
+// ── Shift Configurations (admin-defined named shifts) ──────────────────────
+export const shiftConfigurations = pgTable("shift_configurations", {
+  id:        varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  name:      text("name").notNull(),       // "Shift A", "Morning Shift"
+  startTime: text("start_time").notNull(), // "09:00"
+  endTime:   text("end_time").notNull(),   // "17:00"
+  color:     text("color").notNull().default("blue"), // color key
+  isActive:  boolean("is_active").notNull().default(true),
+  createdBy: varchar("created_by").references(() => users.id, { onDelete: "set null" }),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+  updatedAt: timestamp("updated_at").notNull().defaultNow(),
+});
+
+export const insertShiftConfigurationSchema = createInsertSchema(shiftConfigurations).omit({
+  id: true, createdAt: true, updatedAt: true,
+});
+
+// ── Overtime Records ────────────────────────────────────────────────────────
+export const overtimeRecords = pgTable("overtime_records", {
+  id:         varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  userId:     varchar("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+  date:       text("date").notNull(),        // "YYYY-MM-DD"
+  startTime:  text("start_time").notNull(),  // "18:00"
+  endTime:    text("end_time").notNull(),     // "21:00"
+  reason:     text("reason"),
+  status:     text("status").notNull().default("pending").$type<"pending"|"approved"|"rejected">(),
+  approvedBy: varchar("approved_by").references(() => users.id, { onDelete: "set null" }),
+  notes:      text("notes"),
+  createdBy:  varchar("created_by").references(() => users.id, { onDelete: "set null" }),
+  createdAt:  timestamp("created_at").notNull().defaultNow(),
+  updatedAt:  timestamp("updated_at").notNull().defaultNow(),
+}, (table) => ({
+  otUserDateIdx: index("ot_user_date_idx").on(table.userId, table.date),
+}));
+
+export const insertOvertimeRecordSchema = createInsertSchema(overtimeRecords).omit({
+  id: true, createdAt: true, updatedAt: true,
+});
+
+// ── WFH Records ────────────────────────────────────────────────────────────
+export const wfhRecords = pgTable("wfh_records", {
+  id:           varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  userId:       varchar("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+  date:         text("date").notNull(), // "YYYY-MM-DD"
+  workLocation: text("work_location").notNull().$type<"wfh" | "office" | "hybrid">(),
+  notes:        text("notes"),
+  createdAt:    timestamp("created_at").notNull().defaultNow(),
+  updatedAt:    timestamp("updated_at").notNull().defaultNow(),
+}, (table) => ({
+  wfhUserDateIdx: index("wfh_user_date_idx").on(table.userId, table.date),
+  wfhDateIdx:     index("wfh_date_idx").on(table.date),
+}));
+
+export const insertWfhRecordSchema = createInsertSchema(wfhRecords).omit({
+  id: true, createdAt: true, updatedAt: true,
+});
+
 export type InsertPermission = z.infer<typeof insertPermissionSchema>;
 export type InsertRole = z.infer<typeof insertRoleSchema>;
 export type InsertRolePermission = z.infer<typeof insertRolePermissionSchema>;
@@ -866,6 +974,16 @@ export type InsertProductRequest = z.infer<typeof insertProductRequestSchema>;
 export type InsertProductRequestComment = z.infer<typeof insertProductRequestCommentSchema>;
 export type InsertUserColumnPreference = z.infer<typeof insertUserColumnPreferenceSchema>;
 export type InsertAttendanceRecord = z.infer<typeof insertAttendanceRecordSchema>;
+export type LeaveRequest = typeof leaveRequests.$inferSelect;
+export type InsertLeaveRequest = z.infer<typeof insertLeaveRequestSchema>;
+export type ShiftSchedule = typeof shiftSchedules.$inferSelect;
+export type InsertShiftSchedule = z.infer<typeof insertShiftScheduleSchema>;
+export type ShiftConfiguration = typeof shiftConfigurations.$inferSelect;
+export type InsertShiftConfiguration = z.infer<typeof insertShiftConfigurationSchema>;
+export type OvertimeRecord = typeof overtimeRecords.$inferSelect;
+export type InsertOvertimeRecord = z.infer<typeof insertOvertimeRecordSchema>;
+export type WfhRecord = typeof wfhRecords.$inferSelect;
+export type InsertWfhRecord = z.infer<typeof insertWfhRecordSchema>;
 
 export type Permission = typeof permissions.$inferSelect;
 export type Role = typeof roles.$inferSelect;
