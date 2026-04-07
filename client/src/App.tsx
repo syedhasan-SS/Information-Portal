@@ -33,6 +33,9 @@ import AttendancePage from "@/pages/attendance";
 import AttendanceCheckInPage from "@/pages/attendance-checkin";
 import TeamAttendancePage from "@/pages/attendance-team";
 import LeaveManagementPage from "@/pages/leave-management";
+import AttendanceShiftsPage from "@/pages/attendance-shifts";
+import AttendanceWfhPage from "@/pages/attendance-wfh";
+import AttendanceOvertimePage from "@/pages/attendance-overtime";
 
 function Router() {
   return (
@@ -159,6 +162,21 @@ function Router() {
       <Route path="/leave-management">
         <ProtectedRoute>
           <LeaveManagementPage />
+        </ProtectedRoute>
+      </Route>
+      <Route path="/attendance/shifts">
+        <ProtectedRoute>
+          <AttendanceShiftsPage />
+        </ProtectedRoute>
+      </Route>
+      <Route path="/attendance/wfh">
+        <ProtectedRoute>
+          <AttendanceWfhPage />
+        </ProtectedRoute>
+      </Route>
+      <Route path="/attendance/overtime">
+        <ProtectedRoute>
+          <AttendanceOvertimePage />
         </ProtectedRoute>
       </Route>
       {/* Fallback to 404 */}

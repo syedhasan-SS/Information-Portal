@@ -99,40 +99,41 @@ export async function notifyTicketCreated(ticket: Ticket, creator: User | undefi
  * Replies in the original thread if slackMessageTs exists on the ticket.
  */
 export async function notifyTicketAssigned(ticket: Ticket, assignee: User, actor: User | undefined) {
+  if (!ticket.assigneeId) return;
+  if (!assignee.isActive) {
+    console.log(`[Notifications] Skipping notification - assignee ${assignee.name} is inactive`);
+    return;
+  }
+
+  // ── 1. In-app notification (DB) — failure must NOT block Slack ─────────
+  storage.createNotification({
+    userId: ticket.assigneeId,
+    type: "ticket_assigned",
+    title: "Ticket Assigned to You",
+    message: `You have been assigned ticket: ${ticket.subject}`,
+    ticketId: ticket.id,
+    actorId: actor?.id,
+    metadata: {
+      ticketNumber: ticket.ticketNumber,
+      vendorHandle: ticket.vendorHandle,
+      priority: ticket.priorityTier,
+      assignedBy: actor?.name,
+    },
+    isRead: false,
+  }).then(() => {
+    console.log(`[Notifications] In-app notification created for ${assignee.name} — ${ticket.ticketNumber}`);
+  }).catch(err => {
+    console.error('[Notifications] Failed to create in-app notification for assignment:', err);
+  });
+
+  // ── 2. Slack thread reply — runs independently of DB result ────────────
   try {
-    if (!ticket.assigneeId) return;
-    if (!assignee.isActive) {
-      console.log(`[Notifications] Skipping notification - assignee ${assignee.name} is inactive`);
-      return;
-    }
-
-    await storage.createNotification({
-      userId: ticket.assigneeId,
-      type: "ticket_assigned",
-      title: "Ticket Assigned to You",
-      message: `You have been assigned ticket: ${ticket.subject}`,
-      ticketId: ticket.id,
-      actorId: actor?.id,
-      metadata: {
-        ticketNumber: ticket.ticketNumber,
-        vendorHandle: ticket.vendorHandle,
-        priority: ticket.priorityTier,
-        assignedBy: actor?.name,
-      },
-      isRead: false,
-    });
-
-    console.log(`[Notifications] Notified user ${assignee.name} about ticket assignment: ${ticket.ticketNumber}`);
-
     const manager  = assignee.managerId ? await storage.getUserById(assignee.managerId) : undefined;
     const threadTs = await ensureSlackThread(ticket);
-
-    // Await so callers can sequence multiple notifications (prevents Slack grouping them as one)
-    await sendSlackTicketAssigned(ticket, assignee, actor, manager, threadTs).catch(err => {
-      console.error('[Slack] Failed to send ticket assigned notification:', err);
-    });
-  } catch (error) {
-    console.error("[Notifications] Failed to create ticket assignment notification:", error);
+    await sendSlackTicketAssigned(ticket, assignee, actor, manager, threadTs);
+    console.log(`[Slack] Assignment notification sent for ${ticket.ticketNumber} → ${assignee.name}`);
+  } catch (err) {
+    console.error('[Slack] Failed to send ticket assigned notification:', err);
   }
 }
 
@@ -391,6 +392,117 @@ export async function notifyDepartmentTransfer(
     }
   } catch (error) {
     console.error("[Notifications] Failed to create department transfer notifications:", error);
+  }
+}
+
+// ── Leave Request Notifications ────────────────────────────────────────────
+
+/**
+ * Notify manager when an employee submits a leave request.
+ * - In-app: notification to the employee's manager (or all dept managers)
+ * - Slack:  post to SLACK_CHANNEL_MANAGERS channel
+ */
+export async function notifyLeaveSubmitted(opts: {
+  leaveId:   string;
+  employee:  User;
+  startDate: Date;
+  endDate:   Date;
+  leaveType: string;
+  reason:    string;
+}) {
+  try {
+    const { leaveId, employee, startDate, endDate, leaveType, reason } = opts;
+
+    const fmtDate = (d: Date) =>
+      d.toLocaleDateString("en-GB", { day: "2-digit", month: "short", year: "numeric" });
+
+    const leaveTypeLabel: Record<string, string> = {
+      sick: "Sick Leave", annual: "Annual Leave",
+      personal: "Personal Leave", emergency: "Emergency Leave",
+    };
+
+    const summary = `${employee.name} has submitted a ${leaveTypeLabel[leaveType] ?? leaveType} request (${fmtDate(startDate)} – ${fmtDate(endDate)}).`;
+
+    // In-app: notify manager if known, otherwise all active dept members with manager+ role
+    const managerUsers = employee.managerId
+      ? [await storage.getUserById(employee.managerId)].filter(Boolean) as User[]
+      : (await storage.getUsersByDepartment(employee.department ?? "", { isActive: true }))
+          .filter(u => ["Owner","Admin","Head","Manager","Lead"].includes(u.role));
+
+    await Promise.all(
+      managerUsers.map(mgr =>
+        storage.createNotification({
+          userId:  mgr.id,
+          type:    "ticket_updated",
+          title:   "New Leave Request",
+          message: summary,
+          data:    { leaveId, employeeId: employee.id },
+        })
+      )
+    );
+
+    // Slack: leave notifications are handled by a dedicated flow — not posted to the pulse channel
+  } catch (err) {
+    console.error("[Leave] notifyLeaveSubmitted error:", err);
+  }
+}
+
+/**
+ * Notify employee when their leave request is approved or rejected.
+ * - In-app: notification to the employee
+ * - Slack:  DM to employee (if slackUserId set), else managers channel
+ */
+export async function notifyLeaveReviewed(opts: {
+  leaveId:    string;
+  employee:   User;
+  reviewer:   User;
+  status:     "approved" | "rejected";
+  reviewNote?: string;
+  startDate:  Date;
+  endDate:    Date;
+}) {
+  try {
+    const { leaveId, employee, reviewer, status, reviewNote, startDate, endDate } = opts;
+
+    const fmtDate = (d: Date) =>
+      d.toLocaleDateString("en-GB", { day: "2-digit", month: "short", year: "numeric" });
+
+    const emoji   = status === "approved" ? "✅" : "❌";
+    const word    = status === "approved" ? "Approved" : "Rejected";
+    const message = `Your leave request (${fmtDate(startDate)} – ${fmtDate(endDate)}) has been ${word.toLowerCase()} by ${reviewer.name}.${reviewNote ? `\nNote: ${reviewNote}` : ""}`;
+
+    // In-app
+    await storage.createNotification({
+      userId:  employee.id,
+      type:    "ticket_updated",
+      title:   `Leave Request ${word}`,
+      message,
+      data:    { leaveId },
+    });
+
+    // Slack: DM the employee directly if they have a Slack user ID linked
+    if (employee.slackUserId) {
+      try {
+        const { WebClient } = await import("@slack/web-api");
+        const botToken = process.env.SLACK_BOT_TOKEN?.trim();
+        if (botToken) {
+          const client = new WebClient(botToken);
+          const dm = await client.conversations.open({ users: employee.slackUserId });
+          const dmChannel = (dm as any).channel?.id;
+          if (dmChannel) {
+            await client.chat.postMessage({
+              channel: dmChannel,
+              text: `${emoji} *Leave Request ${word}*\n*Period:* ${fmtDate(startDate)} – ${fmtDate(endDate)}\n*Reviewed by:* ${reviewer.name}${reviewNote ? `\n*Note:* ${reviewNote}` : ""}`,
+            });
+          }
+        }
+      } catch (dmErr) {
+        console.error("[Leave] Failed to DM employee:", dmErr);
+      }
+    }
+    // Note: leave notifications are NOT posted to the pulse/managers group channel
+  } catch (err) {
+    console.error("[Leave] notifyLeaveReviewed error:", err);
   }
 }
 

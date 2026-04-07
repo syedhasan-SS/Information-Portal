@@ -9,6 +9,7 @@ import { storage } from './storage';
 import { buildPendingReportData, buildPendingReportHtml } from './report-html-builder';
 import { renderHtmlToPng, cacheReportImage } from './report-image';
 import { buildReportPng, type ReportTheme } from './report-image-satori';
+import { isWeekend } from './business-days';
 
 // ── Slack client ──────────────────────────────────────────────────────────────
 
@@ -963,6 +964,13 @@ export function startDailyReportScheduler(): void {
     );
 
     setTimeout(async () => {
+      // Skip weekends — no report on Saturday or Sunday
+      if (isWeekend(new Date())) {
+        console.log('[SlackReporter] Weekend detected — skipping daily report.');
+        scheduleNext();
+        return;
+      }
+
       // 1. Full pending complaints report → main channel (flow-seller-experience-pulse)
       const mainChannel = (process.env.SLACK_CHANNEL_ID || process.env.SLACK_CHANNEL_MANAGERS)?.trim();
       if (mainChannel) {

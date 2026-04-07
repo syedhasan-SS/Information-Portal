@@ -6,7 +6,7 @@
 import { db } from "./db";
 import { ticketActivityLog } from "@shared/schema";
 import type { Ticket, User, TicketActivityLog, Comment } from "@shared/schema";
-import { eq, desc, sql } from "drizzle-orm";
+import { eq, desc, sql, inArray } from "drizzle-orm";
 
 interface ActivityContext {
   user: User;
@@ -303,6 +303,32 @@ export async function logFieldUpdate(
  * Get activity log for a ticket
  * @param ticketIdOrNumber - Can be either ticket UUID or ticket number (e.g., "SS00020")
  */
+/**
+ * Batch-fetch activity logs for many tickets in a single query.
+ * Returns a Map keyed by ticketId.
+ */
+export async function getActivitiesForTickets(ticketIds: string[]): Promise<Map<string, TicketActivityLog[]>> {
+  if (!ticketIds.length) return new Map();
+  try {
+    const rows = await db
+      .select()
+      .from(ticketActivityLog)
+      .where(inArray(ticketActivityLog.ticketId, ticketIds))
+      .orderBy(desc(ticketActivityLog.createdAt));
+
+    const map = new Map<string, TicketActivityLog[]>();
+    for (const row of rows) {
+      const id = row.ticketId as string;
+      if (!map.has(id)) map.set(id, []);
+      map.get(id)!.push(row);
+    }
+    return map;
+  } catch (error) {
+    console.error("[Activity] Failed to batch-fetch ticket activities:", error);
+    return new Map();
+  }
+}
+
 export async function getTicketActivity(ticketIdOrNumber: string): Promise<TicketActivityLog[]> {
   try {
     const activities = await db

@@ -36,6 +36,9 @@ import {
   BarChart3,
   ArrowLeft,
   LogIn,
+  CalendarDays,
+  Home,
+  Timer,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import type { User as UserType } from "@shared/schema";
@@ -346,6 +349,35 @@ export default function AttendancePage() {
           >
             <Download className="h-8 w-8" />
             <span className="text-lg font-semibold">Leave Requests</span>
+          </Button>
+
+          {isManager && (
+            <Button
+              onClick={() => setLocation("/attendance/shifts")}
+              variant="outline"
+              className="h-24 flex-col gap-2"
+            >
+              <CalendarDays className="h-8 w-8" />
+              <span className="text-lg font-semibold">Shift Schedule</span>
+            </Button>
+          )}
+
+          <Button
+            onClick={() => setLocation("/attendance/wfh")}
+            variant="outline"
+            className="h-24 flex-col gap-2"
+          >
+            <Home className="h-8 w-8" />
+            <span className="text-lg font-semibold">WFH Tracker</span>
+          </Button>
+
+          <Button
+            onClick={() => setLocation("/attendance/overtime")}
+            variant="outline"
+            className="h-24 flex-col gap-2 border-orange-200 hover:border-orange-400 hover:bg-orange-50"
+          >
+            <Timer className="h-8 w-8 text-orange-500" />
+            <span className="text-lg font-semibold">OT Tracker</span>
           </Button>
         </div>
 

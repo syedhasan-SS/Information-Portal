@@ -65,6 +65,12 @@ function isCXTicketVisible(user: User, ticket: Ticket): boolean {
 export function canViewTicket(user: User, ticket: Ticket): boolean {
   if (user.role === "Admin" || user.role === "Owner") return true;
 
+  // Head role sees all tickets across all departments
+  if (user.role === "Head") return true;
+
+  // Any user with explicit view:all_tickets permission sees everything
+  if ((user as any).customPermissions?.includes("view:all_tickets")) return true;
+
   // Users can always see tickets assigned to them or created by them, regardless of department
   if (ticket.assigneeId === user.id) return true;
   if (ticket.createdById === user.id) return true;
@@ -75,7 +81,7 @@ export function canViewTicket(user: User, ticket: Ticket): boolean {
     return ticket.department === "CX";
   }
 
-  // All other users (including Lead/Manager/Head) can only view tickets in their own department
+  // All other users can only view tickets in their own department
   return ticket.department === user.department ||
     (!!user.subDepartment && ticket.department === user.subDepartment);
 }
@@ -85,6 +91,12 @@ export function canViewTicket(user: User, ticket: Ticket): boolean {
  */
 export function filterTicketsByDepartmentAccess(tickets: Ticket[], user: User): Ticket[] {
   if (user.role === "Admin" || user.role === "Owner") return tickets;
+
+  // Head role sees all tickets across all departments
+  if (user.role === "Head") return tickets;
+
+  // Any user with explicit view:all_tickets permission sees everything
+  if ((user as any).customPermissions?.includes("view:all_tickets")) return tickets;
 
   if (user.department === "CX") {
     // Consistent with canViewTicket: CX users see all CX-department tickets

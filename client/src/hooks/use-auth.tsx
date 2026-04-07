@@ -80,6 +80,7 @@ export const ROLE_PERMISSIONS: Record<string, string[]> = {
     "view:users",
     "view:vendors",
     "view:analytics",
+    "view:all_tickets",
     "view:department_tickets",
     "view:department_users",
   ],
@@ -162,16 +163,22 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
   }, [currentUser]);
 
+  // Heartbeat — updates lastSeenAt every 30 s while the portal is open
+  useEffect(() => {
+    if (!currentUser) return;
+    const ping = () => fetch("/api/users/heartbeat", {
+      method: "POST",
+      headers: { "x-user-email": currentUser.email },
+    }).catch(() => {});
+    ping(); // immediate ping on login
+    const interval = setInterval(ping, 30_000);
+    return () => clearInterval(interval);
+  }, [currentUser?.email]);
+
   const hasPermission = (permission: string): boolean => {
     if (!currentUser) return false;
 
-    // Check custom permissions first (agent-level overrides)
-    if (currentUser.customPermissions && currentUser.customPermissions.length > 0) {
-      return currentUser.customPermissions.includes(permission);
-    }
-
-    // Combine permissions from all roles (multi-role support)
-    // Use roles array if available, otherwise fall back to single role
+    // Combine permissions from all roles first
     const userRoles = currentUser.roles && currentUser.roles.length > 0
       ? currentUser.roles
       : [currentUser.role];
@@ -181,6 +188,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     for (const role of userRoles) {
       const rolePermissions = ROLE_PERMISSIONS[role] || [];
       rolePermissions.forEach(p => allPermissions.add(p));
+    }
+
+    // Custom permissions are ADDITIVE — they extend role permissions, not replace them
+    if (currentUser.customPermissions && currentUser.customPermissions.length > 0) {
+      currentUser.customPermissions.forEach(p => allPermissions.add(p));
     }
 
     const hasRolePermission = allPermissions.has(permission);

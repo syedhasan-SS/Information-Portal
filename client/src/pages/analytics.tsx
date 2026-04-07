@@ -59,6 +59,8 @@ import { format, subDays, startOfWeek, endOfWeek } from "date-fns";
 import {
   AreaChart,
   Area,
+  LineChart,
+  Line,
   BarChart,
   Bar,
   PieChart,
@@ -160,11 +162,12 @@ async function sendPendingReportToSlack(channelId: string) {
   return res.json();
 }
 
-async function getResolutionTime(from?: string, to?: string) {
+async function getResolutionTime(from?: string, to?: string, grouping?: string) {
   const userEmail = localStorage.getItem("userEmail");
   const params = new URLSearchParams();
   if (from) params.set("from", from);
   if (to) params.set("to", to);
+  if (grouping) params.set("grouping", grouping);
   const res = await fetch(`/api/analytics/resolution-time?${params.toString()}`, {
     headers: { ...(userEmail ? { "x-user-email": userEmail } : {}) },
   });
@@ -367,10 +370,38 @@ function TotalRow({ rows }: { rows: DeptRow[] }) {
   );
 }
 
-function ResolutionTimeCard({ data, isLoading }: { data: any; isLoading: boolean }) {
+const DEPT_LINE_COLORS: Record<string, string> = {
+  "Customer Support": "#8b5cf6",
+  "Seller Support":   "#3b82f6",
+  Finance:            "#10b981",
+  Operations:         "#f59e0b",
+  Growth:             "#f97316",
+  Tech:               "#06b6d4",
+  Supply:             "#ec4899",
+  Marketplace:        "#6366f1",
+  Experience:         "#84cc16",
+};
+
+const CX_TEAMS = ["Customer Support", "Seller Support"] as const;
+
+function ResolutionTimeCard({ data, isLoading, timeGrouping }: { data: any; isLoading: boolean; timeGrouping: string }) {
+  const [activeTab, setActiveTab] = useState<"cx" | "internal">("cx");
+  const [selectedCxTeam,   setSelectedCxTeam]   = useState<string>("Customer Support");
+  const [selectedIntDept,  setSelectedIntDept]   = useState<string | null>(null);
+
   const supportRows: DeptRow[]  = useMemo(() => data?.support  ?? [], [data]);
   const internalRows: DeptRow[] = useMemo(() => data?.internal ?? [], [data]);
   const hasData = supportRows.length > 0 || internalRows.length > 0;
+
+  const cxTrend       = useMemo(() => data?.trendByCx      ?? [], [data]);
+  const internalTrend = useMemo(() => data?.trendByInternal ?? [], [data]);
+  const internalDeptKeys = useMemo(() => {
+    if (!internalTrend.length) return [];
+    return Object.keys(internalTrend[0]).filter(k => k !== "date");
+  }, [internalTrend]);
+
+  // Auto-select first internal dept when data loads
+  const resolvedIntDept = selectedIntDept ?? internalDeptKeys[0] ?? null;
 
   return (
     <Card className="p-6">
@@ -388,6 +419,30 @@ function ResolutionTimeCard({ data, isLoading }: { data: any; isLoading: boolean
         )}
       </div>
 
+      {/* Main toggle */}
+      <div className="mb-5 flex rounded-md border overflow-hidden w-fit">
+        <button
+          onClick={() => setActiveTab("cx")}
+          className={`px-3 py-1.5 text-xs transition-colors ${
+            activeTab === "cx"
+              ? "bg-primary text-primary-foreground"
+              : "bg-background text-muted-foreground hover:bg-muted"
+          }`}
+        >
+          CX Teams
+        </button>
+        <button
+          onClick={() => setActiveTab("internal")}
+          className={`px-3 py-1.5 text-xs border-l transition-colors ${
+            activeTab === "internal"
+              ? "bg-primary text-primary-foreground"
+              : "bg-background text-muted-foreground hover:bg-muted"
+          }`}
+        >
+          Internal Departments
+        </button>
+      </div>
+
       {isLoading ? (
         <div className="space-y-3">
           {[1, 2, 3, 4, 5].map(i => <div key={i} className="h-10 animate-pulse rounded-lg bg-muted" />)}
@@ -397,21 +452,19 @@ function ResolutionTimeCard({ data, isLoading }: { data: any; isLoading: boolean
           <Clock className="h-8 w-8 text-muted-foreground/40" />
           No resolved tickets in the selected range
         </div>
-      ) : (
+      ) : activeTab === "cx" ? (
+        /* ── CX Teams view ── */
         <div className="space-y-6">
-
-          {/* ── Section A: CX Teams ── */}
           <div>
-            <div className="mb-2">
-              <p className="text-xs font-semibold uppercase tracking-wide text-foreground/70">
-                Customer Experience (CX) Teams
-              </p>
-              <p className="text-[11px] text-muted-foreground">
-                End-to-end resolution — ticket creation → ticket closed
-              </p>
+            <div className="mb-3">
+              <p className="text-xs font-semibold uppercase tracking-wide text-foreground/70">Customer Experience (CX) Teams</p>
+              <p className="text-[11px] text-muted-foreground">End-to-end resolution — ticket creation → ticket closed</p>
             </div>
             {supportRows.length === 0 ? (
-              <p className="py-3 text-center text-xs text-muted-foreground">No CX tickets resolved in this range</p>
+              <div className="flex h-32 flex-col items-center justify-center gap-2 text-sm text-muted-foreground">
+                <Clock className="h-6 w-6 text-muted-foreground/40" />
+                No CX tickets resolved in this range
+              </div>
             ) : (
               <>
                 <SectionHeader label="Team" />
@@ -421,26 +474,119 @@ function ResolutionTimeCard({ data, isLoading }: { data: any; isLoading: boolean
             )}
           </div>
 
-          {/* ── Divider ── */}
-          {internalRows.length > 0 && <div className="border-t border-dashed border-border" />}
-
-          {/* ── Section B: Internal Departments ── */}
-          {internalRows.length > 0 && (
-            <div>
-              <div className="mb-2">
-                <p className="text-xs font-semibold uppercase tracking-wide text-foreground/70">
-                  Internal Departments
-                </p>
-                <p className="text-[11px] text-muted-foreground">
-                  Queue hold time — from assignment until reassigned back to CX
-                </p>
+          {/* CX trend chart with team selector */}
+          {cxTrend.length > 0 && (
+            <div className="border-t border-dashed border-border pt-5">
+              <div className="mb-3 flex items-center justify-between gap-4">
+                <div>
+                  <p className="text-xs font-semibold uppercase tracking-wide text-foreground/70">Resolution Trend</p>
+                  <p className="text-[11px] text-muted-foreground">Avg. business days — {timeGrouping.toLowerCase()}</p>
+                </div>
+                <div className="flex rounded-md border overflow-hidden shrink-0">
+                  {CX_TEAMS.map((team, i) => (
+                    <button
+                      key={team}
+                      onClick={() => setSelectedCxTeam(team)}
+                      className={`px-3 py-1 text-xs transition-colors ${i > 0 ? "border-l" : ""} ${
+                        selectedCxTeam === team
+                          ? "bg-primary text-primary-foreground"
+                          : "bg-background text-muted-foreground hover:bg-muted"
+                      }`}
+                    >
+                      {team}
+                    </button>
+                  ))}
+                </div>
               </div>
-              <SectionHeader label="Department" />
-              {internalRows.map(r => <DeptTableRow key={r.name} row={r} />)}
-              <TotalRow rows={internalRows} />
+              <ResponsiveContainer width="100%" height={200}>
+                <LineChart data={cxTrend} margin={{ top: 4, right: 16, left: 0, bottom: 0 }}>
+                  <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
+                  <XAxis dataKey="date" tick={{ fontSize: 11 }} tickLine={false} axisLine={false} />
+                  <YAxis tick={{ fontSize: 11 }} tickLine={false} axisLine={false} unit="d" />
+                  <Tooltip formatter={(v: any) => v != null ? [`${v}d`, selectedCxTeam] : ["No data", ""]} labelStyle={{ fontSize: 11 }} contentStyle={{ fontSize: 11 }} />
+                  <Line
+                    type="monotone"
+                    dataKey={selectedCxTeam === "Customer Support" ? "customerSupport" : "sellerSupport"}
+                    name={selectedCxTeam}
+                    stroke={DEPT_LINE_COLORS[selectedCxTeam]}
+                    strokeWidth={2}
+                    dot={{ r: 3 }}
+                    activeDot={{ r: 5 }}
+                    connectNulls
+                  />
+                </LineChart>
+              </ResponsiveContainer>
             </div>
           )}
+        </div>
+      ) : (
+        /* ── Internal Departments view ── */
+        <div className="space-y-6">
+          <div>
+            <div className="mb-3">
+              <p className="text-xs font-semibold uppercase tracking-wide text-foreground/70">Internal Departments</p>
+              <p className="text-[11px] text-muted-foreground">Queue hold time — from assignment until reassigned back to CX</p>
+            </div>
+            {internalRows.length === 0 ? (
+              <div className="flex h-32 flex-col items-center justify-center gap-2 text-sm text-muted-foreground">
+                <Clock className="h-6 w-6 text-muted-foreground/40" />
+                No internal department data in this range
+              </div>
+            ) : (
+              <>
+                <SectionHeader label="Department" />
+                {internalRows.map(r => <DeptTableRow key={r.name} row={r} />)}
+                <TotalRow rows={internalRows} />
+              </>
+            )}
+          </div>
 
+          {/* Internal trend chart with dept selector */}
+          {internalTrend.length > 0 && internalDeptKeys.length > 0 && resolvedIntDept && (
+            <div className="border-t border-dashed border-border pt-5">
+              <div className="mb-3 flex items-center justify-between gap-4 flex-wrap">
+                <div>
+                  <p className="text-xs font-semibold uppercase tracking-wide text-foreground/70">Resolution Trend</p>
+                  <p className="text-[11px] text-muted-foreground">Avg. queue hold time — {timeGrouping.toLowerCase()}</p>
+                </div>
+                <div className="flex flex-wrap gap-1">
+                  {internalDeptKeys.map(dept => (
+                    <button
+                      key={dept}
+                      onClick={() => setSelectedIntDept(dept)}
+                      className={`rounded px-2.5 py-1 text-xs font-medium transition-colors border ${
+                        resolvedIntDept === dept
+                          ? "border-transparent text-white"
+                          : "bg-background text-muted-foreground hover:bg-muted"
+                      }`}
+                      style={resolvedIntDept === dept ? { backgroundColor: DEPT_LINE_COLORS[dept] ?? "#6b7280", borderColor: "transparent" } : {}}
+                    >
+                      {dept}
+                    </button>
+                  ))}
+                </div>
+              </div>
+              <ResponsiveContainer width="100%" height={200}>
+                <LineChart data={internalTrend} margin={{ top: 4, right: 16, left: 0, bottom: 0 }}>
+                  <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
+                  <XAxis dataKey="date" tick={{ fontSize: 11 }} tickLine={false} axisLine={false} />
+                  <YAxis tick={{ fontSize: 11 }} tickLine={false} axisLine={false} unit="d" />
+                  <Tooltip formatter={(v: any) => v != null ? [`${v}d`, resolvedIntDept] : ["No data", ""]} labelStyle={{ fontSize: 11 }} contentStyle={{ fontSize: 11 }} />
+                  <Line
+                    key={resolvedIntDept}
+                    type="monotone"
+                    dataKey={resolvedIntDept}
+                    name={resolvedIntDept}
+                    stroke={DEPT_LINE_COLORS[resolvedIntDept] ?? "#6b7280"}
+                    strokeWidth={2}
+                    dot={{ r: 3 }}
+                    activeDot={{ r: 5 }}
+                    connectNulls
+                  />
+                </LineChart>
+              </ResponsiveContainer>
+            </div>
+          )}
         </div>
       )}
     </Card>
@@ -545,8 +691,8 @@ export default function AnalyticsPage() {
   }, [datePreset, customDateStart, customDateEnd]);
 
   const { data: resolutionTimeData, isLoading: resolutionTimeLoading } = useQuery({
-    queryKey: ["resolution-time", dateRange.start?.toISOString(), dateRange.end?.toISOString()],
-    queryFn: () => getResolutionTime(dateRange.start?.toISOString(), dateRange.end?.toISOString()),
+    queryKey: ["resolution-time", dateRange.start?.toISOString(), dateRange.end?.toISOString(), timeGrouping],
+    queryFn: () => getResolutionTime(dateRange.start?.toISOString(), dateRange.end?.toISOString(), timeGrouping),
   });
 
   // Filter tickets
@@ -641,27 +787,8 @@ export default function AnalyticsPage() {
     return Array.from(map.entries()).map(([type, count]) => ({ type, count }));
   }, [filtered]);
 
-  // ── Agent leaderboard ────────────────────────────────────────────────────
-  const agentData = useMemo(() => {
-    const map = new Map<string, { total: number; solved: number; breached: number }>();
-    filtered.forEach((t) => {
-      if (!t.assigneeId) return;
-      const cur = map.get(t.assigneeId) || { total: 0, solved: 0, breached: 0 };
-      cur.total++;
-      if (t.status === "Solved" || t.status === "Closed") cur.solved++;
-      if (t.slaStatus === "breached") cur.breached++;
-      map.set(t.assigneeId, cur);
-    });
-    const userMap = new Map((users as any[]).map((u: any) => [u.id, u.name || u.email]));
-    return Array.from(map.entries())
-      .map(([id, v]) => ({
-        name: (userMap.get(id) as string) || "Unknown",
-        ...v,
-        rate: v.total > 0 ? Math.round((v.solved / v.total) * 100) : 0,
-      }))
-      .sort((a, b) => b.total - a.total)
-      .slice(0, 10);
-  }, [filtered, users]);
+  // ── Agent leaderboard — sourced from resolution-time API (business-hours logic) ──
+  const agentData = useMemo(() => resolutionTimeData?.agents ?? [], [resolutionTimeData]);
 
   // ── SLA Summary ──────────────────────────────────────────────────────────
   const slaData = useMemo(() => {
@@ -996,6 +1123,7 @@ export default function AnalyticsPage() {
           ) : (
             <div className="flex h-[280px] items-center justify-center text-sm text-muted-foreground">No data for selected range</div>
           )}
+
         </Card>
 
         {/* ── Row 2: Status + SLA ── */}
@@ -1135,6 +1263,7 @@ export default function AnalyticsPage() {
         <ResolutionTimeCard
           data={resolutionTimeData}
           isLoading={resolutionTimeLoading}
+          timeGrouping={timeGrouping}
         />
 
         {/* ── Row 4: Issue Type + Agent Table ── */}
@@ -1161,32 +1290,59 @@ export default function AnalyticsPage() {
 
           {/* Agent Leaderboard */}
           <Card className="p-6">
-            <div className="mb-4 flex items-center gap-2">
+            <div className="mb-1 flex items-center gap-2">
               <Users className="h-4 w-4 text-muted-foreground" />
               <h2 className="text-base font-semibold">Agent Performance</h2>
             </div>
-            {agentData.length > 0 ? (
-              <div className="space-y-2">
-                <div className="grid grid-cols-4 text-xs font-medium text-muted-foreground mb-1 px-1">
-                  <span className="col-span-2">Agent</span>
-                  <span className="text-center">Total</span>
-                  <span className="text-center">Resolved %</span>
+            <p className="mb-4 text-xs text-muted-foreground">Business hours only — weekends excluded</p>
+            {resolutionTimeLoading ? (
+              <div className="space-y-3">
+                {[1, 2, 3, 4].map(i => <div key={i} className="h-9 animate-pulse rounded-lg bg-muted" />)}
+              </div>
+            ) : agentData.length > 0 ? (
+              <div className="space-y-1">
+                {/* Header */}
+                <div className="grid grid-cols-12 text-xs font-medium text-muted-foreground mb-1 px-1 gap-1">
+                  <span className="col-span-4">Agent</span>
+                  <span className="col-span-2 text-center">Total</span>
+                  <span className="col-span-2 text-center">Resolved</span>
+                  <span className="col-span-2 text-center">Avg Time</span>
+                  <span className="col-span-2 text-center">P90 Time</span>
                 </div>
-                {agentData.map((a, i) => (
-                  <div key={a.name} className="grid grid-cols-4 items-center gap-2 rounded-lg px-1 py-1.5 hover:bg-muted/50 transition-colors">
-                    <div className="col-span-2 flex items-center gap-2">
-                      <span className="flex h-5 w-5 items-center justify-center rounded-full bg-muted text-xs font-medium">{i + 1}</span>
+                {agentData.map((a: any, i: number) => (
+                  <div key={a.name} className="grid grid-cols-12 items-center gap-1 rounded-lg px-1 py-2 hover:bg-muted/50 transition-colors">
+                    {/* Agent name */}
+                    <div className="col-span-4 flex items-center gap-1.5 min-w-0">
+                      <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-muted text-xs font-medium">{i + 1}</span>
                       <span className="truncate text-sm font-medium">{a.name}</span>
                     </div>
-                    <span className="text-center text-sm font-semibold">{a.total}</span>
-                    <div className="flex items-center justify-center gap-1">
-                      <span className={`text-sm font-semibold ${a.rate >= 70 ? "text-green-600" : a.rate >= 40 ? "text-amber-600" : "text-red-500"}`}>
+                    {/* Total */}
+                    <span className="col-span-2 text-center text-sm font-semibold">{a.total}</span>
+                    {/* Resolved % */}
+                    <div className="col-span-2 flex flex-col items-center gap-0.5">
+                      <span className={`text-sm font-semibold leading-none ${a.rate >= 70 ? "text-green-600" : a.rate >= 40 ? "text-amber-600" : "text-red-500"}`}>
                         {a.rate}%
                       </span>
                       {a.breached > 0 && (
-                        <Badge variant="destructive" className="h-4 px-1 text-[10px]">{a.breached} SLA</Badge>
+                        <Badge variant="destructive" className="h-3.5 px-1 text-[9px]">{a.breached} SLA</Badge>
                       )}
                     </div>
+                    {/* Avg resolution */}
+                    <span className="col-span-2 text-center text-xs text-muted-foreground">
+                      {a.avgResolutionHours != null
+                        ? a.avgResolutionHours < 24
+                          ? `${a.avgResolutionHours}h`
+                          : `${(a.avgResolutionHours / 8).toFixed(1)}d`
+                        : "—"}
+                    </span>
+                    {/* P90 resolution */}
+                    <span className="col-span-2 text-center text-xs text-muted-foreground">
+                      {a.p90ResolutionHours != null
+                        ? a.p90ResolutionHours < 24
+                          ? `${a.p90ResolutionHours}h`
+                          : `${(a.p90ResolutionHours / 8).toFixed(1)}d`
+                        : "—"}
+                    </span>
                   </div>
                 ))}
               </div>

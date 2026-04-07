@@ -1,4 +1,4 @@
-import { eq, and, desc, sql, isNull, asc } from "drizzle-orm";
+import { eq, and, desc, sql, isNull, asc, gte, isNotNull } from "drizzle-orm";
 import { db } from "./db";
 import { addBusinessHours } from "./business-days";
 import {
@@ -27,6 +27,11 @@ import {
   productRequestComments,
   userColumnPreferences,
   attendanceRecords,
+  leaveRequests,
+  shiftSchedules,
+  shiftConfigurations,
+  overtimeRecords,
+  wfhRecords,
   pagePermissions,
   pageFeatures,
   rolePageAccess,
@@ -78,6 +83,16 @@ import {
   type InsertCategoryRoutingRule,
   type InsertProductRequest,
   type InsertProductRequestComment,
+  type LeaveRequest,
+  type InsertLeaveRequest,
+  type ShiftSchedule,
+  type InsertShiftSchedule,
+  type ShiftConfiguration,
+  type InsertShiftConfiguration,
+  type OvertimeRecord,
+  type InsertOvertimeRecord,
+  type WfhRecord,
+  type InsertWfhRecord,
 } from "@shared/schema";
 
 export interface IStorage {
@@ -107,9 +122,31 @@ export interface IStorage {
   getUsers(): Promise<User[]>;
   getUserById(id: string): Promise<User | undefined>;
   getUserByEmail(email: string): Promise<User | undefined>;
+  getUserBySlackId(slackUserId: string): Promise<User | undefined>;
+  getTicketBySlackTs(slackMessageTs: string): Promise<Ticket | undefined>;
+  getOpenTicketsWithSlackThread(): Promise<Ticket[]>;
   getUsersByDepartment(department: string, options?: { isActive?: boolean }): Promise<User[]>;
   createUser(user: InsertUser): Promise<User>;
   updateUser(id: string, updates: Partial<InsertUser>): Promise<User | undefined>;
+  updateUserLastSeen(userId: string): Promise<void>;
+  getOnlineUsers(withinMinutes?: number): Promise<User[]>;
+
+  // Leave Requests
+  createLeaveRequest(data: InsertLeaveRequest): Promise<LeaveRequest>;
+  getLeaveRequests(filters: { userId?: string; department?: string; status?: string }): Promise<(LeaveRequest & { userName: string; userEmail: string; userDepartment: string; reviewerName?: string })[]>;
+  updateLeaveRequestStatus(id: string, status: "approved" | "rejected", reviewedBy: string, reviewNote?: string): Promise<LeaveRequest | undefined>;
+
+  // Shift Schedules
+  createShiftSchedule(data: InsertShiftSchedule): Promise<ShiftSchedule>;
+  createShiftSchedulesBulk(records: InsertShiftSchedule[]): Promise<number>;
+  upsertShiftSchedule(data: InsertShiftSchedule): Promise<ShiftSchedule>;
+  getShiftSchedules(filters: { date?: string; weekStart?: string; weekEnd?: string; userId?: string; department?: string }): Promise<(ShiftSchedule & { userName: string; userDepartment: string })[]>;
+  deleteShiftSchedule(id: string): Promise<void>;
+
+  // WFH Records
+  upsertWfhRecord(data: InsertWfhRecord): Promise<WfhRecord>;
+  getWfhRecords(filters: { date?: string; startDate?: string; endDate?: string; department?: string }): Promise<(WfhRecord & { userName: string; userEmail: string; userDepartment: string })[]>;
+  getTodayWfhStatus(userId: string): Promise<WfhRecord | undefined>;
 
   // Notifications
   getNotifications(userId: string): Promise<Notification[]>;
@@ -784,6 +821,27 @@ export class DatabaseStorage implements IStorage {
     return results[0];
   }
 
+  async getUserBySlackId(slackUserId: string): Promise<User | undefined> {
+    const results = await db.select().from(users).where(eq(users.slackUserId, slackUserId)).limit(1);
+    return results[0];
+  }
+
+  async getTicketBySlackTs(slackMessageTs: string): Promise<Ticket | undefined> {
+    const results = await db.select().from(tickets).where(eq(tickets.slackMessageTs, slackMessageTs)).limit(1);
+    return results[0] ? this.computeSlaStatus(results[0]) : undefined;
+  }
+
+  async getOpenTicketsWithSlackThread(): Promise<Ticket[]> {
+    // Return all non-closed tickets that have a Slack thread timestamp
+    const results = await db
+      .select()
+      .from(tickets)
+      .where(
+        sql`${tickets.slackMessageTs} IS NOT NULL AND ${tickets.status} NOT IN ('Closed')`
+      );
+    return results.map(t => this.computeSlaStatus(t));
+  }
+
   async getUsersByDepartment(department: string, options?: { isActive?: boolean }): Promise<User[]> {
     const conditions = [eq(users.department, department)];
 
@@ -813,6 +871,262 @@ export class DatabaseStorage implements IStorage {
 
   async deleteUser(id: number): Promise<void> {
     await db.delete(users).where(eq(users.id, id));
+  }
+
+  async updateUserLastSeen(userId: string): Promise<void> {
+    await db.update(users).set({ lastSeenAt: new Date() }).where(eq(users.id, userId));
+  }
+
+  async getOnlineUsers(withinMinutes = 5): Promise<User[]> {
+    const cutoff = new Date(Date.now() - withinMinutes * 60 * 1000);
+    return db
+      .select()
+      .from(users)
+      .where(
+        and(
+          eq(users.isActive, true),
+          isNotNull(users.lastSeenAt),
+          gte(users.lastSeenAt, cutoff)
+        )
+      )
+      .orderBy(users.name);
+  }
+
+  // Leave Requests
+  async createLeaveRequest(data: InsertLeaveRequest): Promise<LeaveRequest> {
+    const results = await db.insert(leaveRequests).values(data).returning();
+    return results[0];
+  }
+
+  async getLeaveRequests(filters: { userId?: string; department?: string; status?: string }) {
+    const rows = await db
+      .select({
+        lr: leaveRequests,
+        u:  users,
+      })
+      .from(leaveRequests)
+      .innerJoin(users, eq(leaveRequests.userId, users.id))
+      .orderBy(desc(leaveRequests.createdAt));
+
+    return rows
+      .filter(({ lr, u }) => {
+        if (filters.userId && lr.userId !== filters.userId) return false;
+        if (filters.department && u.department !== filters.department) return false;
+        if (filters.status && lr.status !== filters.status) return false;
+        return true;
+      })
+      .map(({ lr, u }) => ({
+        ...lr,
+        userName:       u.name,
+        userEmail:      u.email,
+        userDepartment: u.department || "",
+      }));
+  }
+
+  async updateLeaveRequestStatus(
+    id: string,
+    status: "approved" | "rejected",
+    reviewedBy: string,
+    reviewNote?: string
+  ): Promise<LeaveRequest | undefined> {
+    const results = await db
+      .update(leaveRequests)
+      .set({ status, reviewedBy, reviewedAt: new Date(), reviewNote: reviewNote ?? null, updatedAt: new Date() })
+      .where(eq(leaveRequests.id, id))
+      .returning();
+    return results[0];
+  }
+
+  // Shift Schedules
+  async createShiftSchedule(data: InsertShiftSchedule): Promise<ShiftSchedule> {
+    const results = await db.insert(shiftSchedules).values(data).returning();
+    return results[0];
+  }
+
+  async createShiftSchedulesBulk(records: InsertShiftSchedule[]): Promise<number> {
+    if (records.length === 0) return 0;
+    const CHUNK = 100;
+    let total = 0;
+    for (let i = 0; i < records.length; i += CHUNK) {
+      const chunk = records.slice(i, i + CHUNK);
+      const res = await db.insert(shiftSchedules).values(chunk).returning();
+      total += res.length;
+    }
+    return total;
+  }
+
+  async upsertShiftSchedule(data: InsertShiftSchedule): Promise<ShiftSchedule> {
+    // Check for existing record for this user+date
+    const existing = await db
+      .select()
+      .from(shiftSchedules)
+      .where(and(eq(shiftSchedules.userId, data.userId), eq(shiftSchedules.date, data.date)))
+      .limit(1);
+    if (existing[0]) {
+      const results = await db
+        .update(shiftSchedules)
+        .set({ ...data, updatedAt: new Date() })
+        .where(eq(shiftSchedules.id, existing[0].id))
+        .returning();
+      return results[0];
+    }
+    const results = await db.insert(shiftSchedules).values(data).returning();
+    return results[0];
+  }
+
+  async getShiftSchedules(filters: { date?: string; weekStart?: string; weekEnd?: string; userId?: string; department?: string }) {
+    const rows = await db
+      .select({ ss: shiftSchedules, u: users })
+      .from(shiftSchedules)
+      .innerJoin(users, eq(shiftSchedules.userId, users.id))
+      .orderBy(shiftSchedules.date, users.name);
+
+    return rows
+      .filter(({ ss, u }) => {
+        if (filters.userId && ss.userId !== filters.userId) return false;
+        if (filters.department && u.department !== filters.department) return false;
+        if (filters.date && ss.date !== filters.date) return false;
+        if (filters.weekStart && ss.date < filters.weekStart) return false;
+        if (filters.weekEnd   && ss.date > filters.weekEnd)   return false;
+        return true;
+      })
+      .map(({ ss, u }) => ({
+        ...ss,
+        userName:       u.name,
+        userDepartment: u.department || "",
+      }));
+  }
+
+  async deleteShiftSchedule(id: string): Promise<void> {
+    await db.delete(shiftSchedules).where(eq(shiftSchedules.id, id));
+  }
+
+  // WFH Records
+  async upsertWfhRecord(data: InsertWfhRecord): Promise<WfhRecord> {
+    const existing = await db
+      .select()
+      .from(wfhRecords)
+      .where(and(eq(wfhRecords.userId, data.userId), eq(wfhRecords.date, data.date)))
+      .limit(1);
+    if (existing[0]) {
+      const results = await db
+        .update(wfhRecords)
+        .set({ ...data, updatedAt: new Date() })
+        .where(eq(wfhRecords.id, existing[0].id))
+        .returning();
+      return results[0];
+    }
+    const results = await db.insert(wfhRecords).values(data).returning();
+    return results[0];
+  }
+
+  async getWfhRecords(filters: { date?: string; startDate?: string; endDate?: string; department?: string }) {
+    const rows = await db
+      .select({ wr: wfhRecords, u: users })
+      .from(wfhRecords)
+      .innerJoin(users, eq(wfhRecords.userId, users.id))
+      .where(eq(users.isActive, true))
+      .orderBy(wfhRecords.date, users.name);
+
+    return rows
+      .filter(({ wr, u }) => {
+        if (filters.department && u.department !== filters.department) return false;
+        if (filters.date      && wr.date !== filters.date)               return false;
+        if (filters.startDate && wr.date < filters.startDate)            return false;
+        if (filters.endDate   && wr.date > filters.endDate)              return false;
+        return true;
+      })
+      .map(({ wr, u }) => ({
+        ...wr,
+        userName:       u.name,
+        userEmail:      u.email,
+        userDepartment: u.department || "",
+      }));
+  }
+
+  async getTodayWfhStatus(userId: string): Promise<WfhRecord | undefined> {
+    const today = new Date().toISOString().split("T")[0];
+    const results = await db
+      .select()
+      .from(wfhRecords)
+      .where(and(eq(wfhRecords.userId, userId), eq(wfhRecords.date, today)))
+      .limit(1);
+    return results[0];
+  }
+
+  // Shift Configurations
+  async getShiftConfigurations(): Promise<ShiftConfiguration[]> {
+    return await db.select().from(shiftConfigurations).where(eq(shiftConfigurations.isActive, true)).orderBy(shiftConfigurations.name);
+  }
+
+  async getAllShiftConfigurations(): Promise<ShiftConfiguration[]> {
+    return await db.select().from(shiftConfigurations).orderBy(shiftConfigurations.name);
+  }
+
+  async createShiftConfiguration(data: InsertShiftConfiguration): Promise<ShiftConfiguration> {
+    const results = await db.insert(shiftConfigurations).values(data).returning();
+    return results[0];
+  }
+
+  async updateShiftConfiguration(id: string, updates: Partial<InsertShiftConfiguration>): Promise<ShiftConfiguration | undefined> {
+    const results = await db.update(shiftConfigurations).set({ ...updates, updatedAt: new Date() }).where(eq(shiftConfigurations.id, id)).returning();
+    return results[0];
+  }
+
+  async deleteShiftConfiguration(id: string): Promise<void> {
+    await db.delete(shiftConfigurations).where(eq(shiftConfigurations.id, id));
+  }
+
+  // Overtime Records
+  async createOvertimeRecord(data: InsertOvertimeRecord): Promise<OvertimeRecord> {
+    const results = await db.insert(overtimeRecords).values(data).returning();
+    return results[0];
+  }
+
+  async getOvertimeRecords(filters: { weekStart?: string; weekEnd?: string; userId?: string; department?: string; status?: string }) {
+    const result = await db.execute(sql`
+      SELECT ot.*, u.name AS "userName", u.department AS "userDepartment",
+             a.name AS "approverName"
+      FROM overtime_records ot
+      INNER JOIN users u ON ot.user_id = u.id
+      LEFT JOIN users a ON ot.approved_by = a.id
+      ORDER BY ot.date DESC, u.name ASC
+    `);
+    const rows: any[] = (result as any).rows ?? (result as any).result?.rows ?? [];
+
+    return rows.filter((r: any) => {
+      if (filters.userId && r.user_id !== filters.userId) return false;
+      if (filters.department && r.userDepartment !== filters.department) return false;
+      if (filters.status && r.status !== filters.status) return false;
+      if (filters.weekStart && r.date < filters.weekStart) return false;
+      if (filters.weekEnd   && r.date > filters.weekEnd)   return false;
+      return true;
+    }).map((r: any) => ({
+      id: r.id,
+      userId: r.user_id,
+      date: r.date,
+      startTime: r.start_time,
+      endTime: r.end_time,
+      reason: r.reason,
+      status: r.status,
+      approvedBy: r.approved_by,
+      notes: r.notes,
+      createdBy: r.created_by,
+      createdAt: r.created_at,
+      updatedAt: r.updated_at,
+      userName: r.userName,
+      userDepartment: r.userDepartment,
+      approverName: r.approverName,
+    }));
+  }
+
+  async updateOvertimeRecord(id: string, updates: Partial<InsertOvertimeRecord>): Promise<OvertimeRecord | undefined> {
+    const results = await db.update(overtimeRecords).set({ ...updates, updatedAt: new Date() }).where(eq(overtimeRecords.id, id)).returning();
+    return results[0];
+  }
+
+  async deleteOvertimeRecord(id: string): Promise<void> {
+    await db.delete(overtimeRecords).where(eq(overtimeRecords.id, id));
   }
 
   // Issue Types

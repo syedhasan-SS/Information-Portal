@@ -106,6 +106,105 @@ type SortField = "ticketNumber" | "subject" | "vendorHandle" | "department" | "i
 type SortDirection = "asc" | "desc";
 
 // Module-level cache: persists across navigation (component remounts) but resets on full page reload
+// Hierarchical department structure
+const DEPT_HIERARCHY: Record<string, string[]> = {
+  CX:     ["Customer Support", "Seller Support"],
+  Supply: ["Marketplace", "KAM Team"],
+};
+const MAIN_DEPT_NAMES = ["CX", "Finance", "Operations", "Tech", "Supply", "Growth"];
+const SUB_DEPT_PARENT: Record<string, string> = {
+  "Customer Support": "CX",
+  "Seller Support":   "CX",
+  "Marketplace":      "Supply",
+  "KAM Team":         "Supply",
+};
+
+/** Single hierarchical department picker — expand/collapse within one dropdown */
+function HierarchicalDeptSelect({
+  value,
+  onChange,
+  placeholder = "All departments",
+}: {
+  value: string;
+  onChange: (val: string) => void;
+  placeholder?: string;
+}) {
+  const [open, setOpen] = useState(false);
+  const [expanded, setExpanded] = useState<Set<string>>(new Set());
+
+  const toggle = (dept: string, e: React.MouseEvent) => {
+    e.stopPropagation();
+    setExpanded(prev => {
+      const next = new Set(prev);
+      next.has(dept) ? next.delete(dept) : next.add(dept);
+      return next;
+    });
+  };
+
+  const select = (val: string) => { onChange(val); setOpen(false); };
+
+  const displayLabel = value || placeholder;
+
+  return (
+    <Popover open={open} onOpenChange={setOpen}>
+      <PopoverTrigger asChild>
+        <Button variant="outline" className="h-9 w-full justify-between font-normal text-sm">
+          <span className="truncate">{displayLabel}</span>
+          <ChevronDown className="ml-2 h-3.5 w-3.5 shrink-0 opacity-50" />
+        </Button>
+      </PopoverTrigger>
+      <PopoverContent className="w-[220px] p-1" align="start">
+        <div className="max-h-[300px] overflow-y-auto">
+          <button
+            onClick={() => select("")}
+            className={`w-full flex items-center gap-2 rounded px-2.5 py-1.5 text-sm transition-colors hover:bg-muted ${!value ? "font-medium text-foreground" : "text-muted-foreground"}`}
+          >
+            {placeholder}
+          </button>
+          {MAIN_DEPT_NAMES.map(dept => {
+            const subs = DEPT_HIERARCHY[dept];
+            const isOpen = expanded.has(dept);
+            const isSelected = value === dept;
+            return (
+              <div key={dept}>
+                <div className="flex items-stretch">
+                  <button
+                    onClick={() => select(dept)}
+                    className={`flex-1 flex items-center gap-2 rounded-l px-2.5 py-1.5 text-sm transition-colors hover:bg-muted ${isSelected ? "font-semibold text-primary" : "text-foreground"}`}
+                  >
+                    {dept}
+                  </button>
+                  {subs && (
+                    <button
+                      onClick={(e) => toggle(dept, e)}
+                      className="flex items-center px-2 rounded-r transition-colors hover:bg-muted text-muted-foreground"
+                    >
+                      <ChevronDown className={`h-3.5 w-3.5 transition-transform duration-150 ${isOpen ? "rotate-180" : ""}`} />
+                    </button>
+                  )}
+                </div>
+                {subs && isOpen && (
+                  <div className="ml-3 border-l border-border pl-2">
+                    {subs.map(sub => (
+                      <button
+                        key={sub}
+                        onClick={() => select(sub)}
+                        className={`w-full flex items-center rounded px-2 py-1.5 text-sm transition-colors hover:bg-muted ${value === sub ? "font-medium text-primary" : "text-muted-foreground"}`}
+                      >
+                        {sub}
+                      </button>
+                    ))}
+                  </div>
+                )}
+              </div>
+            );
+          })}
+        </div>
+      </PopoverContent>
+    </Popover>
+  );
+}
+
 type FilterCache = {
   activeTab: "open" | "solved";
   searchQuery: string;
@@ -537,8 +636,43 @@ export default function AllTicketsPage() {
       return false;
     }
 
-    if (departmentFilter && ticket.department !== departmentFilter) {
-      return false;
+    if (departmentFilter) {
+      const snap = (ticket as any).categorySnapshot;
+      const deptType: string = snap?.departmentType || "";
+      const owner: string = (ticket as any).ownerTeam || ticket.department || "";
+      const num: string = ticket.ticketNumber || "";
+      const ticketDept: string = ticket.department || owner;
+
+      const getCxSubTeam = (): string => {
+        if (deptType === "Customer Support" || deptType === "Seller Support") return deptType;
+        if (owner === "Customer Support" || owner === "Seller Support") return owner;
+        if (num.startsWith("SS")) return "Seller Support";
+        if (num.startsWith("CS")) return "Customer Support";
+        return "";
+      };
+
+      const isCxTicket = ticketDept === "CX" || ticketDept === "Customer Support" || ticketDept === "Seller Support"
+        || num.startsWith("SS") || num.startsWith("CS");
+
+      const parent = SUB_DEPT_PARENT[departmentFilter];
+      if (parent) {
+        // Sub-dept selected — filter precisely
+        if (parent === "CX") {
+          if (getCxSubTeam() !== departmentFilter) return false;
+        } else {
+          // Supply sub-depts: match ticket.department or categorySnapshot.subDepartment
+          const subDept = snap?.subDepartment || ticketDept;
+          if (subDept !== departmentFilter && ticketDept !== departmentFilter) return false;
+        }
+      } else {
+        // Main dept selected — include all sub-dept tickets too
+        const subDepts = DEPT_HIERARCHY[departmentFilter] ?? [];
+        if (departmentFilter === "CX") {
+          if (!isCxTicket) return false;
+        } else {
+          if (ticketDept !== departmentFilter && !subDepts.includes(ticketDept)) return false;
+        }
+      }
     }
 
     if (issueTypeFilter && ticket.issueType !== issueTypeFilter) {
@@ -558,9 +692,18 @@ export default function AllTicketsPage() {
     }
 
     if (assigneeDeptFilter) {
-      // Filter by the department of whoever is assigned to the ticket
       const assignee = users?.find((u) => u.id === ticket.assigneeId);
-      if (!assignee || assignee.department !== assigneeDeptFilter) return false;
+      if (!assignee) return false;
+      const assigneeDept = assignee.department || "";
+      const parent = SUB_DEPT_PARENT[assigneeDeptFilter];
+      if (parent) {
+        // Sub-dept: exact match
+        if (assigneeDept !== assigneeDeptFilter) return false;
+      } else {
+        // Main dept: include members whose dept is a sub-dept of this one
+        const subDepts = DEPT_HIERARCHY[assigneeDeptFilter] ?? [];
+        if (assigneeDept !== assigneeDeptFilter && !subDepts.includes(assigneeDept)) return false;
+      }
     }
 
     if (categoryFilter) {
@@ -902,17 +1045,11 @@ export default function AllTicketsPage() {
             <div className="grid grid-cols-2 gap-3 px-4 py-3 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6">
               <div className="space-y-1">
                 <label className="text-xs font-medium text-muted-foreground">Department</label>
-                <Select value={departmentFilter} onValueChange={(val) => { setDepartmentFilter(val === "all" ? "" : val); setCurrentPage(1); }}>
-                  <SelectTrigger className="h-9 w-full">
-                    <SelectValue placeholder="All departments" />
-                  </SelectTrigger>
-                  <SelectContent className="max-h-[300px] overflow-y-auto">
-                    <SelectItem value="all">All departments</SelectItem>
-                    {departmentsData?.filter(d => d.isActive).map((dept) => (
-                      <SelectItem key={dept.id} value={dept.name}>{dept.name}</SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
+                <HierarchicalDeptSelect
+                  value={departmentFilter}
+                  onChange={(val) => { setDepartmentFilter(val); setCurrentPage(1); }}
+                  placeholder="All departments"
+                />
               </div>
 
               <div className="space-y-1">
@@ -998,17 +1135,11 @@ export default function AllTicketsPage() {
 
               <div className="space-y-1">
                 <label className="text-xs font-medium text-muted-foreground">Assignee's Dept</label>
-                <Select value={assigneeDeptFilter} onValueChange={(val) => { setAssigneeDeptFilter(val === "all" ? "" : val); setCurrentPage(1); }}>
-                  <SelectTrigger className="h-9 w-full">
-                    <SelectValue placeholder="All depts" />
-                  </SelectTrigger>
-                  <SelectContent className="max-h-[300px] overflow-y-auto">
-                    <SelectItem value="all">All depts</SelectItem>
-                    {departmentsData?.filter(d => d.isActive).map((dept) => (
-                      <SelectItem key={dept.id} value={dept.name}>{dept.name}</SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
+                <HierarchicalDeptSelect
+                  value={assigneeDeptFilter}
+                  onChange={(val) => { setAssigneeDeptFilter(val); setCurrentPage(1); }}
+                  placeholder="All depts"
+                />
               </div>
             </div>
           </Card>
