@@ -49,7 +49,7 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { useToast } from "@/hooks/use-toast";
-import { cn } from "@/lib/utils";
+import { cn, formatDateShort } from "@/lib/utils";
 import {
   ArrowLeft,
   Loader2,
@@ -1222,7 +1222,7 @@ export default function MyTicketsPage() {
                             <div className="flex flex-col gap-1">
                               {getSlaStatusBadge(ticket.slaStatus)}
                               <span className={new Date(ticket.slaResolveTarget) < new Date() ? 'text-red-600 font-medium' : 'text-muted-foreground'}>
-                                {new Date(ticket.slaResolveTarget).toLocaleDateString()}
+                                {formatDateShort(ticket.slaResolveTarget)}
                               </span>
                             </div>
                           ) : (
@@ -1239,7 +1239,7 @@ export default function MyTicketsPage() {
                       )}
                       {isColumnVisible("lastUpdated") && (
                         <TableCell className="text-sm text-muted-foreground">
-                          {new Date(ticket.updatedAt).toLocaleDateString()}
+                          {formatDateShort(ticket.updatedAt)}
                         </TableCell>
                       )}
                       {isColumnVisible("source") && (

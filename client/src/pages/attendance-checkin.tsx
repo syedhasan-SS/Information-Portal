@@ -18,7 +18,7 @@ import {
   Timer,
 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
-import { cn } from "@/lib/utils";
+import { cn, formatDateShort } from "@/lib/utils";
 // Google Maps removed due to billing requirements
 // import { GoogleMapLocation } from "@/components/GoogleMapLocation";
 

@@ -21,7 +21,7 @@ import {
   Plus, Search, X, BarChart2, Calendar, Trash2, Users, ChevronDown,
   ChevronUp, Settings, Building2, Clock, LayoutGrid,
 } from "lucide-react";
-import { cn } from "@/lib/utils";
+import { cn, formatDateShort } from "@/lib/utils";
 import { useToast } from "@/hooks/use-toast";
 import type { User as UserType } from "@shared/schema";
 

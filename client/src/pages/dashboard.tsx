@@ -77,15 +77,11 @@ export default function DashboardPage() {
   const [, setLocation] = useLocation();
   const { user, hasPermission, logout } = useAuth();
 
-  const { data: allTickets, isLoading: ticketsLoading } = useQuery({
+  const { data: tickets, isLoading: ticketsLoading } = useQuery({
     queryKey: ["tickets"],
     queryFn: getTickets,
   });
-
-  // IMPORTANT: Backend already filters tickets by department
-  // The API endpoint /api/tickets returns pre-filtered tickets based on user's department
-  // We trust the backend filtering and just display what we receive
-  const tickets = allTickets;
+  // Backend already filters tickets by role/department — we trust it completely.
 
   const { data: users } = useQuery({
     queryKey: ["users"],
@@ -153,7 +149,7 @@ export default function DashboardPage() {
   const breachedThisMonth = slaTicketsThisMonth.filter((t) => t.slaStatus === "breached").length;
   const slaCompliance = slaTicketsThisMonth.length > 0
     ? Math.round(((onTrackThisMonth + atRiskThisMonth * 0.5) / slaTicketsThisMonth.length) * 100)
-    : 0;
+    : 100;
 
   // SLA Compliance for last month (for comparison)
   const slaTicketsLastMonth = ticketsLastMonthList.filter((t) => t.slaResolveTarget);
@@ -161,7 +157,7 @@ export default function DashboardPage() {
   const atRiskLastMonth = slaTicketsLastMonth.filter((t) => t.slaStatus === "at_risk").length;
   const slaComplianceLastMonth = slaTicketsLastMonth.length > 0
     ? Math.round(((onTrackLastMonth + atRiskLastMonth * 0.5) / slaTicketsLastMonth.length) * 100)
-    : 0;
+    : 100;
 
   // Priority Breakdown - PENDING TICKETS ONLY
   const pendingTickets = tickets?.filter((t) => ["New", "Open", "Pending"].includes(t.status)) || [];
@@ -669,19 +665,15 @@ function KPICard({
     label: string;
   };
 }) {
-  const getTrendIcon = () => {
-    if (!comparison) return null;
-    if (comparison.value > 0) return <TrendingUp className="h-3 w-3" />;
-    if (comparison.value < 0) return <TrendingDown className="h-3 w-3" />;
-    return <Minus className="h-3 w-3" />;
-  };
+  const trendColor = !comparison ? ""
+    : comparison.value > 0 ? "text-green-600"
+    : comparison.value < 0 ? "text-red-600"
+    : "text-muted-foreground";
 
-  const getTrendColor = () => {
-    if (!comparison) return "";
-    if (comparison.value > 0) return "text-green-600";
-    if (comparison.value < 0) return "text-red-600";
-    return "text-muted-foreground";
-  };
+  const trendIcon = !comparison ? null
+    : comparison.value > 0 ? <TrendingUp className="h-3 w-3" />
+    : comparison.value < 0 ? <TrendingDown className="h-3 w-3" />
+    : <Minus className="h-3 w-3" />;
 
   return (
     <Card className="p-5">
@@ -710,8 +702,8 @@ function KPICard({
           )}>{value}</p>
           <p className="text-xs text-muted-foreground">{subtitle}</p>
           {comparison && (
-            <div className={cn("flex items-center gap-1 text-xs font-medium mt-2", getTrendColor())}>
-              {getTrendIcon()}
+            <div className={cn("flex items-center gap-1 text-xs font-medium mt-2", trendColor)}>
+              {trendIcon}
               <span>{comparison.value > 0 ? "+" : ""}{comparison.value}%</span>
               <span className="text-muted-foreground font-normal">{comparison.label}</span>
             </div>

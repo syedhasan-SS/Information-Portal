@@ -40,6 +40,7 @@ import {
   Loader2,
 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
+import { formatDateShort } from "@/lib/utils";
 
 interface LeaveRequest {
   id: string;

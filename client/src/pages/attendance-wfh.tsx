@@ -15,7 +15,7 @@ import {
 import {
   ArrowLeft, Home, Building2, GitMerge, Users, Loader2, TrendingUp,
 } from "lucide-react";
-import { cn } from "@/lib/utils";
+import { cn, formatDateShort } from "@/lib/utils";
 import { useToast } from "@/hooks/use-toast";
 import type { User as UserType } from "@shared/schema";
 

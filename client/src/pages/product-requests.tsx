@@ -47,6 +47,7 @@ import {
   Search,
 } from "lucide-react";
 import type { ProductRequest, User } from "@shared/schema";
+import { formatDateShort } from "@/lib/utils";
 
 // API functions
 async function getProductRequests(): Promise<ProductRequest[]> {
@@ -577,7 +578,7 @@ export default function ProductRequestsPage() {
                               </>
                             )}
                             <span>•</span>
-                            <span>{new Date(request.createdAt).toLocaleDateString()}</span>
+                            <span>{formatDateShort(request.createdAt)}</span>
                           </div>
                         </div>
                       </div>
@@ -712,7 +713,7 @@ export default function ProductRequestsPage() {
                 <span>•</span>
                 <span>{selectedRequest.requestType}</span>
                 <span>•</span>
-                <span>Created {new Date(selectedRequest.createdAt).toLocaleDateString()}</span>
+                <span>Created {formatDateShort(selectedRequest.createdAt)}</span>
               </DialogDescription>
             </DialogHeader>
 

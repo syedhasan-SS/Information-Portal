@@ -15,7 +15,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { cn } from "@/lib/utils";
+import { cn, formatDateShort } from "@/lib/utils";
 import { useLocation } from "wouter";
 import {
   ArrowLeft,
@@ -1634,7 +1634,7 @@ export default function UsersPage() {
                       )}
                       <div className="flex items-center justify-between text-xs text-muted-foreground">
                         <span>{user.isActive ? "Active" : "Inactive"}</span>
-                        <span>Created {new Date(user.createdAt).toLocaleDateString()}</span>
+                        <span>Created {formatDateShort(user.createdAt)}</span>
                       </div>
                     </div>
                   </Card>

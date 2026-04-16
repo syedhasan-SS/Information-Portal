@@ -19,7 +19,7 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import { cn } from "@/lib/utils";
+import { cn, formatDateShort } from "@/lib/utils";
 import {
   ArrowLeft,
   Store,
@@ -30,9 +30,6 @@ import {
   MapPin,
   User,
   TrendingUp,
-  Clock,
-  CheckCircle,
-  AlertTriangle,
 } from "lucide-react";
 import type { Vendor, Ticket, Category } from "@shared/schema";
 
@@ -308,7 +305,7 @@ export default function VendorProfilePage() {
                           <TableCell>{getStatusBadge(ticket.status)}</TableCell>
                           <TableCell>{getPriorityBadge(ticket.priorityTier)}</TableCell>
                           <TableCell className="text-sm text-muted-foreground">
-                            {new Date(ticket.createdAt).toLocaleDateString()}
+                            {formatDateShort(ticket.createdAt)}
                           </TableCell>
                           <TableCell className="text-right">
                             <Button

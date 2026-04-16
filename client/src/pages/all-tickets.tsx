@@ -36,7 +36,7 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import { cn } from "@/lib/utils";
+import { cn, formatDateShort } from "@/lib/utils";
 import {
   Command,
   CommandEmpty,
@@ -1314,7 +1314,7 @@ export default function AllTicketsPage() {
                             <div className="flex flex-col gap-1">
                               {getSlaStatusBadge(ticket.slaStatus)}
                               <span className={new Date(ticket.slaResolveTarget) < new Date() ? 'text-red-600 font-medium' : 'text-muted-foreground'}>
-                                {new Date(ticket.slaResolveTarget).toLocaleDateString()}
+                                {formatDateShort(ticket.slaResolveTarget)}
                               </span>
                             </div>
                           ) : (
@@ -1328,12 +1328,12 @@ export default function AllTicketsPage() {
                         </TableCell>
                         <TableCell className="text-sm text-muted-foreground">
                           <div className="flex flex-col">
-                            <span>{new Date(ticket.createdAt).toLocaleDateString()}</span>
+                            <span>{formatDateShort(ticket.createdAt)}</span>
                             <span className="text-xs opacity-70">{new Date(ticket.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>
                           </div>
                         </TableCell>
                         <TableCell className="text-sm text-muted-foreground">
-                          {new Date(ticket.updatedAt).toLocaleDateString()}
+                          {formatDateShort(ticket.updatedAt)}
                         </TableCell>
                         <TableCell className="text-sm text-muted-foreground">
                           Portal

@@ -22,7 +22,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
-import { cn } from "@/lib/utils";
+import { cn, formatDateShort } from "@/lib/utils";
 import {
   ArrowLeft,
   Clock,
@@ -1002,7 +1002,7 @@ export default function TicketDetailPage() {
                           <div>
                             <label className="text-xs font-medium text-muted-foreground">Order Date</label>
                             <p className="mt-0.5 text-sm">
-                              {new Date(order.orderDate).toLocaleDateString()}
+                              {formatDateShort(order.orderDate)}
                             </p>
                           </div>
                         )}

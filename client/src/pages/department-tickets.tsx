@@ -30,6 +30,7 @@ import {
   Clock,
   AlertCircle,
 } from "lucide-react";
+import { formatDateShort } from "@/lib/utils";
 
 type Ticket = {
   id: string;
@@ -324,7 +325,7 @@ export default function DepartmentTicketsPage() {
                         {ticket.assigneeId ? userMap[ticket.assigneeId]?.name || "Unknown" : "Unassigned"}
                       </TableCell>
                       <TableCell>{getSlaStatusIcon(ticket.slaStatus)}</TableCell>
-                      <TableCell>{new Date(ticket.createdAt).toLocaleDateString()}</TableCell>
+                      <TableCell>{formatDateShort(ticket.createdAt)}</TableCell>
                     </TableRow>
                   ))
                 )}
