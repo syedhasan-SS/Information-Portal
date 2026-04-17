@@ -1265,8 +1265,8 @@ export default function AllTicketsPage() {
                   </TableHeader>
                   <TableBody>
                     {paginatedTickets.map((ticket) => {
-                      const agingEndDate = ["Solved", "Closed"].includes(ticket.status) && ticket.resolvedAt
-                        ? new Date(ticket.resolvedAt)
+                      const agingEndDate = ["Solved", "Closed"].includes(ticket.status)
+                        ? new Date(ticket.resolvedAt || ticket.updatedAt)
                         : new Date();
                       const agingDays = Math.floor((agingEndDate.getTime() - new Date(ticket.createdAt).getTime()) / (1000 * 60 * 60 * 24));
                       const categoryDisplay = getCategoryDisplay(ticket, categoryMap);
